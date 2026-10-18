@@ -109,7 +109,7 @@ a{color:var(--blue)}
 .hero .ctas{display:flex;flex-wrap:wrap;gap:.8rem;margin-top:2rem}
 .hero .note{margin-top:1.1rem;font-size:.9rem;color:var(--text-2)}
 .pharmacist{position:relative;align-self:end;justify-self:end;width:100%;max-width:617px;aspect-ratio:617/750;max-height:750px}
-.pharmacist img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:top center}
+.pharmacist img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;object-position:bottom center}
 .pharmacist .fallback{position:absolute;inset:0;display:grid;place-items:end center}
 .pharmacist.has-img .fallback{display:none}
 .pharmacist .card-tag{position:absolute;left:0;bottom:2rem;background:#fff;border-radius:var(--r);box-shadow:0 14px 30px -18px rgba(20,40,80,.55);padding:.7rem .9rem;font-size:.85rem;display:grid;gap:.1rem;max-width:240px}

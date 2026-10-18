@@ -8,9 +8,9 @@
    Drop the exported files at these paths. Until a file exists, a drawn placeholder shows instead. */
 const IMG = {
   heroBg: "assets/hero-bg.jpg",                 // Figma: header pic / Rectangle 30 (pharmacy shelves)
-  pharmacistMale: "assets/pharmacist-male.png", // Figma: header pic / Rectangle 29 (male pharmacist)
-  pharmacistFemale: "assets/pharmacist-female.png", // Figma: Chat / Rectangle 31
-  delivery: "assets/delivery.png"               // Figma: Delivery / Rectangle 31
+  pharmacistMale: "assets/pharmacist-male.webp", // Figma: header pic / Rectangle 29 (male pharmacist)
+  pharmacistFemale: "assets/pharmacist-female.webp", // Figma: Chat / Rectangle 31
+  delivery: "assets/delivery.webp"               // Figma: Delivery / Rectangle 31
 };
 
 const NGN = n => "₦" + Math.round(n).toLocaleString("en-NG");
@@ -173,7 +173,7 @@ function vHome() {
         <p>Don't self medicate. Talk to an expert. Reach a Synako pharmacist in <em><span class="ph">under 5 minutes</span></em> during opening hours.</p>
         <button class="btn-blue" type="button" data-go="legal" data-doc="contact">Get Started</button>
       </div>
-      <div class="photo"><div class="fallback">${personSVG("female")}</div>${photo(IMG.pharmacistFemale)}</div>
+      <div class="photo"><div class="fallback">${personSVG("female")}</div>${photo(IMG.pharmacistFemale).replace("<img ", "<img style=\"object-position:42% 30%\" ")}</div>
     </div>
     <div class="feature">
       <div>

@@ -166,12 +166,12 @@ window.SYNAKO = (function () {
   const STATES = ["Abia","Adamawa","Akwa Ibom","Anambra","Bauchi","Bayelsa","Benue","Borno","Cross River","Delta","Ebonyi","Edo","Ekiti","Enugu","FCT – Abuja","Gombe","Imo","Jigawa","Kaduna","Kano","Katsina","Kebbi","Kogi","Kwara","Lagos","Nasarawa","Niger","Ogun","Ondo","Osun","Oyo","Plateau","Rivers","Sokoto","Taraba","Yobe","Zamfara"];
 
   const FAQ = [
-    ["Is Synako a licensed pharmacy?", "Yes. Synako operates from a PCN-registered pharmacy premises and holds a PCN e-pharmacy licence. Our licence numbers and superintendent pharmacist are listed at the bottom of every page and on the Our licences page."],
+    ["Is Synako a registered pharmacy?", "Yes. Synako operates from a pharmacy premises registered with the Pharmacy Council of Nigeria, supervised by our superintendent pharmacist. Our registration details are at the bottom of every page and on the Our licences page."],
     ["Do I need a prescription?", "Only for prescription-only medicines, which are clearly marked. Over-the-counter products can be ordered straight away, though our pharmacist may contact you before sending some items to check they're right for you."],
     ["What makes a prescription valid?", "It must come from a licensed prescriber, be dated within the last 6 months, and show the prescriber's name, signature, registration number, phone number and a clinic or hospital address in Nigeria."],
     ["When do I pay for prescription medicines?", "After our pharmacist approves your prescription. We send you a payment link; nothing is charged before that."],
     ["Can I order controlled medicines online?", "No. Nigerian law doesn't allow controlled medicines to be sold online. Bring your original prescription to our pharmacy and our pharmacist will help you there."],
-    ["Where do you deliver?", "Within Nigeria only. Delivery areas, fees and same-day cut-off times are on the Delivery page."],
+    ["Where do you deliver?", "Within Nigeria only. Delivery options and fees are on the Delivery page."],
     ["How do I know the medicines are genuine?", "We buy only NAFDAC-registered products from approved manufacturers and distributors, and record the batch and expiry of every item we send."],
     ["Who can order?", "Adults aged 18 and over. We confirm your age before your first order."],
     ["Can I return medicines?", "For safety reasons, medicines can't be returned once they've left the pharmacy unless they're faulty or we sent the wrong item. See the Returns page for other products."],

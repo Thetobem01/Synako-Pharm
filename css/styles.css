@@ -1,0 +1,423 @@
+/* Synako Pharmacy — styles taken from the Figma file "Synako Pharmacy Store (web)", page "Main Web".
+   Fonts: DM Sans (headings, nav, buttons, body) and Poppins (top bar, product cards), as used in Figma.
+   Layout: blue top bar → white header → full-width hero with pharmacist photo on the right →
+   centred section titles in brand blue → product rows → paired feature cards → tabbed browse grid. */
+:root{
+  --blue:#3362AB;          /* Figma primary (bars, titles, buttons) */
+  --blue-bright:#0156FF;   /* Figma Color 3 (button border, highlights) */
+  --blue-ink:#264C88;
+  --blue-soft:#E5ECF1;     /* card fill base, rgba(229,236,241,.5) on white */
+  --bg-soft:#F5F7FF;       /* Figma Color 1 */
+  --line:#CACDD8;          /* Figma Color 6 */
+  --grey:#A2A6B0;          /* top bar label */
+  --text:#000000;
+  --text-2:#3A3F4B;
+  --muted:#666666;
+  --red:#C94D3F;           /* Figma Color 8 */
+  --green:#78A962;         /* Figma Color 9 */
+  --orange:#E8892B;        /* logo "PHARMACY" */
+  --rx-bg:#FFF2E2; --rx-fg:#9A4F05;
+  --ok-bg:#E9F3E4; --ok-fg:#3D6B2A;
+  --warn-bg:#FDF1DA; --warn-fg:#8A5A00;
+  --bad-bg:#FBE7E5; --bad-fg:#9A2F27;
+  --white:#FFFFFF;
+  --font:"DM Sans", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --font-card:"Poppins", "Segoe UI", system-ui, sans-serif;
+  --font-mono:ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  --pill:50px; --r:10px; --r-lg:16px;
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--white);color:var(--text);font-family:var(--font);font-size:16px;line-height:1.5;font-optical-sizing:auto}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:60;background:var(--blue)}
+h1,h2,h3{margin:0;font-family:var(--font);font-weight:700;line-height:1.15;text-wrap:balance}
+p{margin:0}
+img{max-width:100%;display:block}
+button{font:inherit;cursor:pointer;color:inherit}
+input,select,textarea{font:inherit;color:var(--text)}
+a{color:var(--blue)}
+:focus-visible{outline:3px solid var(--blue-bright);outline-offset:2px;border-radius:4px}
+.wrap{max-width:1500px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.muted{color:var(--muted)}
+.small{font-size:.875rem}
+.num{font-variant-numeric:tabular-nums}
+.mono{font-family:var(--font-mono);font-variant-numeric:tabular-nums}
+.ph{border:1px dashed var(--orange);background:var(--rx-bg);color:var(--rx-fg);border-radius:4px;padding:0 .3em;white-space:nowrap}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+/* Prototype strip (not part of the Figma design) */
+.proto{background:#FFD98A;color:#3A2A00;font-size:.8rem}
+.proto .wrap{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:.35rem 1rem;padding-block:.35rem}
+.proto .switch{display:flex;gap:.3rem}
+.proto button{border:1px solid #3A2A00;background:transparent;border-radius:var(--pill);padding:.1rem .7rem;font-size:.78rem;font-weight:700}
+.proto button[aria-pressed="true"]{background:#3A2A00;color:#fff}
+
+/* 1. Top bar — Figma: #3362AB, DM Sans Medium 12, label #A2A6B0 */
+.topbar{background:var(--blue);color:#fff;font-size:12px;font-weight:500}
+.topbar .wrap{display:flex;justify-content:space-between;align-items:center;gap:.4rem 1.5rem;flex-wrap:wrap;min-height:44px;padding-block:.35rem}
+.topbar .lbl{color:var(--grey)}
+.topbar .mid .lbl{color:#C7CEDA}
+.topbar .mid button{border:0;background:none;color:#fff;font-weight:500;padding:0 0 1px;border-bottom:1px solid #fff;margin-left:.4rem;font-size:12px}
+.topbar .right{display:flex;align-items:center;gap:.9rem}
+.topbar .social{display:flex;gap:.5rem}
+.topbar .social svg{width:18px;height:18px;fill:#fff}
+
+/* 2. Header — Figma: white, logo left, nav DM Sans Bold 14 caps, pill buttons */
+.site{position:sticky;top:env(safe-area-inset-top,0px);z-index:50;background:#fff;border-bottom:1px solid var(--line)}
+.site .wrap{display:flex;align-items:center;gap:1.5rem;min-height:92px;padding-block:.5rem}
+.logo{border:0;background:none;padding:0;flex:none}
+.logo img{width:146px;height:auto}
+.nav{display:flex;align-items:center;gap:2.6rem;margin-left:auto}
+.nav>button:not(.pill){border:0;background:none;font-weight:700;font-size:14px;letter-spacing:.01em;padding:.4rem 0;color:#000}
+.nav>button:not(.pill):hover,.nav>button:not(.pill)[aria-current="true"]{color:var(--blue)}
+.pill{display:inline-flex;align-items:center;justify-content:center;gap:.5rem;border-radius:var(--pill);border:2px solid var(--blue);font-weight:700;font-size:14px;padding:8px 26px;line-height:1.25;text-decoration:none;white-space:nowrap}
+.pill-outline{background:#fff;color:var(--blue)}
+.pill-outline:hover{background:var(--bg-soft)}
+.pill-solid{background:var(--blue);border-color:var(--blue-bright);color:#fff}
+.pill-solid:hover{background:var(--blue-ink)}
+.pill-rx{background:var(--orange);border-color:var(--orange);color:#231200}
+.pill-rx:hover{filter:brightness(1.05)}
+.pill-ghost{background:transparent;border-color:var(--line);color:var(--text)}
+.pill-ok{background:var(--green);border-color:var(--green);color:#10200A}
+.pill-bad{background:#fff;border-color:var(--red);color:var(--red)}
+.pill-lg{font-size:16px;padding:12px 30px}
+.pill:disabled{opacity:.45;cursor:not-allowed}
+.hicons{display:flex;align-items:center;gap:.9rem}
+.iconbtn{border:0;background:none;padding:.35rem;position:relative;display:grid;place-items:center;border-radius:50%}
+.iconbtn:hover{background:var(--bg-soft)}
+.iconbtn svg{width:22px;height:22px}
+.badge{position:absolute;top:-2px;right:-4px;background:var(--blue-bright);color:#fff;font-family:var(--font-card);font-weight:700;font-size:10px;min-width:16px;height:16px;border-radius:8px;display:grid;place-items:center;padding:0 3px}
+.searchbar{border-top:1px solid var(--line);background:#fff}
+.searchbar form{display:flex;gap:.5rem;padding-block:.6rem}
+.searchbar input{flex:1;min-width:0;border:1px solid var(--line);border-radius:var(--pill);padding:.6rem 1.1rem;font-family:var(--font-card);font-size:14px;background:var(--bg-soft)}
+.searchbar input:focus{outline:none;border-color:var(--blue);box-shadow:0 0 0 3px rgba(51,98,171,.18)}
+.menubtn{display:none}
+
+/* 3. Hero — Figma: 750px band, shelf photo background, pharmacist photo right (617px), title DM Sans Bold 66 #3362AB */
+.hero{position:relative;overflow:hidden;background:
+  linear-gradient(90deg,rgba(255,255,255,.96) 0%,rgba(255,255,255,.9) 50%,rgba(255,255,255,.55) 80%),
+  repeating-linear-gradient(0deg,#E4EBF5 0 5px,transparent 5px 110px),
+  repeating-linear-gradient(90deg,#DCE6F3 0 46px,#F1E4D6 46px 70px,#DCE8DF 70px 104px,#EEF2F9 104px 140px,#E6DFF0 140px 168px);
+}
+.hero.has-bg{background:linear-gradient(90deg,rgba(255,255,255,.88) 0%,rgba(255,255,255,.6) 50%,rgba(255,255,255,0) 72%),var(--hero-bg) center/cover no-repeat}
+.hero .wrap{position:relative;display:grid;grid-template-columns:minmax(0,1fr) minmax(280px,617px);align-items:end;min-height:min(750px,62vw)}
+.hero .copy{align-self:center;padding-block:3rem;max-width:760px}
+.hero h1{font-size:clamp(2.4rem,4.6vw,4.125rem);color:var(--blue);letter-spacing:-.01em}
+.hero .lede{font-size:clamp(1.05rem,1.4vw,1.5rem);margin-top:1rem;color:#1E2433;max-width:30em}
+.hero .ctas{display:flex;flex-wrap:wrap;gap:.8rem;margin-top:2rem}
+.hero .note{margin-top:1.1rem;font-size:.9rem;color:var(--text-2)}
+.pharmacist{position:relative;align-self:end;justify-self:end;width:100%;max-width:617px;aspect-ratio:617/750;max-height:750px}
+.pharmacist img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;object-position:bottom center}
+.pharmacist .fallback{position:absolute;inset:0;display:grid;place-items:end center}
+.pharmacist.has-img .fallback{display:none}
+.pharmacist .card-tag{position:absolute;left:0;bottom:2rem;background:#fff;border-radius:var(--r);box-shadow:0 14px 30px -18px rgba(20,40,80,.55);padding:.7rem .9rem;font-size:.85rem;display:grid;gap:.1rem;max-width:240px}
+.pharmacist .card-tag b{font-size:.92rem}
+
+/* Trust strip (new) */
+.trust{border-bottom:1px solid var(--line);background:var(--bg-soft)}
+.trust .wrap{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1rem;padding-block:1.1rem}
+.trust div{display:flex;gap:.7rem;align-items:center;font-size:.9rem}
+.trust svg{width:26px;height:26px;flex:none;color:var(--blue)}
+.trust b{display:block;font-size:.95rem}
+
+/* Section titles — Figma: centred, DM Sans Bold, brand blue */
+.section{padding-block:3.5rem}
+.stitle{text-align:center;color:var(--blue);font-size:clamp(1.7rem,2.8vw,3.125rem);margin-bottom:.6rem}
+.ssub{text-align:center;color:var(--text-2);max-width:42em;margin:0 auto 2rem}
+
+/* 5. Product cards — Figma "Product Card MAIN": 234×269, fill rgba(229,236,241,.5), border #CACDD8, Poppins */
+.cards{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:1.5rem 2.5rem}
+.pcard{position:relative;display:flex;flex-direction:column;gap:.45rem}
+.pcard .flag{align-self:flex-start;font-family:var(--font-card);font-size:10px;font-weight:600;letter-spacing:.03em;padding:4px 8px;border-radius:4px;background:var(--ok-bg);color:var(--ok-fg)}
+.pcard .flag.rx{background:var(--rx-bg);color:var(--rx-fg)}
+.pcard .box{background:rgba(229,236,241,.5);border:1px solid var(--line);display:flex;flex-direction:column;padding:22px 25px 16px;font-family:var(--font-card);min-height:269px}
+.pcard .shot{border:0;background:none;padding:0;height:101px;display:grid;place-items:center;position:relative;margin-bottom:.6rem}
+.pcard .shot img{max-height:101px;max-width:150px;object-fit:contain}
+.pcard .shot.has-img .pack{display:none}
+.pcard .name{border:0;background:none;padding:0;text-align:left;font-family:var(--font-card);font-size:13px;color:#000;line-height:1.35}
+.pcard .name:hover{color:var(--blue)}
+.pcard .brand{font-weight:700;font-size:13px}
+.pcard .prices{margin-top:auto;padding-top:.5rem;line-height:1.4}
+.pcard .was{color:var(--muted);font-size:14px;text-decoration:line-through}
+.pcard .price{font-weight:600;font-size:18px;font-variant-numeric:tabular-nums}
+.pcard .add{margin-top:.6rem;border:2px solid var(--blue);background:#fff;color:var(--blue);border-radius:var(--pill);font-family:var(--font);font-weight:700;font-size:13px;padding:6px 12px}
+.pcard .add:hover{background:var(--blue);color:#fff}
+.pcard .add.rx{border-color:var(--orange);color:var(--rx-fg)}
+.pcard .add.rx:hover{background:var(--orange);color:#231200}
+.samp{font-family:var(--font);font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+
+/* Pack illustration (shown until real product photos are added) */
+.pack{width:112px;height:78px;border-radius:4px;background:#fff;box-shadow:0 8px 14px -10px rgba(16,30,60,.55),inset 0 0 0 1px rgba(16,30,60,.08);position:relative;overflow:hidden;color:#1B2A44;transform:perspective(400px) rotateY(-14deg) rotateX(4deg)}
+.pack::before{content:"";position:absolute;inset:0 0 auto 0;height:30%;background:var(--c)}
+.pack i{position:absolute;left:7px;right:7px;top:36%;font-style:normal;font-family:var(--font-card);font-size:8.5px;font-weight:700;line-height:1.15}
+.pack small{position:absolute;left:7px;bottom:6px;font-size:7px;color:#5A6680}
+.pack.dev{width:88px;height:88px;border-radius:14px}
+
+/* Pharmacy strip — replaces the Zip banner */
+.strip{background:var(--bg-soft);border:1px solid var(--line);border-radius:4px;display:flex;align-items:center;justify-content:center;gap:1rem;flex-wrap:wrap;padding:1.25rem 1rem;text-align:center;font-size:.95rem}
+.strip .tagx{font-weight:700;color:var(--blue)}
+.strip .sep{width:1px;height:28px;background:var(--line)}
+
+/* 7. Feature pair — Figma "Chat" and "Delivery" cards (811×569 each) */
+.pair{display:grid;grid-template-columns:1fr 1fr;gap:4.5rem}
+.feature{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,.85fr);gap:1.25rem;align-items:center;padding:3rem 2.5rem;background:#fff}
+.feature h2{font-size:clamp(1.6rem,2.4vw,2.8rem)}
+.feature p{font-size:clamp(1rem,1.25vw,1.4rem);margin:1.2rem 0 1.8rem;color:#1E2433}
+.feature p em{font-style:normal;color:var(--blue-bright)}
+.feature .photo{position:relative;aspect-ratio:312/431;width:100%;border-radius:4px;overflow:hidden;background:linear-gradient(160deg,#EAF0F8,#D3E0F1)}
+.feature .photo img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.feature .photo .fallback{position:absolute;inset:0;display:grid;place-items:end center}
+.feature .photo.has-img .fallback{display:none}
+.btn-blue{display:inline-flex;align-items:center;justify-content:center;background:linear-gradient(90deg,#0B7BEF,#0156FF);color:#fff;border:0;border-radius:6px;font-weight:700;font-size:clamp(1rem,1.2vw,1.35rem);padding:.75rem 1.6rem}
+.btn-blue:hover{filter:brightness(1.07)}
+
+/* 8. Browse — Figma tabs: pill frames 202×82, active blue */
+.tabs{display:flex;justify-content:center;gap:.5rem;flex-wrap:wrap;margin:0 auto 2.5rem;background:var(--bg-soft);border-radius:8px;padding:.5rem;width:fit-content;max-width:100%}
+.tabs button{border:0;background:transparent;border-radius:6px;padding:.75rem 1.6rem;font-weight:700;font-size:clamp(.9rem,1.1vw,1.15rem);color:#444}
+.tabs button[aria-selected="true"]{background:linear-gradient(90deg,#0B7BEF,#0156FF);color:#fff}
+.tiles{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:2.5rem 4rem;max-width:1600px;margin:0 auto}
+.tile{border:0;background:var(--blue-soft);border-radius:4px;aspect-ratio:436/437;display:grid;place-items:center;position:relative;padding:12%;overflow:hidden}
+.tile img{max-width:100%;max-height:100%;object-fit:contain}
+.tile.has-img .pack{display:none}
+.tile .pack{transform:perspective(500px) rotateY(-16deg) scale(1.8)}
+.tile .cap{position:absolute;left:0;right:0;bottom:0;background:rgba(255,255,255,.92);padding:.7rem 1rem;display:flex;justify-content:space-between;gap:.5rem;font-family:var(--font-card);font-size:.88rem;text-align:left;transform:translateY(100%);transition:transform .2s}
+.tile:hover .cap,.tile:focus-visible .cap{transform:none}
+.center{display:flex;justify-content:center;margin-top:2.5rem}
+
+/* 9. Blue band section — Figma review block (blue panel with light card); used here for prescriptions */
+.band{position:relative;padding-top:2rem}
+.band::before{content:"";position:absolute;left:0;right:0;top:20%;bottom:0;background:var(--blue);border-radius:4px}
+.band .inner{position:relative;background:#E8EDF4;border-radius:var(--r-lg);margin:0 clamp(0rem,4vw,5rem);padding:clamp(1.25rem,3vw,2.5rem)}
+.steps{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1.25rem}
+.step{display:grid;gap:.45rem;align-content:start}
+.step .n{width:40px;height:40px;border-radius:50%;background:linear-gradient(90deg,#0B7BEF,#0156FF);color:#fff;display:grid;place-items:center;font-weight:700}
+.step h3{font-size:1.1rem}
+.step p{font-size:.93rem;color:var(--text-2)}
+.band .foot{display:flex;justify-content:center;gap:.8rem;flex-wrap:wrap;margin-top:1.75rem}
+.band .below{position:relative;text-align:center;color:#fff;padding-block:1.5rem 2rem;font-size:.95rem}
+
+/* 10. Mobile section — Figma "Try it now on mobile" */
+.mobile{display:grid;grid-template-columns:1fr 1fr;gap:3rem;align-items:center}
+.mobile h2{font-size:clamp(2.2rem,4vw,4.5rem);background:linear-gradient(90deg,var(--blue) 0%,var(--blue-bright) 40%,#9C7CF4 100%);-webkit-background-clip:text;background-clip:text;color:transparent;line-height:1.05}
+.mobile p{font-size:clamp(1rem,1.3vw,1.4rem);margin:1.5rem 0 2rem;max-width:30em;color:#1E2433}
+.stores{display:flex;gap:1rem;flex-wrap:wrap}
+.store{display:flex;align-items:center;gap:.7rem;border-radius:10px;padding:.6rem 1.1rem;background:var(--blue);color:#fff;border:0;text-align:left;opacity:.55;cursor:not-allowed}
+.store.alt{background:#fff;color:var(--blue);border:1.5px solid var(--blue)}
+.store small{display:block;font-size:.72rem}
+.store b{font-size:1rem}
+.store svg{width:26px;height:26px}
+.phone{justify-self:center;width:min(300px,70vw);aspect-ratio:9/18.5;border-radius:38px;background:#11151F;padding:12px;box-shadow:0 30px 60px -30px rgba(20,40,80,.6)}
+.phone .scr{width:100%;height:100%;border-radius:28px;background:#fff;overflow:hidden;display:grid;grid-template-rows:auto auto 1fr;font-size:10px}
+.phone .scr .tb{background:var(--blue);height:18px}
+.phone .scr .hd{display:flex;justify-content:space-between;align-items:center;padding:8px 10px;border-bottom:1px solid var(--line)}
+.phone .scr .hd img{width:62px}
+.phone .scr .bd{padding:14px 12px;background:linear-gradient(180deg,#F3F6FB,#fff);display:grid;align-content:start;gap:8px}
+.phone .scr .bd h4{margin:0;color:var(--blue);font-size:17px;line-height:1.15}
+.phone .scr .bd .row{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:6px}
+.phone .scr .bd .row span{height:58px;border-radius:4px;background:rgba(229,236,241,.8);border:1px solid var(--line)}
+.phone .scr .bd .b{background:var(--blue);color:#fff;border-radius:20px;padding:4px 10px;width:fit-content;font-weight:700}
+
+/* Footer */
+.footer{background:#0F1E3A;color:#C9D2E3;margin-top:2rem}
+.footer .grid{display:grid;grid-template-columns:1.5fr 1fr 1fr 1fr;gap:2rem;padding-block:3rem}
+.footer h3{color:#fff;font-size:1rem;margin-bottom:.8rem}
+.footer ul{list-style:none;margin:0;padding:0;display:grid;gap:.45rem;font-size:.9rem}
+.footer ul button{border:0;background:none;padding:0;color:#C9D2E3;text-align:left}
+.footer ul button:hover{color:#fff;text-decoration:underline}
+.footer .logo-w{background:#fff;border-radius:8px;padding:6px 10px;width:fit-content;margin-bottom:1rem}
+.footer .logo-w img{width:120px}
+.reg{display:grid;grid-template-columns:auto 1fr;gap:1rem;align-items:start;font-size:.86rem}
+.ropse{width:72px;height:72px;border-radius:50%;border:2px dashed var(--orange);display:grid;place-items:center;text-align:center;font-size:.58rem;font-weight:700;color:#FFD3A1;line-height:1.2;padding:6px}
+.reg dl{margin:0;display:grid;grid-template-columns:auto 1fr;gap:.25rem .75rem}
+.reg dt{color:#93A0BA}
+.reg dd{margin:0;min-width:0}
+.footer .ph{background:rgba(232,137,43,.14);color:#FFD3A1;white-space:normal}
+.footer .legal{border-top:1px solid #24375A;display:flex;justify-content:space-between;gap:.5rem 1.5rem;flex-wrap:wrap;padding-block:1.1rem;font-size:.8rem;color:#93A0BA}
+
+/* Inner pages */
+.page-head{padding-block:2rem 1.25rem}
+.page-head h1{font-size:clamp(1.7rem,3vw,2.6rem);color:var(--blue)}
+.crumbs{font-size:.85rem;color:var(--muted);display:flex;gap:.4rem;flex-wrap:wrap;margin-bottom:.6rem}
+.crumbs button{border:0;background:none;padding:0;color:var(--blue)}
+.shop{display:grid;grid-template-columns:240px minmax(0,1fr);gap:2.5rem;padding-bottom:3rem}
+.filters{display:grid;gap:.2rem;align-content:start;position:sticky;top:160px}
+.filters h3{font-size:.8rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:.25rem 0 .5rem}
+.filters button{border:0;background:none;text-align:left;padding:.55rem .8rem;border-radius:6px;display:flex;justify-content:space-between;font-weight:500}
+.filters button:hover{background:var(--bg-soft)}
+.filters button[aria-current="true"]{background:var(--blue);color:#fff;font-weight:700}
+.filters .ct{opacity:.7;font-size:.82rem}
+.chips{display:none;gap:.4rem;overflow-x:auto;padding-bottom:.6rem;scrollbar-width:none}
+.chips button{flex:none;border:1px solid var(--line);background:#fff;border-radius:var(--pill);padding:.35rem .85rem;font-size:.85rem;font-weight:500}
+.chips button[aria-current="true"]{background:var(--blue);border-color:var(--blue);color:#fff}
+.toolbar{display:flex;justify-content:space-between;align-items:center;gap:1rem;flex-wrap:wrap;margin-bottom:1.25rem}
+.grid-shop{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:1.5rem}
+.empty{border:1px dashed var(--line);border-radius:var(--r);padding:2rem;text-align:center;color:var(--muted)}
+.linkbtn{border:0;background:none;padding:0;color:var(--blue);font-weight:700}
+.linkbtn:hover{text-decoration:underline}
+
+.pdp{display:grid;grid-template-columns:1fr 1fr;gap:3rem;padding-bottom:3rem}
+.pdp .visual{background:rgba(229,236,241,.5);border:1px solid var(--line);min-height:400px;display:grid;place-items:center;position:relative}
+.pdp .visual img{max-width:70%;max-height:320px;object-fit:contain}
+.pdp .visual.has-img .pack{display:none}
+.pdp .visual .pack{transform:perspective(500px) rotateY(-16deg) scale(2)}
+.pdp .info{display:grid;gap:1rem;align-content:start}
+.pdp h1{font-size:clamp(1.6rem,2.6vw,2.3rem)}
+.pdp .brand{font-family:var(--font-card);font-weight:700}
+.pdp .price{font-family:var(--font-card);font-weight:600;font-size:1.7rem}
+.tag{display:inline-flex;align-items:center;gap:.3rem;width:fit-content;font-size:.72rem;font-weight:700;letter-spacing:.04em;text-transform:uppercase;border-radius:4px;padding:.18rem .5rem}
+.tag.otc{background:var(--bg-soft);color:var(--blue)}
+.tag.rx{background:var(--rx-bg);color:var(--rx-fg)}
+.tag.ok{background:var(--ok-bg);color:var(--ok-fg)}
+.tag.warn{background:var(--warn-bg);color:var(--warn-fg)}
+.tag.bad{background:var(--bad-bg);color:var(--bad-fg)}
+.notice{border-radius:var(--r);padding:1rem 1.1rem;display:grid;gap:.3rem;font-size:.93rem}
+.notice.rx{background:var(--rx-bg);color:var(--rx-fg)}
+.notice.info{background:var(--bg-soft);color:var(--blue-ink)}
+.notice.ok{background:var(--ok-bg);color:var(--ok-fg)}
+.qty{display:inline-flex;align-items:center;border:1px solid var(--line);border-radius:var(--pill);overflow:hidden;background:#fff}
+.qty button{border:0;background:none;width:40px;height:42px;font-size:1.1rem}
+.qty button:hover{background:var(--bg-soft)}
+.qty span{min-width:30px;text-align:center;font-weight:700}
+.buy{display:flex;gap:.8rem;flex-wrap:wrap;align-items:center}
+.facts{border-top:1px solid var(--line)}
+.facts details{border-bottom:1px solid var(--line);padding:.85rem 0}
+.facts summary{cursor:pointer;font-weight:700;list-style:none;display:flex;justify-content:space-between}
+.facts summary::after{content:"+";color:var(--muted)}
+.facts details[open] summary::after{content:"–"}
+.facts details p{margin-top:.5rem;color:var(--text-2);font-size:.95rem;max-width:62ch}
+
+.two{display:grid;grid-template-columns:minmax(0,1fr) 370px;gap:2rem;align-items:start;padding-bottom:3rem}
+.two.track{grid-template-columns:320px minmax(0,1fr)}
+.panel{background:#fff;border:1px solid var(--line);border-radius:var(--r);padding:1.4rem}
+.line{display:grid;grid-template-columns:76px minmax(0,1fr) auto;gap:1rem;align-items:center;padding:1rem 0;border-bottom:1px solid var(--line)}
+.line:last-child{border-bottom:0}
+.line .thumb{background:rgba(229,236,241,.5);border:1px solid var(--line);height:66px;display:grid;place-items:center;overflow:hidden;position:relative}
+.line .thumb img{max-height:56px;max-width:64px;object-fit:contain}
+.line .thumb.has-img .pack{display:none}
+.line .thumb .pack{transform:scale(.48)}
+.line .right{display:grid;justify-items:end;gap:.4rem}
+.rm{border:0;background:none;color:var(--muted);font-size:.82rem;padding:0;text-decoration:underline}
+.summary{display:grid;gap:.6rem;position:sticky;top:160px}
+.summary .r{display:flex;justify-content:space-between;gap:1rem}
+.summary .total{border-top:1px solid var(--line);padding-top:.7rem;font-weight:700;font-size:1.1rem}
+.stepper{display:flex;gap:.3rem;flex-wrap:wrap;margin-bottom:1.25rem}
+.stepper button{border:0;background:var(--bg-soft);color:var(--muted);border-radius:var(--pill);padding:.4rem .95rem;font-size:.85rem;font-weight:700}
+.stepper button[aria-current="step"]{background:var(--blue);color:#fff}
+.stepper button.done{background:var(--ok-bg);color:var(--ok-fg)}
+form.f{display:grid;gap:1rem}
+.f h2{color:var(--blue);font-size:1.5rem}
+.f .row2{display:grid;grid-template-columns:1fr 1fr;gap:1rem}
+.f label{display:grid;gap:.35rem;font-weight:500;font-size:.93rem}
+.f .hint{font-weight:400;color:var(--muted);font-size:.82rem}
+.f input:not([type=checkbox]):not([type=radio]):not([type=file]),.f select,.f textarea{width:100%;border:1px solid var(--line);border-radius:8px;padding:.65rem .8rem;background:#fff}
+.f input:focus,.f select:focus,.f textarea:focus{outline:none;border-color:var(--blue);box-shadow:0 0 0 3px rgba(51,98,171,.18)}
+.f .check{display:flex;gap:.6rem;align-items:flex-start;font-weight:400}
+.f .check input{margin-top:.25rem;width:18px;height:18px;accent-color:var(--blue);flex:none}
+.f fieldset{border:1px solid var(--line);border-radius:var(--r);padding:1rem;margin:0;display:grid;gap:.75rem}
+.f legend{font-weight:700;padding:0 .35rem}
+.drop{border:2px dashed var(--line);border-radius:var(--r);padding:1.25rem;text-align:center;background:var(--bg-soft);display:grid;gap:.4rem;justify-items:center}
+.drop input{max-width:100%}
+.pay{display:grid;gap:.5rem}
+.pay label{display:flex;gap:.7rem;align-items:center;border:1px solid var(--line);border-radius:8px;padding:.75rem .9rem}
+.pay label:has(input:checked){border-color:var(--blue);background:var(--bg-soft)}
+.pay input{accent-color:var(--blue)}
+.actions{display:flex;justify-content:space-between;gap:.75rem;flex-wrap:wrap}
+
+.timeline{list-style:none;margin:0;padding:0;display:grid}
+.timeline li{display:grid;grid-template-columns:28px 1fr;gap:.9rem;position:relative;padding-bottom:1.1rem}
+.timeline li:not(:last-child)::before{content:"";position:absolute;left:13px;top:30px;bottom:2px;width:2px;background:var(--line)}
+.timeline li.done:not(:last-child)::before{background:var(--green)}
+.dot{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;font-size:.8rem;font-weight:700}
+.dot.done{background:var(--ok-bg);color:var(--ok-fg)}
+.dot.now{background:var(--rx-bg);color:var(--rx-fg);box-shadow:0 0 0 3px rgba(232,137,43,.3)}
+.dot.next{background:var(--bg-soft);color:var(--muted)}
+.audit{font-family:var(--font-mono);font-size:.78rem;display:grid;gap:.3rem;background:var(--bg-soft);border-radius:8px;padding:.8rem;max-height:230px;overflow:auto}
+.audit div{display:grid;grid-template-columns:auto 1fr;gap:.75rem}
+.audit span{color:var(--muted)}
+.order-list{display:grid;gap:.5rem}
+.order-pick{display:flex;justify-content:space-between;gap:.75rem;align-items:center;border:1px solid var(--line);background:#fff;border-radius:8px;padding:.7rem .9rem;text-align:left;width:100%}
+.order-pick[aria-current="true"]{border-color:var(--blue);background:var(--bg-soft)}
+
+/* Pharmacist workspace */
+.staff-head{background:var(--blue);color:#fff}
+.staff-head .wrap{display:flex;justify-content:space-between;align-items:center;gap:1rem;flex-wrap:wrap;padding-block:1.4rem}
+.staff-head .eyebrow{font-size:.75rem;letter-spacing:.09em;text-transform:uppercase;color:#FFD3A1;font-weight:700}
+.staff-head p{color:#D6E0F2;font-size:.92rem}
+.staff-stats{display:flex;gap:1.75rem;font-size:.85rem;color:#D6E0F2}
+.staff-stats b{display:block;font-size:1.5rem;color:#fff}
+.desk{display:grid;grid-template-columns:330px minmax(0,1fr);gap:1.5rem;padding-block:1.5rem 3rem;align-items:start}
+.queue{display:grid;gap:.5rem}
+.q{display:grid;gap:.25rem;text-align:left;border:1px solid var(--line);border-left:4px solid var(--orange);background:#fff;border-radius:8px;padding:.75rem .9rem;width:100%}
+.q.approved{border-left-color:var(--green)}
+.q.rejected{border-left-color:var(--red)}
+.q.info{border-left-color:#E8A426}
+.q[aria-current="true"]{box-shadow:0 0 0 2px var(--blue)}
+.q .top{display:flex;justify-content:space-between;align-items:center;gap:.5rem}
+.review{display:grid;grid-template-columns:1fr 1fr;gap:1.25rem}
+.rxdoc{background:#FFFDF7;border:1px solid #E6DFCB;border-radius:6px;padding:1.1rem 1.2rem;font-family:Georgia,"Times New Roman",serif;font-size:.86rem;line-height:1.5;color:#2A2A2A;display:grid;gap:.5rem;box-shadow:0 10px 24px -18px rgba(0,0,0,.5)}
+.rxdoc .hd{border-bottom:1px solid #DDD3B8;padding-bottom:.5rem}
+.rxdoc .sym{font-size:1.6rem;font-style:italic;color:#7A6A3A;line-height:1}
+.rxdoc .sig{border-top:1px solid #DDD3B8;padding-top:.4rem;font-style:italic;color:#555}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:.3rem .9rem;font-size:.92rem;margin:0}
+.kv dt{color:var(--muted)}
+.kv dd{margin:0;min-width:0}
+.checks{display:grid;gap:.55rem}
+
+.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translate(-50%,20px);background:#0F1E3A;color:#fff;padding:.7rem 1.15rem;border-radius:var(--pill);font-size:.9rem;font-weight:500;opacity:0;pointer-events:none;transition:opacity .2s,transform .2s;z-index:80;max-width:calc(100% - 32px)}
+.toast.show{opacity:1;transform:translate(-50%,0)}
+
+/* Responsive */
+@media (max-width:1280px){
+  .cards{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .nav{gap:1.5rem}
+  .pair{gap:2rem}
+  .feature{grid-template-columns:1fr;padding:2rem 1.5rem}
+  .feature .photo{max-width:320px}
+}
+@media (max-width:1000px){
+  .nav>button:not(.pill){display:none}
+  .trust .wrap{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .steps{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .footer .grid{grid-template-columns:1fr 1fr}
+  .desk{grid-template-columns:1fr}
+  .tiles{gap:1.25rem}
+}
+@media (max-width:820px){
+  .site .wrap{min-height:68px;gap:.75rem}
+  .logo img{width:112px}
+  .nav .pill{padding:6px 14px;font-size:13px}
+  .nav .pill-outline{display:none}
+  .hero .wrap{grid-template-columns:1fr;min-height:0}
+  .hero .copy{padding-block:2.25rem 0}
+  .pharmacist{justify-self:center;max-width:380px;margin-top:1rem}
+  .pair{grid-template-columns:1fr}
+  .mobile{grid-template-columns:1fr}
+  .shop{grid-template-columns:1fr}
+  .filters{display:none}
+  .chips{display:flex}
+  .pdp{grid-template-columns:1fr;gap:1.5rem}
+  .pdp .visual{min-height:280px}
+  .two,.two.track{grid-template-columns:1fr}
+  .summary{position:static}
+  .review{grid-template-columns:1fr}
+  .tiles{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .topbar .mid{display:none}
+}
+@media (max-width:560px){
+  .cards{grid-template-columns:repeat(2,minmax(0,1fr));gap:1rem}
+  .pcard .box{padding:16px 14px;min-height:0}
+  .trust .wrap{grid-template-columns:1fr}
+  .steps{grid-template-columns:1fr}
+  .footer .grid{grid-template-columns:1fr}
+  .f .row2{grid-template-columns:1fr}
+  .hicons{gap:.35rem}
+  .hicons .avatar{display:none}
+  .tabs button{padding:.6rem .9rem}
+  .tiles{gap:.8rem}
+  .strip .sep{display:none}
+  .grid-shop{grid-template-columns:repeat(2,minmax(0,1fr));gap:1rem}
+  .topbar .right .callus{display:none}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}

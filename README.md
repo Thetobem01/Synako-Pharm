@@ -40,15 +40,15 @@ with these exact names. Until a file exists, the site shows a drawn placeholder 
 
 | Save as | Figma layer (page "Main Web") |
 |---|---|
-| `assets/pharmacist-male.png` | Frame 145 → header → header pic → **Rectangle 29** (pharmacist on the right of the hero) |
+| `assets/pharmacist-male.webp` ✅ | Frame 145 → header → header pic → **Rectangle 29** (pharmacist on the right of the hero) |
 | `assets/hero-bg.jpg` | Frame 145 → header → header pic → **Rectangle 30** (pharmacy shelves) |
-| `assets/pharmacist-female.png` | Chat → Group 138 → Frame 103 → **Rectangle 31** |
-| `assets/delivery.png` | Delivery → Group 138 → Frame 103 → **Rectangle 31** |
+| `assets/pharmacist-female.webp` ✅ | Chat → Group 138 → Frame 103 → **Rectangle 31** |
+| `assets/delivery.webp` ✅ | Delivery → Group 138 → Frame 103 → **Rectangle 31** |
 | `assets/products/<id>.png` | Product photos. IDs: `wellman`, `omron`, `immunace`, `secure`, `pears`, `nivea`, `aloe`, `nappy`, `ors`, `thermo`, `para`, `mrdt`, `amlo`, `metf`, `amox`, `al` |
 | `assets/logo.svg` (optional) | The logo as a vector, if you have the source file |
 
 In Figma: select the layer, open **Export** in the right panel, choose PNG at **2x**, and export.
-Then upload the files to the matching folder on GitHub (Add file → Upload files).
+Rename each file to the name in the table **before** uploading (Figma exports them as "Rectangle 29.png" and so on, which the site won't find), then upload to the matching folder on GitHub (Add file → Upload files). PNG is fine for new uploads; the ✅ files have already been added and compressed to WebP.
 
 ## Before launch
 

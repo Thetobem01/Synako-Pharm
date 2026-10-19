@@ -1,52 +1,79 @@
 # Synako Pharmacy — online shop
 
-Website for Synako Pharmacy, a PCN-registered pharmacy in Nigeria, built from the Figma file
-**Synako Pharmacy Store (web)**. It's a front-end prototype: everything runs in the browser,
-nothing is stored or sent, and no payment is taken.
+Website and order system for Synako Pharmacy, a PCN-registered pharmacy in Nigeria, built from
+the Figma file **Synako Pharmacy Store (web)**. Customers can order over-the-counter products,
+send prescriptions, pay with Paystack and track their order live. Pharmacists review prescriptions
+and run orders from the **Pharmacist Desk** at `/pharmacist`.
 
-## What's in it
+## How it works
 
-**Pages** (each has its own address, ready for your domain):
-
-| Address | Page |
+| Part | Where |
 |---|---|
-| `/` | Home, following the Figma layout |
-| `/products`, `/products/otc`, `/products/prescription`, `/products/<category>` | Shop with categories, search and sorting |
-| `/product/<id>` | Product page with active ingredient, strength, pack, classification, storage, warnings |
-| `/controlled-medicines` | Why controlled medicines aren't sold online, and how to get them in store |
-| `/prescriptions` | Send a prescription |
-| `/basket`, `/checkout` | Naira checkout with 18+ check and prescription upload; pay after approval |
-| `/track` | Order tracking with full order record |
-| `/about`, `/contact`, `/faq`, `/delivery`, `/careers`, `/licences` | Information pages |
-| `/privacy`, `/terms`, `/returns`, `/cookies` | Legal drafts (review before launch) |
-| `/pharmacist` | Pharmacist review queue |
+| Website (all pages, mobile menu, checkout, tracking, desk) | `index.html`, `css/`, `js/app.js` |
+| **Business details, hours, delivery rules and fees** | `js/config.js` ← edit this |
+| Products and prices | `js/data.js` |
+| Delivery options and totals (used by site *and* server) | `js/pricing.js` |
+| Order API (Vercel serverless functions) | `api/` |
 
-**Catalogue:** about 55 sample products in `js/data.js`, split into over-the-counter
-(10 categories) and prescription-only (6 categories). Each has a drawn pack image (`js/art.js`)
-until a real photo is added. **Controlled medicines are deliberately not listed**: the Electronic
-Pharmacy Regulations 2026 prohibit selling them online. Every classification must be confirmed by
-the superintendent pharmacist.
+**Orders:** saved in Upstash Redis. The server recalculates every total from `js/data.js` and
+`js/pricing.js`, so prices can't be changed in the browser.
 
-**Mobile:** hamburger menu with shop, services and company links, search, and the pharmacist line.
-A medicines directory above the footer lists OTC, prescription and controlled medicines separately.
+**Payments:** Paystack (card, bank transfer, USSD). Over-the-counter orders are paid at checkout.
+Prescription orders are paid after the pharmacist approves them: a **Pay now** button appears on
+the customer's order page. Payments are verified with Paystack on the server, and a webhook
+catches payments if the customer closes the page early.
 
-## Run it
+**Delivery rules** (from `js/config.js`):
+- Home delivery in 30 minutes during opening hours (Mon–Sat 7:30am–6:00pm)
+- Same-day delivery for orders placed before 2pm
+- Orders above ₦999,999.99 are delivered the next day
+- Other states: 2–4 working days
 
-It's a static site, so there's no build step. Page addresses need a server that sends unknown
-paths to `index.html` (Vercel does this via `vercel.json`):
+**Pharmacist advice:** quick questions under 5 minutes are free; longer consultations are booked
+as appointments (fee set in `js/config.js`).
+
+**Prescriptions:** photos are resized in the customer's browser and stored privately; only
+signed-in staff can open them. Controlled medicines are not sold online (Electronic Pharmacy
+Regulations 2026); `/controlled-medicines` explains in-store collection.
+
+## Go live on Vercel
+
+1. **Import the repo** at vercel.com/new (framework preset "Other", no build command).
+2. **Add storage:** in the Vercel project, open *Storage* → *Marketplace* → **Upstash for Redis**
+   → create a database and connect it to the project. This adds `KV_REST_API_URL` and
+   `KV_REST_API_TOKEN` automatically.
+3. **Add environment variables** (*Settings* → *Environment Variables*):
+
+   | Name | Value |
+   |---|---|
+   | `PAYSTACK_PUBLIC_KEY` | From Paystack dashboard → Settings → API Keys (`pk_test_…` first, then `pk_live_…`) |
+   | `PAYSTACK_SECRET_KEY` | Same page (`sk_test_…`, then `sk_live_…`). Never put this in the code. |
+   | `STAFF_PASSWORD` | A strong password for the Pharmacist Desk |
+   | `SESSION_SECRET` | Any long random text (signs staff sign-ins) |
+
+4. **Paystack webhook:** in Paystack → Settings → API Keys & Webhooks, set the webhook URL to
+   `https://YOUR-DOMAIN/api/paystack-webhook`.
+5. **Redeploy**, then place a test order with Paystack's test card before switching to live keys.
+6. **Domain:** add it under *Settings* → *Domains*, then update `robots.txt`.
+
+Until storage and Paystack are connected, the checkout shows a "call us to order" message instead
+of taking orders.
+
+## Fill in your details
+
+Open `js/config.js` and add: address, city, state, phone, WhatsApp, email, company name and RC
+number, PCN premises number, PCN e-pharmacy licence, superintendent pharmacist and PCN reg. no.,
+and the ROPSE emblem image. Anything left empty is hidden from customers, and the Pharmacist Desk
+shows a list of what's still missing. Set your real delivery fees and consultation fee there too.
+
+**Prices in `js/data.js` are placeholders.** Replace them with your real prices, and have the
+superintendent pharmacist confirm each product's OTC / prescription-only classification.
+
+## Run it locally
 
 ```bash
-npx serve -s .
-# then open http://localhost:3000
+npm run dev          # http://localhost:3000 · test storage and payments · desk password "desk"
 ```
-
-**Deploy on Vercel:** import this repo at vercel.com/new, keep the framework preset "Other" and
-the build command empty. Every push to `main` deploys; every pull request gets a preview link.
-When you buy your domain, add it in the Vercel project under Settings → Domains, then update
-`robots.txt` with the sitemap address.
-
-**Editing products:** open `js/data.js`. Each product has a name, ingredient, strength, pack type
-(`form`, which decides the drawing), category, `cls` (`otc` or `pom`), sample price and text.
 
 ## Fonts
 
@@ -65,29 +92,8 @@ with these exact names. Until a file exists, the site shows a drawn placeholder 
 | `assets/pharmacist-female.webp` ✅ | Chat → Group 138 → Frame 103 → **Rectangle 31** |
 | `assets/delivery.webp` ✅ | Delivery → Group 138 → Frame 103 → **Rectangle 31** |
 | `assets/products/<id>.png` | Product photos, named by the product `id` in `js/data.js` (for example `para.png`, `wellman.png`, `omron.png`). A photo replaces the drawn pack image automatically. |
+| `assets/mobile-mockup.webp` | Phone mockup in the "Try it now on mobile" banner (taken from the banner image; export **Mockup** from Figma at 2x for a sharper version) |
 | `assets/logo.svg` (optional) | The logo as a vector, if you have the source file |
 
 In Figma: select the layer, open **Export** in the right panel, choose PNG at **2x**, and export.
 Rename each file to the name in the table **before** uploading (Figma exports them as "Rectangle 29.png" and so on, which the site won't find), then upload to the matching folder on GitHub (Add file → Upload files). PNG is fine for new uploads; the ✅ files have already been added and compressed to WebP.
-
-## Before launch
-
-Details still to fill in are marked with an orange dashed outline on the page:
-
-- PCN premises number, PCN e-pharmacy licence number, superintendent pharmacist and PCN reg. no.
-- Pharmacy address, phone/WhatsApp number, opening hours
-- Delivery areas, same-day cut-off and fees, and whether "30 minutes" delivery is achievable
-- Real product list, prices and OTC / prescription-only classification (confirmed by the superintendent pharmacist)
-- Payment provider (Paystack or Flutterwave)
-- Privacy notice (NDPA 2023), terms of sale, returns, delivery and licence pages
-- The PCN ROPSE emblem
-
-Under Nigeria's Electronic Pharmacy Regulations 2026, Synako needs a PCN e-pharmacy licence before
-taking orders, sells within Nigeria only, supplies prescription-only medicines only against a valid
-prescription, and can't sell controlled medicines online. Lyrica (pregabalin) from the Figma design
-has been left out for that reason.
-
-## Next: the real build
-
-Accounts, a database, secure prescription file storage, Paystack or Flutterwave payments,
-the pharmacist dashboard, and the link to the PCN's National Electronic Pharmacy Platform.

@@ -1,0 +1,10 @@
+{
+  "name": "synako-pharmacy",
+  "private": true,
+  "type": "module",
+  "description": "Synako Pharmacy website and order API (Vercel)",
+  "engines": { "node": ">=18" },
+  "scripts": {
+    "dev": "SYNAKO_DEV=1 PAYSTACK_MOCK=1 STAFF_PASSWORD=desk node dev/server.mjs"
+  }
+}

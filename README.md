@@ -1,32 +1,52 @@
 # Synako Pharmacy — online shop
 
-Front-end prototype of Synako Pharmacy's online store for Nigeria, built from the Figma file
-**Synako Pharmacy Store (web)** (page "Main Web").
+Website for Synako Pharmacy, a PCN-registered pharmacy in Nigeria, built from the Figma file
+**Synako Pharmacy Store (web)**. It's a front-end prototype: everything runs in the browser,
+nothing is stored or sent, and no payment is taken.
 
-It covers the full customer journey and the pharmacist's side:
+## What's in it
 
-- Home page following the Figma layout: blue top bar, header, hero with pharmacist photo,
-  Most Popular Products, Talk to a Pharmacist / Home delivery cards, tabbed product browser,
-  prescription steps, mobile section, footer with licence details
-- Shop with categories and search, product pages (pharmacy vs prescription-only)
-- Basket and Naira checkout with an 18+ check
-- Prescription upload with the prescriber details the regulations require; payment only after approval
-- Order tracking with a full order record
-- Pharmacist review queue (approve, reject, request info)
+**Pages** (each has its own address, ready for your domain):
 
-Everything runs in the browser. No data is stored or sent, and no payment is taken.
+| Address | Page |
+|---|---|
+| `/` | Home, following the Figma layout |
+| `/products`, `/products/otc`, `/products/prescription`, `/products/<category>` | Shop with categories, search and sorting |
+| `/product/<id>` | Product page with active ingredient, strength, pack, classification, storage, warnings |
+| `/controlled-medicines` | Why controlled medicines aren't sold online, and how to get them in store |
+| `/prescriptions` | Send a prescription |
+| `/basket`, `/checkout` | Naira checkout with 18+ check and prescription upload; pay after approval |
+| `/track` | Order tracking with full order record |
+| `/about`, `/contact`, `/faq`, `/delivery`, `/careers`, `/licences` | Information pages |
+| `/privacy`, `/terms`, `/returns`, `/cookies` | Legal drafts (review before launch) |
+| `/pharmacist` | Pharmacist review queue |
+
+**Catalogue:** about 55 sample products in `js/data.js`, split into over-the-counter
+(10 categories) and prescription-only (6 categories). Each has a drawn pack image (`js/art.js`)
+until a real photo is added. **Controlled medicines are deliberately not listed**: the Electronic
+Pharmacy Regulations 2026 prohibit selling them online. Every classification must be confirmed by
+the superintendent pharmacist.
+
+**Mobile:** hamburger menu with shop, services and company links, search, and the pharmacist line.
+A medicines directory above the footer lists OTC, prescription and controlled medicines separately.
 
 ## Run it
 
-It's a static site, so there's no build step.
+It's a static site, so there's no build step. Page addresses need a server that sends unknown
+paths to `index.html` (Vercel does this via `vercel.json`):
 
 ```bash
-python3 -m http.server 8000
-# then open http://localhost:8000
+npx serve -s .
+# then open http://localhost:3000
 ```
 
-**Deploy on Vercel:** import this repo at vercel.com/new. Leave the framework preset as "Other"
-and the build command empty. Every push to `main` deploys automatically.
+**Deploy on Vercel:** import this repo at vercel.com/new, keep the framework preset "Other" and
+the build command empty. Every push to `main` deploys; every pull request gets a preview link.
+When you buy your domain, add it in the Vercel project under Settings → Domains, then update
+`robots.txt` with the sitemap address.
+
+**Editing products:** open `js/data.js`. Each product has a name, ingredient, strength, pack type
+(`form`, which decides the drawing), category, `cls` (`otc` or `pom`), sample price and text.
 
 ## Fonts
 
@@ -44,7 +64,7 @@ with these exact names. Until a file exists, the site shows a drawn placeholder 
 | `assets/hero-bg.jpg` | Frame 145 → header → header pic → **Rectangle 30** (pharmacy shelves) |
 | `assets/pharmacist-female.webp` ✅ | Chat → Group 138 → Frame 103 → **Rectangle 31** |
 | `assets/delivery.webp` ✅ | Delivery → Group 138 → Frame 103 → **Rectangle 31** |
-| `assets/products/<id>.png` | Product photos. IDs: `wellman`, `omron`, `immunace`, `secure`, `pears`, `nivea`, `aloe`, `nappy`, `ors`, `thermo`, `para`, `mrdt`, `amlo`, `metf`, `amox`, `al` |
+| `assets/products/<id>.png` | Product photos, named by the product `id` in `js/data.js` (for example `para.png`, `wellman.png`, `omron.png`). A photo replaces the drawn pack image automatically. |
 | `assets/logo.svg` (optional) | The logo as a vector, if you have the source file |
 
 In Figma: select the layer, open **Export** in the right panel, choose PNG at **2x**, and export.

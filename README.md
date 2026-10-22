@@ -54,7 +54,7 @@ Regulations 2026); `/controlled-medicines` explains in-store collection.
 4. **Paystack webhook:** in Paystack → Settings → API Keys & Webhooks, set the webhook URL to
    `https://YOUR-DOMAIN/api/paystack-webhook`.
 5. **Redeploy**, then place a test order with Paystack's test card before switching to live keys.
-6. **Domain:** add it under *Settings* → *Domains*, then update `robots.txt`.
+6. **Domain:** add it under *Settings* → *Domains*, then change `site.url` in `js/config.js` to the new address (no trailing slash). The sitemap, robots file, share previews and search-engine data all follow it.
 
 Until storage and Paystack are connected, the checkout shows a "call us to order" message instead
 of taking orders.
@@ -68,6 +68,20 @@ shows a list of what's still missing. Set your real delivery fees and consultati
 
 **Prices in `js/data.js` are placeholders.** Replace them with your real prices, and have the
 superintendent pharmacist confirm each product's OTC / prescription-only classification.
+
+## Web standards built in
+
+- **Search engines:** each page sets its own title, description, canonical link and share preview. `/sitemap.xml` and `/robots.txt` are generated from the catalogue (`api/sitemap.js`, `api/robots.js`), so new products are listed automatically. Basket, checkout, tracking and the Pharmacist Desk are kept out of search results.
+- **Structured data:** the pharmacy (address, hours, phone) and over-the-counter products are described in schema.org JSON-LD. Prescription medicines are deliberately left out.
+- **Share previews:** `assets/og-image.jpg` (1200×630) is shown when the site is shared on WhatsApp, Facebook, LinkedIn or X.
+- **Install to home screen:** `manifest.webmanifest` plus icons in `assets/`. For sharper icons, export the logo mark from Figma as SVG or a 1024px PNG and replace `icon-512.png`, `icon-192.png` and `apple-touch-icon.png`.
+- **Security headers** (`vercel.json`): Content Security Policy, HSTS, Permissions-Policy, nosniff, frame and referrer rules. The policy allows Paystack only, so if you add another outside service (analytics, chat widget, maps), add its domain to the `Content-Security-Policy` line or it will be blocked. Run a test payment after any change.
+- **Accessibility:** WCAG 2.2 AA colour contrast, keyboard navigation, skip link, labelled forms, screen-reader headings and reduced-motion support.
+- **Region settings:** language, currency, country and time zone live in `site` in `js/config.js`; prices and dates are formatted from them.
+
+## Product photos
+
+Products show a drawn pack until you add a photo. Save it as `assets/products/<product id>.webp` (square, at least 800×800, white background), then add the id to the `PHOTOS` list at the top of `js/data.js`, e.g. `para: "webp",`.
 
 ## Run it locally
 

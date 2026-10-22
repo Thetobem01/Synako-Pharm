@@ -1,7 +1,0 @@
-User-agent: *
-Allow: /
-Disallow: /pharmacist
-Disallow: /checkout
-Disallow: /basket
-# Add once the domain is live:
-# Sitemap: https://YOUR-DOMAIN/sitemap.xml

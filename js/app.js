@@ -665,13 +665,13 @@ const CONTENT = {
   contact: () => ({ title: "Talk to a pharmacist", lead: `Quick questions are free, and you'll reach a pharmacist in under ${C.freeMinutes} minutes during opening hours.`, body: `
     <div class="two flat">
       <div style="display:grid;gap:1.25rem">
-        <form class="f panel" id="contactform" novalidate><h2>${icon("chat", "ic")} Quick question (free)</h2>
+        <form class="f panel" id="contactform" novalidate><div class="hp" aria-hidden="true"><label>Leave this empty<input name="website" tabindex="-1" autocomplete="off"></label></div><h2>${icon("chat", "ic")} Quick question (free)</h2>
           <p class="small muted">For advice that takes under ${C.freeMinutes} minutes: a medicine, a side effect, or your order.</p>
           <div class="row2"><label for="cn">Your name<input id="cn" name="name" required autocomplete="name"></label><label for="cp">Phone number<input id="cp" name="phone" type="tel" required minlength="10" autocomplete="tel"></label></div>
           <label for="ctopic">What's it about?<select id="ctopic" name="topic"><option>Advice about a medicine</option><option>My order</option><option>A prescription</option><option>Controlled medicine collection</option><option>Something else</option></select></label>
           <label for="cmsg">Message<textarea id="cmsg" name="message" rows="4" required></textarea></label>
           <div><button class="btn btn-primary" type="submit">Send message</button></div></form>
-        <form class="f panel" id="apptform" novalidate><h2>${icon("cal", "ic")} Book a consultation</h2>
+        <form class="f panel" id="apptform" novalidate><div class="hp" aria-hidden="true"><label>Leave this empty<input name="website" tabindex="-1" autocomplete="off"></label></div><h2>${icon("cal", "ic")} Book a consultation</h2>
           <p class="small muted">Anything longer than ${C.freeMinutes} minutes, such as a medicines review or advice on a long-term condition, is by appointment. ${C.fee ? `A consultation costs ${NGN(C.fee)}.` : "A consultation fee applies; we'll confirm it when we call to confirm your appointment."}</p>
           <div class="row2"><label for="an">Your name<input id="an" name="name" required autocomplete="name"></label><label for="ap">Phone number<input id="ap" name="phone" type="tel" required minlength="10" autocomplete="tel"></label></div>
           <div class="row2"><label for="ad">Date<input id="ad" name="date" type="date" required min="${new Date().toISOString().slice(0, 10)}"></label>
@@ -715,7 +715,7 @@ const CONTENT = {
     <h2>Who we are</h2><p>${esc(has(B.companyName) ? B.companyName : "Synako Pharmacy")}${has(B.rcNumber) ? ` (RC ${esc(B.rcNumber)})` : ""}${addressLine ? `, ${esc(addressLine)}` : ""}, is the data controller for information you give us.${has(B.email) ? ` Contact us about privacy at ${esc(B.email)}.` : ""}</p>
     <h2>What we collect</h2><p>Your name, contact details, date of birth, delivery address, order history, payment confirmations from Paystack (not your card number), prescriptions and the details on them, and anything you tell our pharmacists about your health.</p>
     <h2>Why we use it</h2><p>To supply your medicines safely and lawfully, check prescriptions, confirm your age, deliver your order, keep the records pharmacy law requires, and answer your questions. We rely on your consent and on our legal obligations under the Nigeria Data Protection Act 2023 and pharmacy regulations.</p>
-    <h2>Who we share it with</h2><p>Only those who need it to complete your order: our delivery riders (name, address, phone), Paystack for payment, and the Pharmacy Council of Nigeria's National Electronic Pharmacy Platform, as the regulations require. We never sell your data.</p>
+    <h2>Who we share it with</h2><p>Only those who need it to complete your order: our delivery riders (name, address, phone), Paystack for payment, our email provider (Resend) to send order updates, and the Pharmacy Council of Nigeria's National Electronic Pharmacy Platform, as the regulations require. We never sell your data.</p>
     <h2>How long we keep it</h2><p>Prescription and dispensing records are kept for as long as pharmacy law requires. Other information is kept only as long as needed.</p>
     <h2>Your rights</h2><p>You can ask to see, correct or delete your information, withdraw consent, or complain to the Nigeria Data Protection Commission.</p>
     <h2>Security</h2><p>Information is encrypted in transit, and prescriptions can only be opened by our pharmacists after signing in.</p></div>` }),
@@ -736,7 +736,7 @@ const CONTENT = {
   cookies: () => ({ title: "Cookies", lead: "", body: `${DRAFT}<div class="panel prose"><p>We don't use advertising or tracking cookies. Your browser stores your basket and the orders you've placed on this device so they're there when you come back. If we add analytics later, we'll ask for your consent first and list them here.</p></div>` }),
   careers: () => ({ title: "Careers at Synako", lead: "Join a pharmacy team that puts patients first.", body: `
     <div class="panel prose"><h2>Open roles</h2><p>We don't have open roles right now, but we'd love to hear from pharmacists, pharmacy technicians, dispatch riders and customer support staff. Register your interest and we'll contact you when a role opens.</p></div>
-    <form class="f panel" id="careersform" novalidate style="margin-top:1rem"><h2>Register your interest</h2>
+    <form class="f panel" id="careersform" novalidate style="margin-top:1rem"><div class="hp" aria-hidden="true"><label>Leave this empty<input name="website" tabindex="-1" autocomplete="off"></label></div><h2>Register your interest</h2>
       <div class="row2"><label for="kn">Full name<input id="kn" name="name" required autocomplete="name"></label><label for="ke">Email<input id="ke" name="email" type="email" required autocomplete="email"></label></div>
       <div class="row2"><label for="kr">Role you're interested in<select id="kr" name="role"><option>Pharmacist</option><option>Pharmacy technician</option><option>Dispatch rider</option><option>Customer support</option><option>Other</option></select></label>
       <label for="kc">PCN registration number<span class="hint">Pharmacists and technicians only.</span><input id="kc" name="pcn"></label></div>
@@ -800,6 +800,7 @@ function vStaff() {
       <p class="small muted" role="status">Updates every 10 seconds${st.updated ? ` · last ${st.updated.toLocaleTimeString("en-GB")}` : ""}</p></div>
     ${st.err ? alertBox(st.err) : ""}
     ${d.missing && d.missing.length ? `<details class="setup"><summary><b>${d.missing.length} site details still missing</b> · customers can't see these yet</summary><p class="small">Add them in <code>js/config.js</code>: ${d.missing.map(esc).join(", ")}.</p></details>` : ""}
+    ${d.setup && d.setup.length ? `<details class="setup"><summary><b>${d.setup.length} hosting setting${d.setup.length === 1 ? "" : "s"} to add</b> · in Vercel, Settings → Environment Variables</summary><p class="small">${d.setup.map(esc).join(", ")}. See the README for what each one does.</p></details>` : ""}
     ${st.tab === "requests" ? `<div class="requests">${d.requests.length ? d.requests.map(r => `<article class="panel req"><div class="top"><b>${{ appointment: "Consultation booking", message: "Message", careers: "Careers interest" }[r.type]}</b><span class="small muted">${stamp(r.createdAt)}</span></div>
         <div class="small"><b>${esc(r.name)}</b> · ${r.phone ? `<a href="tel:${esc(r.phone)}">${esc(r.phone)}</a>` : ""} ${esc(r.email || "")}</div>
         ${r.type === "appointment" ? `<div class="small">Wants: <b>${esc(r.date)} at ${esc(PR.fmt12(r.time || "00:00"))}</b></div>` : ""}${r.topic ? `<div class="small">${esc(r.topic)}</div>` : ""}${r.role ? `<div class="small">${esc(r.role)} ${r.pcn ? `· PCN ${esc(r.pcn)}` : ""}</div>` : ""}

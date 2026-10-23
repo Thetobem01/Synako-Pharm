@@ -1,4 +1,4 @@
-import { handle, only, send, body, fail, site, db, newId, digits, log, publicOrder, storageReady } from "./_lib/core.js";
+import { handle, only, send, body, fail, site, db, newId, digits, log, publicOrder, storageReady, limit, notifyCustomer, notifyStaff } from "./_lib/core.js";
 
 const MAX_FILE = 900 * 1024; // bytes of base64 text; images are compressed in the browser first
 const clean = (s, n = 200) => String(s == null ? "" : s).trim().slice(0, n);
@@ -7,6 +7,7 @@ const clean = (s, n = 200) => String(s == null ? "" : s).trim().slice(0, n);
 export default handle(async (req, res) => {
   if (!only(req, res, "POST")) return;
   if (!storageReady()) throw fail(503, "Online ordering isn't switched on yet. Please call the pharmacy to order.");
+  await limit(req, "orders", 10, 3600, "You've placed several orders in a short time. Please call the pharmacy if you need to place more.");
   const b = await body(req);
   const { config, P, pricing } = site();
 
@@ -52,5 +53,6 @@ export default handle(async (req, res) => {
   await db.set("order:" + o.id, o);
   if (file) await db.set("rx:" + o.id, file);
   await db.index("orders", o.id, now);
+  await Promise.all([notifyCustomer(o, "placed"), notifyStaff(o, "placed")]);
   send(res, 201, { order: publicOrder(o) });
 });

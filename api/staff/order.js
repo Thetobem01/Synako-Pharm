@@ -1,4 +1,4 @@
-import { handle, only, send, body, query, fail, requireStaff, db, log, STATUS } from "../_lib/core.js";
+import { handle, only, send, body, query, fail, requireStaff, db, log, STATUS, notifyCustomer } from "../_lib/core.js";
 
 const NEXT = { // allowed staff actions by current status
   pending_review: ["approve", "info", "reject"],
@@ -61,5 +61,6 @@ export default handle(async (req, res) => {
   log(o, MSG[action]);
   log(o, `${MSG[action]} by ${by}${note ? ` · “${note}”` : ""}`, { internal: true });
   await db.set("order:" + o.id, o);
+  await notifyCustomer(o, action);
   send(res, 200, { order: Object.assign({}, o, { statusLabel: STATUS[o.status], actions: NEXT[o.status] || [] }) });
 });

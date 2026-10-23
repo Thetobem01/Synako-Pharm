@@ -76,6 +76,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 input, select, textarea { font: inherit; color: var(--ink); }
 :focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; border-radius: 4px; }
 ::selection { background: var(--brand-100); }
+.hp { position: absolute; left: -10000px; width: 1px; height: 1px; overflow: hidden; }
 .sr { position: absolute !important; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; }
 .skip { position: absolute; left: var(--sp-4); top: -100px; z-index: 200; background: var(--brand); color: #fff; padding: .7rem 1rem; border-radius: var(--r-sm); font-weight: 600; }
 .skip:focus { top: var(--sp-4); }

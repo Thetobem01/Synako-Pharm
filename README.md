@@ -50,6 +50,9 @@ Regulations 2026); `/controlled-medicines` explains in-store collection.
    | `PAYSTACK_SECRET_KEY` | Same page (`sk_test_…`, then `sk_live_…`). Never put this in the code. |
    | `STAFF_PASSWORD` | A strong password for the Pharmacist Desk |
    | `SESSION_SECRET` | Any long random text (signs staff sign-ins) |
+   | `RESEND_API_KEY` | *Optional, recommended.* From resend.com → API Keys. Turns on order emails. |
+   | `MAIL_FROM` | Sender, e.g. `Synako Pharmacy <orders@yourdomain.com>` (verify the domain in Resend first) |
+   | `STAFF_EMAIL` | Where new-order, payment and message alerts go, e.g. the pharmacist's inbox |
 
 4. **Paystack webhook:** in Paystack → Settings → API Keys & Webhooks, set the webhook URL to
    `https://YOUR-DOMAIN/api/paystack-webhook`.
@@ -58,6 +61,37 @@ Regulations 2026); `/controlled-medicines` explains in-store collection.
 
 Until storage and Paystack are connected, the checkout shows a "call us to order" message instead
 of taking orders.
+
+The Pharmacist Desk lists any hosting settings that are still missing.
+
+## Launch checklist
+
+Work through this before switching to live Paystack keys and sharing the address:
+
+- [ ] All business and licence details filled in `js/config.js` (the desk shows what's missing)
+- [ ] Real prices in `js/data.js`, and every product's OTC / prescription-only status confirmed by the superintendent pharmacist
+- [ ] Privacy notice, terms of sale and returns policy reviewed by your lawyer, then the "draft" notice removed from those pages (`DRAFT` in `js/app.js`)
+- [ ] Real delivery fees, express area and consultation fee set in `js/config.js`
+- [ ] Upstash Redis connected, and `STAFF_PASSWORD` and `SESSION_SECRET` set to long random values
+- [ ] Order emails set up (`RESEND_API_KEY`, `MAIL_FROM`, `STAFF_EMAIL`) and one test email received
+- [ ] One full test order with Paystack's test card: pay, pack, dispatch, deliver
+- [ ] One test prescription order: approve on the desk, then pay from the customer's tracking page
+- [ ] Paystack webhook URL set, then switch to `pk_live_…` / `sk_live_…` keys and redeploy
+- [ ] Custom domain connected and `site.url` updated in `js/config.js`
+- [ ] Sitemap submitted in Google Search Console (`https://YOUR-DOMAIN/sitemap.xml`)
+
+## Emails
+
+With the three email settings above, the site sends:
+
+- **To the customer:** order received, payment received, prescription approved (with a link to pay), more information needed, not approved, out for delivery, delivered. Each email links to the order's tracking page.
+- **To `STAFF_EMAIL`:** a new order or prescription to review, a payment received, and a new message or consultation request. Staff alerts contain only the order number and a link to the desk, never health details.
+
+Emails are best-effort: if Resend is down, the order still goes through.
+
+## Abuse protection
+
+Each visitor (by IP address) is limited to 10 orders an hour, 6 messages per 10 minutes, 40 order look-ups per 10 minutes and 8 staff sign-in attempts per 15 minutes. Messages also carry a hidden field that only spam bots fill in; those are dropped without being stored. Limits use the same Redis database as orders.
 
 ## Fill in your details
 
@@ -87,7 +121,11 @@ Products show a drawn pack until you add a photo. Save it as `assets/products/<p
 
 ```bash
 npm run dev          # http://localhost:3000 · test storage and payments · desk password "desk"
+npm test             # pricing rules and the full order API (place, pay, review, track)
+npm run check        # syntax check of every script
 ```
+
+The tests run automatically on GitHub for every pull request (`.github/workflows/ci.yml`).
 
 ## Fonts
 

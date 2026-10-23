@@ -79,6 +79,19 @@ superintendent pharmacist confirm each product's OTC / prescription-only classif
 - **Accessibility:** WCAG 2.2 AA colour contrast, keyboard navigation, skip link, labelled forms, screen-reader headings and reduced-motion support.
 - **Region settings:** language, currency, country and time zone live in `site` in `js/config.js`; prices and dates are formatted from them.
 
+## Orders and receipts
+
+- **Order page** (`/track/<order number>`): a status headline, a progress tracker, items with pictures, payment and delivery details, and the order's activity. It refreshes by itself. Orders placed on a device are listed under **Your orders** (`/track`); on another device, customers use the order number and the last 4 digits of their phone.
+- **Receipts:** customers download a PDF receipt (or an order summary before payment) from the order page. Staff can download one from the Pharmacist Desk, which also shows the delivery address. The PDF is made in the browser by `js/receipt.js`; no outside service sees the order. Your business and licence details from `js/config.js` appear on it automatically, so fill them in before launch.
+- **Buy again** puts the same items back in the basket. Prescription items still need a valid prescription.
+
+## Shopping helpers
+
+- Search suggestions as you type (arrow keys and Enter work; screen readers announce them).
+- Live "Open now / Closed" status in the top bar, from the opening hours in `js/config.js`.
+- A same-day delivery countdown on product pages, based on `delivery.sameDayCutoff`.
+- "Recently viewed" products on the home and product pages (kept in the browser only).
+
 ## Product photos
 
 Products show a drawn pack until you add a photo. Save it as `assets/products/<product id>.webp` (square, at least 800×800, white background), then add the id to the `PHOTOS` list at the top of `js/data.js`, e.g. `para: "webp",`.

@@ -51,7 +51,11 @@ const ICONS = {
   clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
   cal: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>',
   card: '<rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20M6 15h4"/>',
-  check: '<path d="M20 6L9 17l-5-5"/>'
+  check: '<path d="M20 6L9 17l-5-5"/>',
+  copy: '<rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/>',
+  download: '<path d="M12 3v12M7 10l5 5 5-5M4 21h16"/>',
+  refresh: '<path d="M20 11a8 8 0 0 0-14.3-4.9L4 8M4 4v4h4M4 13a8 8 0 0 0 14.3 4.9L20 16M20 20v-4h-4"/>',
+  x: '<path d="M18 6L6 18M6 6l12 12"/>'
 };
 const icon = (k, cls) => `<svg class="${cls || "ic"}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[k] || ICONS.box}</svg>`;
 
@@ -65,11 +69,42 @@ const store = {
 const S = {
   mode: "shop", view: "home", filter: "all", tab: "body", q: "", sort: "popular", product: null, qty: 1, page: "about",
   cart: store.get("synako.cart", []), rxRequest: false, step: 1, form: {}, busy: false, error: "",
-  mine: store.get("synako.orders", []), trackId: null, track: null, trackErr: "",
+  mine: store.get("synako.orders", []), trackId: null, track: null, trackErr: "", justPlaced: null,
+  recent: store.get("synako.recent", []),
   staff: { token: store.sget("synako.staff"), name: store.sget("synako.staffName"), list: null, sel: null, detail: null, file: null, tab: "review", err: "", updated: null }
 };
 const saveCart = () => store.set("synako.cart", S.cart);
 const saveMine = () => store.set("synako.orders", S.mine.slice(0, 20));
+/* Keep a short summary of each order on this device, so "Your orders" can list them */
+function remember(o, phone) {
+  const prev = S.mine.find(m => m.id === o.id) || {};
+  const entry = { id: o.id, phone: phone || prev.phone || "", at: o.createdAt, status: o.status, statusLabel: o.statusLabel, total: o.total, priced: o.priced !== false, count: o.items.reduce((t, i) => t + Number(i.qty || 1), 0) };
+  S.mine = [entry].concat(S.mine.filter(m => m.id !== o.id)); saveMine();
+}
+const PAID = s => ["paid", "packed", "out_for_delivery", "delivered"].includes(s);
+const hm = s => { const [h, m] = String(s).split(":").map(Number); return h * 60 + (m || 0); };
+const DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+const dur = m => { const h = Math.floor(m / 60), r = m % 60; return [h ? `${h} hr${h === 1 ? "" : "s"}` : "", r ? `${r} min${r === 1 ? "" : "s"}` : ""].filter(Boolean).join(" ") || "a minute"; };
+/* Open now, or when we next open (Nigeria time) */
+function openState() {
+  const c = PR.clock(CFG), today = H.open[c.day];
+  if (today && c.minutes >= hm(today[0]) && c.minutes < hm(today[1])) return { open: true, text: `Open now · until ${PR.fmt12(today[1])}` };
+  for (let i = 0; i < 8; i++) {
+    const d = (c.day + i) % 7, h = H.open[d];
+    if (!h || (i === 0 && c.minutes >= hm(h[0]))) continue;
+    return { open: false, text: `Closed · opens ${i === 0 ? "today" : i === 1 ? "tomorrow" : DAYS[d]} ${PR.fmt12(h[0])}` };
+  }
+  return { open: false, text: "Closed" };
+}
+/* Delivery promise on the product page, counting down to the same-day cut-off */
+function etaHTML() {
+  const c = PR.clock(CFG), today = H.open[c.day], cut = hm(D.sameDayCutoff), o = openState();
+  let b, sub;
+  if (today && c.minutes < cut) { b = `Order within ${dur(cut - c.minutes)} for same-day delivery`; sub = o.open ? `Or get it in ${D.expressMinutes} minutes with home delivery.` : `Home delivery in ${D.expressMinutes} minutes starts when we open at ${PR.fmt12(today[0])}.`; }
+  else if (o.open) { b = `Home delivery in ${D.expressMinutes} minutes`; sub = `Available until ${PR.fmt12(today[1])} today, or choose next-day delivery.`; }
+  else { b = "Order now for next-day delivery"; sub = `We're closed right now. ${o.text.replace("Closed · o", "O")}.`; }
+  return `${icon("truck", "ic")}<div><b>${b}</b><span>${sub}</span></div>`;
+}
 
 /* ---------- API (live) with a built-in demo for previews ---------- */
 const MEMORY = !!window.SYNAKO_MEMORY_ROUTER || location.protocol === "file:";
@@ -98,7 +133,8 @@ const demo = (() => {
   const id = p => (p || "SYN") + "-" + Math.random().toString(36).slice(2, 8).toUpperCase();
   const log = (o, m, internal) => o.history.push({ t: new Date().toISOString(), m, internal: !!internal });
   const pub = o => ({ id: o.id, createdAt: o.createdAt, status: o.status, statusLabel: LBL[o.status], rx: o.rx, rxRequest: o.rxRequest, items: o.items, subtotal: o.subtotal, deliveryFee: o.deliveryFee, total: o.total, priced: o.priced,
-    delivery: o.delivery, note: ["info_needed", "rejected"].includes(o.status) ? o.note : "", canPay: ["awaiting_payment", "approved_awaiting_payment"].includes(o.status) && o.priced, history: o.history.filter(h => !h.internal) });
+    delivery: { speed: o.delivery.speed, label: o.delivery.label, city: o.delivery.city, state: o.delivery.state }, note: ["info_needed", "rejected"].includes(o.status) ? o.note : "", canPay: ["awaiting_payment", "approved_awaiting_payment"].includes(o.status) && o.priced,
+    history: o.history.filter(h => !h.internal), customer: { name: o.customer.name }, payment: o.payment && o.payment.status === "paid" ? o.payment : { status: "unpaid" } });
   const full = o => Object.assign({}, o, { statusLabel: LBL[o.status], actions: NEXT[o.status] || [] });
   const wait = v => new Promise(r => setTimeout(() => r(v), 250));
   function make(b) {
@@ -119,7 +155,7 @@ const demo = (() => {
     createOrder: b => wait({ order: pub(make(b)) }),
     getOrder: (oid, phone) => wait({ order: pub(find(oid, phone)) }),
     payStart: (oid, phone) => { const o = find(oid, phone); return wait({ reference: o.id + "-1", amount: Math.round(o.total * 100), email: o.customer.email, mock: true }); },
-    payVerify: ref => { const o = orders.get(ref.replace(/-\d+$/, "")); o.status = "paid"; log(o, "Payment received · demo (no money taken)"); return wait({ order: pub(o) }); },
+    payVerify: ref => { const o = orders.get(ref.replace(/-\d+$/, "")); o.status = "paid"; o.payment = { status: "paid", channel: "test", reference: ref, paidAt: new Date().toISOString() }; log(o, "Payment received · demo (no money taken)"); return wait({ order: pub(o) }); },
     request: () => wait({ id: id("MSG") }),
     staffLogin: () => wait({ token: "demo" }),
     staffList: () => wait({ orders: [...orders.values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).map(o => ({ id: o.id, createdAt: o.createdAt, status: o.status, statusLabel: LBL[o.status], rx: o.rx, rxRequest: o.rxRequest, customer: o.customer.name, total: o.total, priced: o.priced, items: o.items.map(i => `${i.qty} × ${i.name}`), speed: o.delivery.label })), requests: reqs, missing: missingDetails() }),
@@ -215,9 +251,11 @@ function go(path, opts) {
   S.view = r.view;
   S.error = "";
   if (r.filter) S.filter = r.filter;
-  if (r.product) { S.product = r.product; S.qty = 1; }
+  if (r.product) { S.product = r.product; S.qty = 1; S.recent = [r.product].concat(S.recent.filter(x => x !== r.product)).slice(0, 8); store.set("synako.recent", S.recent); }
+  if (r.view !== "track") S.justPlaced = null;
+  closeSugg();
   if (r.page) S.page = r.page;
-  if (r.view === "track") { S.trackId = r.trackId || S.trackId; }
+  if (r.view === "track") { if (r.trackId !== S.trackId) { S.track = null; S.trackErr = ""; } S.trackId = r.trackId || null; }
   if (!MEMORY && !opts.noHistory) { try { history[opts.replace ? "replaceState" : "pushState"]({}, "", pathFor()); } catch (e) { /* stay in memory */ } }
   closeDrawer(true);
   render(true);
@@ -230,10 +268,15 @@ window.addEventListener("popstate", () => go(location.pathname, { noHistory: tru
 const link = (path, label, cls, extra) => `<a href="${path}" data-link${cls ? ` class="${cls}"` : ""}${extra ? " " + extra : ""}>${label}</a>`;
 
 /* ---------- Small pieces ---------- */
-function toast(msg) { const t = $("#toast"); t.textContent = msg; t.classList.add("show"); clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove("show"), 3200); }
+function toast(msg, action) {
+  const t = $("#toast");
+  t.innerHTML = `<span>${esc(msg)}</span>${action ? link(action.href, action.label, "toast-act") : ""}`;
+  t.classList.add("show"); clearTimeout(toast.t);
+  toast.t = setTimeout(() => t.classList.remove("show"), action ? 5000 : 3200);
+}
 const photo = (src, style, alt) => `<img src="${src}" alt="${esc(alt || "")}" loading="lazy" decoding="async" data-swap${style ? ` style="${style}"` : ""}>`;
 const media = p => p.photo ? `<span class="drawn">${art(p)}</span>${photo(p.photo, "", p.name)}` : `<span class="drawn">${art(p)}</span>`;
-const tag = p => p.cls === "pom" ? `<span class="tag rx">Prescription only</span>` : `<span class="tag otc">Over the counter</span>`;
+const tag = p => p.cls === "pom" ? `<span class="tag rx">Prescription only</span>` : `<span class="tag otc">Over-the-counter</span>`;
 const alertBox = msg => msg ? `<div class="notice bad" role="alert" tabindex="-1" id="form-error"><b>Something needs attention</b><span>${esc(msg)}</span></div>` : "";
 const phoneText = () => has(B.phone) ? `<a class="tel" href="tel:${esc(B.phone.replace(/\s/g, ""))}">${esc(B.phone)}</a>` : "";
 const contactLine = () => has(B.phone) ? `call ${phoneText()}` : `use the ${link("/contact", "contact page", "linkbtn")}`;
@@ -256,7 +299,7 @@ function personSVG(kind) {
 function card(p) {
   const rx = p.cls === "pom";
   return `<article class="pcard">
-    <a class="pcard-media" href="/product/${p.id}" data-link tabindex="-1" aria-hidden="true"><span class="pcard-badge ${rx ? "rx" : "otc"}">${rx ? "Prescription" : "Over the counter"}</span>${media(p)}</a>
+    <a class="pcard-media" href="/product/${p.id}" data-link tabindex="-1" aria-hidden="true"><span class="pcard-badge ${rx ? "rx" : "otc"}">${rx ? "Prescription" : "Over-the-counter"}</span>${media(p)}</a>
     <div class="pcard-body">
       <p class="pcard-brand">${esc(p.brand === "Generic" ? cat(p.cat).name : p.brand)}</p>
       <h3 class="pcard-name"><a href="/product/${p.id}" data-link>${esc(p.name)}</a></h3>
@@ -276,6 +319,7 @@ function vHome() {
   const popular = P.filter(p => p.pop).slice(0, 6);
   const TABS = [["body", "Body care"], ["family", "Mother & baby"], ["vitamins", "Vitamins"], ["devices", "Health devices"]];
   const tabItems = P.filter(p => p.cat === S.tab).slice(0, 4);
+  const seen = S.recent.filter(prod).slice(0, 6).map(prod);
   return `
   <section class="hero" aria-labelledby="hero-title"><div class="wrap hero-grid">
     <div class="hero-copy">
@@ -316,6 +360,7 @@ function vHome() {
     <div class="cards">${popular.map(card).join("")}</div>
     <div class="strip">${icon("rx", "ic")}<p><b>Have a prescription?</b> Upload it at checkout. You pay only after our pharmacist approves it.</p>${link("/prescriptions", "How it works <span aria-hidden=\"true\">→</span>", "more")}</div>
   </div></section>
+  ${seen.length ? `<section class="section tight" aria-labelledby="seen-title"><div class="wrap">${sectionHead("seen-title", "Pick up where you left off", "Recently viewed", "", "")}<div class="cards">${seen.map(card).join("")}</div></div></section>` : ""}
 
   <section class="section tight" aria-label="Services"><div class="wrap pair">
     <article class="feature">
@@ -404,7 +449,7 @@ function vShop() {
       ${isPom ? `<div class="notice rx small" style="margin-bottom:1rem"><b>Prescription needed at checkout</b><span>You can add these to your basket, then upload a valid prescription. Our pharmacist checks it before anything is charged.</span></div>` : ""}
       <div class="toolbar"><p class="muted small" role="status">${list.length} product${list.length === 1 ? "" : "s"}${S.q ? ` · <button class="linkbtn" type="button" data-clear>Clear search</button>` : ""}</p>
         <label class="sort" for="sort">Sort by <select id="sort">${[["popular", "Most popular"], ["low", "Price: low to high"], ["high", "Price: high to low"], ["az", "Name: A to Z"]].map(([v, l]) => `<option value="${v}" ${S.sort === v ? "selected" : ""}>${l}</option>`).join("")}</select></label></div>
-      <h2 class="sr">${esc(filterTitle())}: products</h2>
+      <h2 class="sr">${filterTitle()}: products</h2>
       ${list.length ? `<div class="grid-shop">${list.map(card).join("")}</div>`
         : `<div class="empty"><p><b>No products match “${esc(S.q)}”.</b></p><p style="margin-top:.4rem">Try a generic name, such as paracetamol, or ${link("/contact", "ask our pharmacist", "linkbtn")} if we stock it. Controlled medicines aren't listed online.</p></div>`}
     </div>
@@ -415,7 +460,8 @@ function vProduct() {
   const p = prod(S.product); if (!p) return vNotFound();
   const rx = p.cls === "pom", c = cat(p.cat);
   const related = P.filter(x => x.cat === p.cat && x.id !== p.id).slice(0, 4);
-  return `<div class="wrap page-head" style="padding-bottom:.5rem"><nav class="crumbs" aria-label="Breadcrumb">${link("/", "Home")}<span aria-hidden="true">/</span>${link(rx ? "/products/prescription" : "/products/otc", rx ? "Prescription" : "Over the counter")}<span aria-hidden="true">/</span>${link("/products/" + p.cat, c.name)}</nav></div>
+  const seen = S.recent.filter(id => id !== p.id && prod(id)).slice(0, 4).map(prod);
+  return `<div class="wrap page-head" style="padding-bottom:.5rem"><nav class="crumbs" aria-label="Breadcrumb">${link("/", "Home")}<span aria-hidden="true">/</span>${link(rx ? "/products/prescription" : "/products/otc", rx ? "Prescription" : "Over-the-counter")}<span aria-hidden="true">/</span>${link("/products/" + p.cat, c.name)}</nav></div>
   <div class="wrap pdp">
     <div class="visual">${media(p)}</div>
     <div class="info">
@@ -429,6 +475,12 @@ function vProduct() {
         <div class="qty" role="group" aria-label="Quantity"><button type="button" data-qty="-1" aria-label="Decrease quantity">−</button><span class="num" id="qty-val" aria-live="polite">${S.qty}</span><button type="button" data-qty="1" aria-label="Increase quantity">+</button></div>
         <button class="btn ${rx ? "btn-accent" : "btn-primary"} btn-lg" type="button" data-add="${p.id}" data-withqty="1">${rx ? "Add to basket · prescription needed" : "Add to basket"}</button>
       </div>
+      <div class="eta" id="eta" role="status">${etaHTML()}</div>
+      <ul class="assure" aria-label="Our promise">
+        <li>${icon("box", "ic sm")}Genuine, NAFDAC-registered</li>
+        <li>${icon("shield", "ic sm")}Checked by a pharmacist</li>
+        <li>${icon("lock", "ic sm")}Secure checkout with Paystack</li>
+      </ul>
       <dl class="specs">
         <dt>${p.cls === "pom" || p.strength || !["device", "thermo", "kit", "strips", "bar"].includes(p.form) && !["body", "devices", "sexual"].includes(p.cat) ? "Active ingredient" : "Product type"}</dt><dd>${esc(p.generic)}</dd>
         ${p.strength ? `<dt>Strength</dt><dd>${esc(p.strength)}</dd>` : ""}
@@ -446,7 +498,8 @@ function vProduct() {
       <p class="small muted">Questions about this product? ${link("/contact", "Talk to a pharmacist", "linkbtn")}.</p>
     </div>
   </div>
-  ${related.length ? `<section class="wrap related" aria-labelledby="rel-title">${sectionHead("rel-title", "", "More in " + esc(c.name), "", link("/products/" + p.cat, "View all <span aria-hidden=\"true\">→</span>", "more"))}<div class="cards cards-4">${related.map(card).join("")}</div></section>` : ""}`;
+  ${related.length ? `<section class="wrap related" aria-labelledby="rel-title">${sectionHead("rel-title", "", "More in " + esc(c.name), "", link("/products/" + p.cat, "View all <span aria-hidden=\"true\">→</span>", "more"))}<div class="cards cards-4">${related.map(card).join("")}</div></section>` : ""}
+  ${seen.length ? `<section class="wrap related" aria-labelledby="seen-title">${sectionHead("seen-title", "", "Recently viewed", "", "")}<div class="cards cards-4">${seen.map(card).join("")}</div></section>` : ""}`;
 }
 
 /* ---------- Controlled medicines (information only, nothing for sale) ---------- */
@@ -483,17 +536,18 @@ function vControlled() {
 const items = () => S.cart.filter(l => prod(l.id)).map(l => Object.assign({}, l, { p: prod(l.id) }));
 const hasRx = () => S.rxRequest || S.cart.some(l => prod(l.id) && prod(l.id).cls === "pom");
 const quoteNow = () => PR.quote({ items: S.cart, state: S.form.state, speed: S.form.speed, rxRequest: S.rxRequest }, CFG, P);
-function summary(cta) {
+function summary(cta, estimate) {
   const q = quoteNow();
   return `<aside class="panel summary" aria-labelledby="sum-title"><h2 class="h3" id="sum-title">Order summary</h2>
     ${items().map(l => `<div class="r small"><span>${l.q} × ${esc(l.p.name)}</span><span class="num">${NGN(l.p.price * l.q)}</span></div>`).join("")}
     ${S.rxRequest ? `<div class="r small"><span>Prescription items</span><span class="muted">Priced by pharmacist</span></div>` : ""}
     <div class="r"><span>Subtotal</span><span class="num">${NGN(q.subtotal)}</span></div>
-    <div class="r"><span>Delivery <span class="muted small">(${esc(q.speedLabel)})</span></span><span class="num">${NGN(q.deliveryFee)}</span></div>
-    <div class="r total"><span>Total</span><span class="num">${NGN(q.total)}${S.rxRequest ? "+" : ""}</span></div>
+    <div class="r"><span>Delivery <span class="muted small">(${estimate ? "from · choose at checkout" : esc(q.speedLabel)})</span></span><span class="num">${NGN(q.deliveryFee)}</span></div>
+    <div class="r total"><span>${estimate ? "Estimated total" : "Total"}</span><span class="num">${NGN(q.total)}${S.rxRequest ? "+" : ""}</span></div>
     ${q.big ? `<div class="notice info small"><b>Next-day delivery</b><span>Orders above ${threshold} are delivered the next day.</span></div>` : ""}
     ${hasRx() ? `<div class="notice rx small"><b>Pay after approval</b><span>Your order has prescription items, so nothing is charged until our pharmacist approves the prescription.</span></div>` : ""}
-    ${cta || ""}</aside>`;
+    ${cta || ""}
+    <p class="secure small">${icon("lock", "ic sm")}<span>Secure checkout. Payments are handled by Paystack, so Synako never sees your card number.</span></p></aside>`;
 }
 function vBasket() {
   const list = items();
@@ -503,12 +557,12 @@ function vBasket() {
   return `<div class="wrap page-head"><h1>Your basket</h1></div>
   <div class="wrap two"><section class="panel" aria-label="Items in your basket">
     ${list.map(l => `<div class="line"><a class="thumb" href="/product/${l.p.id}" data-link tabindex="-1" aria-hidden="true">${media(l.p)}</a>
-      <div style="min-width:0">${link("/product/" + l.p.id, esc(l.p.name), "linkbtn dark")}<div class="muted small">${esc(l.p.pack)}</div><div style="margin-top:.35rem">${tag(l.p)}</div></div>
+      <div style="min-width:0">${link("/product/" + l.p.id, esc(l.p.name), "linkbtn dark")}<div class="muted small">${esc(l.p.pack)}${l.q > 1 ? ` · ${NGN(l.p.price)} each` : ""}</div><div style="margin-top:.35rem">${tag(l.p)}</div></div>
       <div class="right"><b class="num">${NGN(l.p.price * l.q)}</b>
         <div class="qty" role="group" aria-label="Quantity of ${esc(l.p.name)}"><button type="button" data-lineqty="${l.id}" data-d="-1" aria-label="Decrease">−</button><span class="num" aria-live="polite">${l.q}</span><button type="button" data-lineqty="${l.id}" data-d="1" aria-label="Increase">+</button></div>
         <button class="rm" type="button" data-remove="${l.id}" aria-label="Remove ${esc(l.p.name)}">Remove</button></div></div>`).join("")}
     ${S.rxRequest ? `<div class="line"><div class="thumb rxthumb" aria-hidden="true">℞</div><div><b>Prescription request</b><div class="muted small">Our pharmacist will add the medicines on your prescription and confirm the price.</div></div><div class="right"><button class="rm" type="button" data-rxreq-remove>Remove</button></div></div>` : ""}
-  </section>${summary(`${link("/checkout", "Go to checkout", "btn btn-primary btn-lg full")}${link("/products", "Continue shopping", "linkbtn center-self")}`)}</div>`;
+  </section>${summary(`${link("/checkout", "Go to checkout", "btn btn-primary btn-lg full")}${link("/products", "Continue shopping", "linkbtn center-self")}`, true)}</div>`;
 }
 function stepList() { const s = [{ n: 1, l: "Your details" }, { n: 2, l: "Delivery" }]; if (hasRx()) s.push({ n: 3, l: "Prescription" }); s.push({ n: 4, l: hasRx() ? "Review & submit" : "Review & pay" }); return s; }
 function vCheckout() {
@@ -522,7 +576,7 @@ function vCheckout() {
   if (S.step === 1) body = `<form class="f" id="f1" novalidate><h2>Your details</h2>
     <div class="row2"><label for="fn">Full name<input id="fn" name="name" required value="${v("name")}" autocomplete="name"></label>
     <label for="phn">Phone number<span class="hint">We'll use it to confirm delivery and to find your order.</span><input id="phn" name="phone" type="tel" inputmode="tel" required minlength="10" placeholder="0803 000 0000" value="${v("phone")}" autocomplete="tel"></label></div>
-    <div class="row2"><label for="em">Email<span class="hint">Paystack sends your receipt here.</span><input id="em" name="email" type="email" required value="${v("email")}" autocomplete="email"></label>
+    <div class="row2"><label for="em">Email<span class="hint">For order updates. You can also download a receipt from your order page.</span><input id="em" name="email" type="email" required value="${v("email")}" autocomplete="email"></label>
     <label for="dob">Date of birth<span class="hint">We supply medicines to adults 18 and over only.</span><input id="dob" name="dob" type="date" required value="${v("dob")}" autocomplete="bday"></label></div>
     <label class="check"><input type="checkbox" id="adult" name="adult" required ${F.adult ? "checked" : ""}><span>I confirm I am 18 or over and the medicines are for me or someone I care for.</span></label>
     <label class="check"><input type="checkbox" id="consent" name="consent" required ${F.consent ? "checked" : ""}><span>I agree to Synako processing my health information to supply my order, as set out in the ${link("/privacy", "privacy notice", "linkbtn")}.</span></label>
@@ -564,7 +618,7 @@ function vCheckout() {
     ${DEMO ? `<p class="small muted">Design preview: orders and payments here are simulated. Nothing is charged.</p>` : ""}</form>`;
   return `<div class="wrap page-head"><h1>Checkout</h1></div>
   <div class="wrap two"><div class="panel">
-    <ol class="stepper" aria-label="Checkout steps">${steps.map(s => `<li><button type="button" data-step="${s.n}" ${s.n === S.step ? 'aria-current="step"' : ""} class="${s.n < S.step ? "done" : ""}" ${s.n > S.step ? "disabled" : ""}>${s.l}</button></li>`).join("")}</ol>
+    <ol class="stepper" aria-label="Checkout steps">${steps.map((s, i) => `<li class="${s.n === S.step ? "cur" : ""}"><button type="button" data-step="${s.n}" ${s.n === S.step ? 'aria-current="step"' : ""} class="${s.n < S.step ? "done" : ""}" ${s.n > S.step ? "disabled" : ""}><span class="sn" aria-hidden="true">${s.n < S.step ? "✓" : i + 1}</span><span class="sl">${s.l}</span></button></li>`).join("")}</ol>
     ${body}</div>${summary()}</div>`;
 }
 
@@ -584,18 +638,32 @@ function vRx() {
   </div>`;
 }
 
-/* ---------- Tracking (refreshes itself while you watch) ---------- */
+/* ---------- Orders: find an order, and the order page (refreshes itself while you watch) ---------- */
 const STEPS_RX = ["Order placed", "Pharmacist review", "Payment", "Packed", "Out for delivery", "Delivered"];
 const STEPS_OTC = ["Order placed", "Payment", "Packed", "Out for delivery", "Delivered"];
+const STEP_LOG = { "Order placed": /^Order placed/, "Pharmacist review": /approved by pharmacist/i, "Payment": /^Payment received/, "Packed": /^Packed/, "Out for delivery": /^Out for delivery/, "Delivered": /^Delivered/ };
 function stageOf(o) {
   const m = o.rx ? { pending_review: 1, info_needed: 1, rejected: 1, approved_awaiting_payment: 2, paid: 3, packed: 4, out_for_delivery: 5, delivered: 6, cancelled: 1 }
                  : { awaiting_payment: 1, paid: 2, packed: 3, out_for_delivery: 4, delivered: 5, cancelled: 1 };
   return m[o.status] != null ? m[o.status] : 1;
 }
 const statusTag = o => {
-  const cls = { delivered: "ok", paid: "ok", rejected: "bad", cancelled: "bad", info_needed: "warn", pending_review: "warn", awaiting_payment: "warn", approved_awaiting_payment: "warn" }[o.status] || "otc";
+  const cls = { delivered: "ok", paid: "ok", packed: "ok", out_for_delivery: "otc", rejected: "bad", cancelled: "bad", info_needed: "warn", pending_review: "warn", awaiting_payment: "warn", approved_awaiting_payment: "warn" }[o.status] || "otc";
   return `<span class="tag ${cls}">${esc(o.statusLabel || o.status)}</span>`;
 };
+const HEADLINE = {
+  awaiting_payment: ["Waiting for payment", "Pay securely to confirm your order. We start packing as soon as it's paid."],
+  pending_review: ["With our pharmacist", `We're checking your prescription. This usually takes under an hour during opening hours (${H.label}).`],
+  info_needed: ["We need a little more information", "Our pharmacist has a question before we can approve your prescription."],
+  approved_awaiting_payment: ["Approved and ready to pay", "Our pharmacist has approved your prescription. Pay now and we'll start packing."],
+  rejected: ["Prescription not approved", "We couldn't supply this order, and you haven't been charged."],
+  paid: ["Payment received", "Thank you. Our pharmacy team is preparing your order."],
+  packed: ["Packed and sealed", "Your order has been checked by a pharmacist and is waiting for our rider."],
+  out_for_delivery: ["On its way", "Our rider is on the way. Keep your phone nearby; they may ask for your order number."],
+  delivered: ["Delivered", "Thank you for choosing Synako. We hope you feel better soon."],
+  cancelled: ["Order cancelled", "This order was cancelled and you haven't been charged."]
+};
+const SPEED_NOTE = { express: `Within ${D.expressMinutes} minutes of dispatch, during opening hours.`, sameday: `The same day for orders paid before ${cutoff}.`, nextday: "The next working day.", states: "Within 2–4 working days." };
 const phoneFor = id => (S.mine.find(m => m.id === id) || {}).phone || "";
 async function loadTrack(phone) {
   const id = S.trackId; if (!id) return;
@@ -605,44 +673,98 @@ async function loadTrack(phone) {
     const { order } = await api.getOrder(id, phone);
     if (S.trackId !== id) return;
     S.track = order; S.trackErr = "";
-    if (!S.mine.some(m => m.id === id)) { S.mine.unshift({ id, phone, at: order.createdAt }); saveMine(); }
+    remember(order, phone);
   } catch (e) { S.track = null; S.trackErr = e.message; }
   if (S.view === "track") render();
 }
 function vTrack() {
   const o = S.track && S.track.id === S.trackId ? S.track : null;
-  const needPhone = S.trackId && !phoneFor(S.trackId) && !o;
-  const final = o && ["delivered", "rejected", "cancelled"].includes(o.status);
-  const st = o ? (o.rx ? STEPS_RX : STEPS_OTC) : [];
-  const stage = o ? stageOf(o) : 0;
-  const bad = o && ["rejected", "cancelled"].includes(o.status);
-  return `<div class="wrap page-head"><h1>Track your order</h1><p class="muted lead">Your order page updates by itself, so you can leave it open.</p></div>
+  if (o) return vOrder(o);
+  if (S.trackId && phoneFor(S.trackId) && !S.trackErr) return `<div class="wrap page-head"><h1>Order <span class="mono">${esc(S.trackId)}</span></h1></div>
+    <div class="wrap" style="padding-bottom:var(--sp-8)"><div class="panel order-loading" role="status" aria-busy="true"><span class="spinner" aria-hidden="true"></span>Loading your order…</div></div>`;
+  return vFindOrder();
+}
+/* No order open: find one, or pick one placed on this device */
+function vFindOrder() {
+  const needPhone = S.trackId && !S.trackErr;
+  return `<div class="wrap page-head"><h1>Your orders</h1><p class="muted lead">Track an order, pay for an approved prescription, or download a receipt.</p></div>
   <div class="wrap two track">
-    <div style="display:grid;gap:1rem;align-content:start">
-      <form class="f panel" id="trackform" novalidate><h2 class="h3">Find an order</h2>
-        <label for="tid">Order number<input id="tid" name="tid" placeholder="SYN-XXXXXX" class="mono" required value="${esc(S.trackId || "")}" autocapitalize="characters"></label>
-        <label for="tph">Last 4 digits of your phone number<input id="tph" name="tph" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" required autocomplete="off" value="${needPhone ? "" : esc(phoneFor(S.trackId).slice(-4))}"></label>
-        <button class="btn btn-primary" type="submit">Find order</button></form>
-      ${S.mine.length ? `<nav class="order-list" aria-label="Your recent orders"><h2 class="h3">Your recent orders</h2>${S.mine.map(m => `<a class="order-pick" href="/track/${m.id}" data-link aria-current="${m.id === S.trackId ? "page" : "false"}"><b class="mono">${m.id}</b><span class="small muted">${m.at ? stamp(m.at) : ""}</span></a>`).join("")}</nav>` : ""}
-    </div>
-    <section class="panel" style="display:grid;gap:1.25rem;align-content:start" aria-live="polite" aria-busy="${S.trackId && !o && !S.trackErr && !needPhone}">
-      ${!S.trackId ? `<div class="empty-state">${icon("truck", "ic big")}<p><b>Enter your order number</b></p><p class="muted small">You'll find it on the page you saw after ordering, and in your Paystack receipt.</p></div>`
-      : S.trackErr ? alertBox(S.trackErr)
-      : needPhone ? `<div class="empty-state"><p><b>Order ${esc(S.trackId)}</b></p><p class="muted small">Enter the last 4 digits of the phone number you used to see this order.</p></div>`
-      : !o ? `<p class="muted">Loading your order…</p>`
-      : `<div style="display:flex;justify-content:space-between;gap:1rem;flex-wrap:wrap;align-items:center"><div><div class="muted small">Order</div><h2 class="mono" style="font-size:1.4rem">${esc(o.id)}</h2><div class="muted small">Placed ${stamp(o.createdAt)}</div></div>${statusTag(o)}</div>
-        ${o.status === "rejected" ? `<div class="notice rx"><b>We couldn't approve this prescription</b><span>${esc(o.note || "Our pharmacist will contact you to explain.")} You have not been charged.</span></div>` : ""}
-        ${o.status === "info_needed" ? `<div class="notice rx"><b>Our pharmacist needs more information</b><span>${esc(o.note || "We'll call you shortly.")}</span></div>` : ""}
-        ${o.status === "pending_review" ? `<div class="notice info"><b>Your prescription is with our pharmacist</b><span>Usually within an hour during opening hours (${esc(H.label)}). This page updates when it's approved.</span></div>` : ""}
-        ${o.canPay ? `<div class="paybox go">${icon("card", "ic big")}<div><b>${o.status === "approved_awaiting_payment" ? "Approved! " : ""}Pay ${NGN(o.total)} to confirm your order</b><p class="small muted">Card, bank transfer or USSD through Paystack.</p></div><button class="btn btn-primary btn-lg" type="button" data-pay="${esc(o.id)}" ${S.busy ? "disabled" : ""}>${S.busy ? "Opening payment…" : "Pay now"}</button></div>` : ""}
-        ${o.rxRequest && !o.priced ? `<p class="small muted">Our pharmacist will add your prescription items and their price when they approve it.</p>` : ""}
-        <ol class="timeline">${st.map((s, i) => { const c = i < stage ? "done" : (i === stage && !bad && !final ? "now" : "next"); return `<li class="${c}"><span class="dot ${c}" aria-hidden="true">${i < stage ? "✓" : i + 1}</span><div><b>${s}</b>${c === "now" ? `<div class="small muted">In progress</div>` : ""}<span class="sr">${c === "done" ? " (done)" : c === "now" ? " (current step)" : ""}</span></div></li>`; }).join("")}</ol>
-        <details class="facts"><summary>Order details</summary>
-          <div class="small" style="display:grid;gap:.35rem;margin-top:.6rem">${o.items.map(i => `<div class="r"><span>${i.qty} × ${esc(i.name)}</span><span class="num">${NGN(i.total)}</span></div>`).join("")}
-          <div class="r"><span>Delivery · ${esc(o.delivery.label)}</span><span class="num">${NGN(o.deliveryFee)}</span></div><div class="r"><b>Total</b><b class="num">${NGN(o.total)}${o.priced ? "" : "+"}</b></div></div></details>
-        <div><h3 style="margin-bottom:.5rem">Order record</h3><div class="audit">${o.history.slice().reverse().map(l => `<div><span>${stamp(l.t)}</span><b style="font-weight:500">${esc(l.m)}</b></div>`).join("")}</div></div>
-        ${final ? "" : `<p class="small muted">Questions? ${contactLine()}.</p>`}`}
+    <form class="f panel" id="trackform" novalidate><h2 class="h3">Find an order</h2>
+      ${S.trackErr ? alertBox(S.trackErr) : needPhone ? `<div class="notice info small"><b>Order ${esc(S.trackId)}</b><span>Enter the last 4 digits of the phone number you used to open this order.</span></div>` : ""}
+      <label for="tid">Order number<span class="hint">It starts with SYN, for example SYN-7K2M9Q.</span><input id="tid" name="tid" placeholder="SYN-XXXXXX" class="mono" required value="${esc(S.trackId || "")}" autocapitalize="characters" spellcheck="false"></label>
+      <label for="tph">Last 4 digits of your phone number<input id="tph" name="tph" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" required autocomplete="off"></label>
+      <button class="btn btn-primary" type="submit">Find order</button></form>
+    <section class="panel" aria-labelledby="mine-title"><h2 class="h3" id="mine-title">Orders on this device</h2>
+      ${S.mine.length ? `<ul class="olist-cards">${S.mine.map(m => `<li><a class="ocard-link" href="/track/${esc(m.id)}" data-link>
+          <span class="oc-main"><b class="mono">${esc(m.id)}</b>${m.statusLabel ? statusTag(m) : ""}</span>
+          <span class="small muted">${[m.at ? "Placed " + stamp(m.at) : "", m.count ? `${m.count} item${m.count === 1 ? "" : "s"}` : "", m.total != null ? NGN(m.total) + (m.priced === false ? "+" : "") : ""].filter(Boolean).join(" · ")}</span>
+          <span class="oc-go" aria-hidden="true">→</span></a></li>`).join("")}</ul>`
+      : `<div class="empty-state">${icon("box", "ic big")}<p><b>No orders on this device yet</b></p><p class="muted small">Orders you place here appear automatically. On another phone or computer, use your order number to find one.</p>${link("/products", "Start shopping", "btn btn-secondary")}</div>`}
     </section>
+  </div>`;
+}
+function orderProgress(o) {
+  const steps = o.rx ? STEPS_RX : STEPS_OTC, stage = stageOf(o);
+  const stop = ["rejected", "cancelled"].includes(o.status), done = o.status === "delivered";
+  return `<ol class="progress" aria-label="Order progress">${steps.map((s, i) => {
+    const t = (o.history.find(h => STEP_LOG[s] && STEP_LOG[s].test(h.m)) || {}).t;
+    const c = i < stage || (done && i === stage) ? "done" : i === stage ? (stop ? "stop" : "now") : "next";
+    const sub = c === "done" && t ? stamp(t) : c === "now" ? "In progress" : c === "stop" ? (o.status === "rejected" ? "Not approved" : "Cancelled") : "";
+    return `<li class="${c}"><span class="pdot" aria-hidden="true">${c === "done" ? icon("check", "ic") : c === "stop" ? icon("x", "ic") : i + 1}</span><span class="pl"><b>${s}</b>${sub ? `<span>${sub}</span>` : ""}<span class="sr">${{ done: " (done)", now: " (current step)", stop: "", next: " (to come)" }[c]}</span></span></li>`;
+  }).join("")}</ol>`;
+}
+function vOrder(o) {
+  const paid = PAID(o.status), pay = o.payment || {};
+  const [head, sub] = HEADLINE[o.status] || [o.statusLabel, ""];
+  const count = o.items.reduce((t, i) => t + Number(i.qty || 1), 0);
+  const again = o.items.some(i => prod(i.id));
+  const first = String((o.customer && o.customer.name) || "").trim().split(/\s+/)[0];
+  const place = [o.delivery.city, o.delivery.state].filter(has).join(", ");
+  const item = i => { const p = prod(i.id); return `<li class="oitem">
+      <span class="othumb">${p ? media(p) : `<span class="rxthumb" aria-hidden="true">℞</span>`}</span>
+      <span class="oname">${p ? link("/product/" + p.id, esc(i.name), "linkbtn dark") : `<b>${esc(i.name)}</b>`}
+        <span class="small muted">${p ? esc(p.pack) + " · " : ""}Qty ${i.qty} × ${NGN(i.price)}</span>${i.cls === "pom" ? `<span class="tag rx">Prescription</span>` : ""}</span>
+      <b class="num">${NGN(i.total)}</b></li>`; };
+  return `<div class="wrap page-head order-crumbs"><nav class="crumbs" aria-label="Breadcrumb">${link("/", "Home")}<span aria-hidden="true">/</span>${link("/track", "Your orders")}<span aria-hidden="true">/</span><span aria-current="page" class="mono">${esc(o.id)}</span></nav></div>
+  <div class="wrap order">
+    ${S.justPlaced === o.id ? `<div class="notice ok placed" role="status">${icon("check", "ic")}<div><b>Thank you${first ? ", " + esc(first) : ""}! Your order is placed.</b><span>Your order number is <b class="mono">${esc(o.id)}</b>. It's saved on this device, so you can come back to this page at any time.</span></div></div>` : ""}
+    <section class="panel order-hero" aria-labelledby="order-title">
+      <div class="oh-top">
+        <div class="oh-copy">
+          <p class="eyebrow">Order <span class="mono">${esc(o.id)}</span><button class="copy" type="button" data-copy="${esc(o.id)}" aria-label="Copy order number ${esc(o.id)}">${icon("copy", "ic sm")}</button></p>
+          <h1 id="order-title">${esc(head)}</h1>
+          ${sub ? `<p class="oh-sub">${sub}</p>` : ""}
+          <p class="oh-meta">${statusTag(o)}<span>Placed ${stamp(o.createdAt)}</span><span>${count} item${count === 1 ? "" : "s"}</span><span class="num">${NGN(o.total)}${o.priced ? "" : "+"}</span></p>
+        </div>
+        <div class="oh-actions">
+          ${o.canPay ? `<button class="btn btn-primary btn-lg" type="button" data-pay="${esc(o.id)}" ${S.busy ? "disabled" : ""}>${icon("card", "ic sm")}${S.busy ? "Opening payment…" : `Pay ${NGN(o.total)}`}</button>` : ""}
+          <button class="btn ${o.canPay ? "btn-secondary" : "btn-primary"}" type="button" data-receipt>${icon("download", "ic sm")}${paid ? "Download receipt" : "Download order summary"}</button>
+          ${again ? `<button class="btn btn-ghost" type="button" data-again>${icon("refresh", "ic sm")}Buy again</button>` : ""}
+        </div>
+      </div>
+      ${o.status === "info_needed" || o.status === "rejected" ? `<div class="notice rx"><b>Note from our pharmacist</b><span>${esc(o.note || "We'll call you shortly to explain.")}</span></div>` : ""}
+      ${orderProgress(o)}
+    </section>
+    <div class="order-grid">
+      <div class="order-main">
+        <section class="panel" aria-labelledby="items-title"><h2 class="h3" id="items-title">Items <span class="muted">(${count})</span></h2>
+          <ul class="oitems">${o.items.map(item).join("")}</ul>
+          ${o.rxRequest && !o.priced ? `<p class="small muted">Our pharmacist will add your prescription items and their price when they approve it.</p>` : ""}</section>
+        <section class="panel" aria-labelledby="act-title"><h2 class="h3" id="act-title">Order activity</h2>
+          <ol class="activity">${o.history.slice().reverse().map((l, i) => `<li class="${i ? "" : "latest"}"><span class="adot" aria-hidden="true"></span><span><b>${esc(l.m)}</b><time datetime="${esc(l.t)}">${stamp(l.t)}</time></span></li>`).join("")}</ol></section>
+      </div>
+      <aside class="order-side">
+        <section class="panel ocard" aria-labelledby="pay-title"><h2 class="h4" id="pay-title">Payment</h2>
+          <dl class="sumlist"><dt>Subtotal</dt><dd class="num">${NGN(o.subtotal)}${o.priced ? "" : "+"}</dd><dt>Delivery</dt><dd class="num">${NGN(o.deliveryFee)}</dd><dt class="tot">Total</dt><dd class="tot num">${NGN(o.total)}${o.priced ? "" : "+"}</dd></dl>
+          <p class="pay-state ${paid ? "ok" : ""}">${icon(paid ? "check" : "card", "ic sm")}<span>${paid ? `Paid with Paystack${pay.channel && pay.channel !== "test" ? " · " + esc(String(pay.channel).replace(/_/g, " ")) : ""}${pay.paidAt ? `<br><span class="muted">${stamp(pay.paidAt)}</span>` : ""}`
+            : ["rejected", "cancelled"].includes(o.status) ? "Nothing was charged" : o.canPay ? "Not paid yet" : "Pay after our pharmacist approves"}</span></p>
+          ${paid && pay.reference ? `<p class="small muted">Reference <span class="mono">${esc(pay.reference)}</span></p>` : ""}</section>
+        <section class="panel ocard" aria-labelledby="del-title"><h2 class="h4" id="del-title">Delivery</h2>
+          <p><b>${esc(o.delivery.label)}</b></p>${place ? `<p class="small muted">To ${esc(place)}</p>` : ""}
+          <p class="small">${o.status === "delivered" ? `Delivered ${stamp((o.history.find(h => /^Delivered/.test(h.m)) || o.history[o.history.length - 1]).t)}` : esc(SPEED_NOTE[o.delivery.speed] || "")}</p></section>
+        ${helpCard("Need help with this order?")}
+      </aside>
+    </div>
   </div>`;
 }
 
@@ -688,11 +810,11 @@ const CONTENT = {
         <p class="small muted">You can order online at any time. Orders placed while we're closed are handled when we open.</p>
       </aside>
     </div>` }),
-  faq: () => ({ title: "Frequently asked questions", lead: "Quick answers about ordering, prescriptions and delivery.", body: `<div class="faq">${FAQ.map(([q, a], i) => `<details ${i === 0 ? "open" : ""}><summary>${esc(q)}</summary><p>${esc(a)}</p></details>`).join("")}
+  faq: () => ({ title: "Frequently asked questions", lead: "Quick answers about ordering, prescriptions and delivery.", body: `<div class="two flat faq-wrap"><div><div class="faq">${FAQ.map(([q, a], i) => `<details ${i === 0 ? "open" : ""}><summary>${esc(q)}</summary><p>${esc(a)}</p></details>`).join("")}
     <details><summary>How fast is delivery?</summary><p>Home delivery in ${D.expressMinutes} minutes during opening hours (${esc(H.label)}), or same-day delivery for orders placed before ${cutoff}. Orders above ${threshold} are delivered the next day.</p></details>
     <details><summary>Is pharmacist advice free?</summary><p>Yes, for quick questions: you'll reach a pharmacist in under ${C.freeMinutes} minutes. Longer consultations are by appointment and a fee applies.</p></details>
     <details><summary>How do I pay?</summary><p>Securely through Paystack, by card (Verve, Mastercard, Visa), bank transfer or USSD. For prescription orders you pay after our pharmacist approves the prescription.</p></details></div>
-    <p style="margin-top:1.5rem">Can't find your answer? ${link("/contact", "Talk to a pharmacist", "linkbtn")}.</p>` }),
+    </div>${helpCard()}</div>` }),
   delivery: () => ({ title: "Delivery", lead: "We deliver within Nigeria only.", body: `
     <div class="table-wrap" tabindex="0" role="region" aria-label="Delivery options and fees"><table class="tbl"><caption class="sr">Delivery options and fees</caption><thead><tr><th scope="col">Option</th><th scope="col">When</th><th scope="col">Fee</th></tr></thead><tbody>
       <tr><td>Home delivery in ${D.expressMinutes} minutes</td><td>During opening hours (${esc(H.label)})${has(D.expressArea) ? `, ${esc(D.expressArea)}` : ""}</td><td class="num">${NGN(D.fees.express)}</td></tr>
@@ -742,6 +864,13 @@ const CONTENT = {
       <label for="kc">PCN registration number<span class="hint">Pharmacists and technicians only.</span><input id="kc" name="pcn"></label></div>
       <div><button class="btn btn-primary" type="submit">Register interest</button></div></form>` })
 };
+function helpCard(title) {
+  const o = openState();
+  return `<aside class="panel help-card" aria-labelledby="help-title"><span class="help-ic">${icon("chat", "ic")}</span><h2 class="h3" id="help-title">${title || "Still have a question?"}</h2>
+    <p class="small muted">Quick questions are free. You'll reach a pharmacist in under ${C.freeMinutes} minutes during opening hours.</p>
+    <p class="small status-line"><span class="dot ${o.open ? "on" : ""}" aria-hidden="true"></span>${esc(o.text)}</p>
+    ${link("/contact", "Talk to a pharmacist", "btn btn-primary")}${has(B.phone) ? `<p class="small">Or call ${phoneText()}</p>` : ""}</aside>`;
+}
 function slots() { const out = []; for (let m = 7 * 60 + 30; m <= 17 * 60; m += 30) out.push(`${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`); return out; }
 function vPage() {
   const c = (CONTENT[S.page] || CONTENT.about)();
@@ -827,7 +956,7 @@ function deskDetail() {
   const fileView = f ? (f.data.startsWith("data:application/pdf") ? `<p><a class="btn btn-ghost" href="${f.data}" download="${esc(f.name || "prescription.pdf")}">Open prescription PDF</a></p>` : `<a href="${f.data}" target="_blank" rel="noopener"><img class="rx-img" src="${f.data}" alt="Uploaded prescription for order ${esc(o.id)}"></a>`) : (o.rx ? `<p class="muted small">No prescription file.</p>` : "");
   const A = o.actions || [];
   const reviewing = A.includes("approve");
-  return `<div style="display:flex;justify-content:space-between;gap:1rem;flex-wrap:wrap"><div><div class="muted small">Order</div><h2 class="mono" style="font-size:1.35rem">${esc(o.id)}</h2><div class="muted small">${stamp(o.createdAt)} · ${esc(o.delivery.label)}</div></div>${statusTag(o)}</div>
+  return `<div style="display:flex;justify-content:space-between;gap:1rem;flex-wrap:wrap"><div><div class="muted small">Order</div><h2 class="mono" style="font-size:1.35rem">${esc(o.id)}</h2><div class="muted small">${stamp(o.createdAt)} · ${esc(o.delivery.label)}</div></div><div class="desk-head-actions">${statusTag(o)}<button class="btn btn-ghost btn-sm" type="button" data-dreceipt>${icon("download", "ic sm")}${PAID(o.status) ? "Receipt" : "Order summary"}</button></div></div>
     <div class="review">
       <div style="display:grid;gap:.8rem;align-content:start">
         <dl class="kv"><dt>Customer</dt><dd>${esc(o.customer.name)}</dd><dt>Phone</dt><dd><a href="tel:${esc(o.customer.phone)}">${esc(o.customer.phone)}</a></dd><dt>Email</dt><dd>${esc(o.customer.email)}</dd>${o.customer.dob ? `<dt>Date of birth</dt><dd>${esc(o.customer.dob)}</dd>` : ""}
@@ -862,7 +991,7 @@ function renderShell() {
   document.documentElement.lang = CFG.site.locale || "en";
   const yr = $("#year"); if (yr) yr.textContent = new Date().getFullYear();
   orgLd();
-  $("#topbar-hours").textContent = H.label;
+  renderStatus();
   $("#topbar-mid").innerHTML = addressLine ? `Visit our pharmacy at ${esc(addressLine)} ${link("/contact", "Contact Us")}` : `Genuine medicines, checked by our pharmacists ${link("/contact", "Contact Us")}`;
   $("#topbar-right").innerHTML = (has(B.phone) ? `<span class="callus">Call Us: ${phoneText()}</span>` : "") +
     `<span class="social">${has(B.facebook) ? `<a href="${esc(B.facebook)}" target="_blank" rel="noopener" aria-label="Synako on Facebook"><svg viewBox="0 0 24 24"><path d="M22 12a10 10 0 1 0-11.6 9.9v-7H7.9V12h2.5V9.8c0-2.5 1.5-3.9 3.8-3.9 1.1 0 2.2.2 2.2.2v2.5h-1.3c-1.2 0-1.6.8-1.6 1.6V12h2.8l-.4 2.9h-2.3v7A10 10 0 0 0 22 12z"/></svg></a>` : ""}${has(B.instagram) ? `<a href="${esc(B.instagram)}" target="_blank" rel="noopener" aria-label="Synako on Instagram"><svg viewBox="0 0 24 24"><path d="M12 7.3a4.7 4.7 0 1 0 0 9.4 4.7 4.7 0 0 0 0-9.4zm0 7.7a3 3 0 1 1 0-6 3 3 0 0 1 0 6zm6-7.9a1.1 1.1 0 1 1-2.2 0 1.1 1.1 0 0 1 2.2 0zM21.9 8c0-1.7-.4-3.2-1.6-4.4S17.7 2.1 16 2c-1.7-.1-6.4-.1-8.1 0-1.7.1-3.2.5-4.4 1.6S2 6.3 2 8c-.1 1.7-.1 6.4 0 8.1.1 1.7.5 3.2 1.6 4.4s2.7 1.6 4.4 1.6c1.7.1 6.4.1 8.1 0 1.7-.1 3.2-.5 4.4-1.6s1.6-2.7 1.6-4.4c.1-1.7.1-6.4-.2-8.1z"/></svg></a>` : ""}</span>`;
@@ -876,6 +1005,12 @@ function renderShell() {
     <div><h2>${icon("rx", "ic sm")} Prescription medicines</h2><p>Upload a valid prescription; pay after our pharmacist approves it.</p><ul>${col(POM_CATS)}</ul>${link("/products/prescription", "All prescription medicines <span aria-hidden=\"true\">→</span>", "dir-all")}${link("/prescriptions", "Send a prescription <span aria-hidden=\"true\">→</span>", "dir-all")}</div>
     <div class="lock"><h2>${icon("lock", "ic sm")} Controlled medicines</h2><p>Not sold online under the Electronic Pharmacy Regulations 2026. Collect in store with your original prescription and photo ID, after our pharmacist checks it.</p>${link("/controlled-medicines", "How to get a controlled medicine <span aria-hidden=\"true\">→</span>", "dir-all")}</div>`;
 }
+function renderStatus() {
+  const o = openState(), el = $("#topbar-status");
+  if (el) el.innerHTML = `<span class="dot ${o.open ? "on" : ""}" aria-hidden="true"></span><b>${esc(o.text.split(" · ")[0])}</b><span> · ${esc(o.text.split(" · ")[1] || "")}</span><span class="lbl hide-md">${esc(H.label)}</span>`;
+  const eta = $("#eta"); if (eta) eta.innerHTML = etaHTML();
+}
+setInterval(renderStatus, 30000);
 const drawer = () => $("#drawer");
 let lastFocus = null;
 function openDrawer() {
@@ -933,7 +1068,7 @@ function pageMeta() {
     case "page": { const c = (CONTENT[S.page] || CONTENT.about)(); return { title: c.title, desc: strip(c.lead || "") || DEFAULT_DESC }; }
     case "basket": return { title: "Your basket", noindex: true };
     case "checkout": return { title: "Checkout", noindex: true };
-    case "track": return { title: "Track your order", noindex: true };
+    case "track": return { title: S.trackId ? `Order ${S.trackId}` : "Your orders", noindex: true };
     default: return { title: "Page not found", noindex: true };
   }
 }
@@ -993,6 +1128,7 @@ function render(scroll) {
       if (cur) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current");
     });
   }
+  document.body.dataset.view = staff ? "staff" : S.view;
   applyMeta();
   if (staff && /^\(\d+\)/.test(title)) document.title = `${title} | ${B.name}`;
   if (scroll) window.scrollTo(0, 0);
@@ -1008,7 +1144,7 @@ function addToCart(id, q) {
   if (l) l.q = Math.min(10, l.q + q); else S.cart.push({ id, q });
   saveCart();
   const p = prod(id);
-  toast(p.cls === "pom" ? `Added ${p.name}. Upload your prescription at checkout.` : `Added ${p.name} to your basket.`);
+  toast(p.cls === "pom" ? `Added ${p.name}. Upload your prescription at checkout.` : `Added ${p.name} to your basket.`, { href: "/basket", label: "View basket" });
   renderCount();
 }
 function saveForm() {
@@ -1016,7 +1152,60 @@ function saveForm() {
   new FormData(f).forEach((val, key) => { if (typeof File !== "undefined" && val instanceof File) return; S.form[key] = val; });
   f.querySelectorAll("input[type=checkbox]").forEach(c => { S.form[c.name] = c.checked; });
 }
-function doSearch(q) { S.q = q.trim(); S.filter = "all"; $("#q").value = S.q; const dq = $("#dq"); if (dq) dq.value = S.q; go("/products"); }
+function doSearch(q) { S.q = q.trim(); S.filter = "all"; $("#q").value = S.q; closeSugg(); go("/products"); }
+
+/* ---------- Search suggestions (ARIA combobox) ---------- */
+const SG = { q: "", list: [], i: -1 };
+function suggest(q) {
+  q = q.trim().toLowerCase(); if (q.length < 2) return [];
+  const score = p => {
+    const n = p.name.toLowerCase();
+    if (n.startsWith(q)) return 4;
+    if (n.split(/[\s:(),-]+/).some(w => w.startsWith(q))) return 3;
+    if (n.includes(q)) return 2;
+    return [p.generic, p.brand, p.use, cat(p.cat).name].join(" ").toLowerCase().includes(q) ? 1 : 0;
+  };
+  return P.map(p => [p, score(p)]).filter(x => x[1]).sort((a, b) => b[1] - a[1] || (b[0].pop || 0) - (a[0].pop || 0)).slice(0, 6).map(x => x[0]);
+}
+function mark(text, q) {
+  const i = text.toLowerCase().indexOf(q.toLowerCase());
+  return i < 0 || !q ? esc(text) : `${esc(text.slice(0, i))}<mark>${esc(text.slice(i, i + q.length))}</mark>${esc(text.slice(i + q.length))}`;
+}
+function renderSugg() {
+  const box = $("#sugg"), input = $("#q"); if (!box) return;
+  if (SG.q.trim().length < 2) { closeSugg(); return; }
+  const n = SG.list.length;
+  box.innerHTML = (n ? SG.list.map((p, i) => `<a role="option" id="sg-${i}" class="sg" href="/product/${p.id}" data-link tabindex="-1" aria-selected="${SG.i === i}">
+      <span class="sg-img" aria-hidden="true">${media(p)}</span>
+      <span class="sg-t"><span class="sg-n">${mark(p.name, SG.q.trim())}</span><span class="sg-s">${esc(p.pack)} · ${p.cls === "pom" ? "Prescription" : "Over-the-counter"}</span></span>
+      <span class="sg-p num">${NGN(p.price)}</span></a>`).join("")
+    : `<p class="sg-none">No products match “${esc(SG.q.trim())}”. Try a generic name, such as paracetamol.</p>`)
+    + `<button type="submit" role="option" id="sg-all" class="sg-all" tabindex="-1" aria-selected="${SG.i === n}">See all results for “${esc(SG.q.trim())}” <span aria-hidden="true">→</span></button>`;
+  box.hidden = false;
+  input.setAttribute("aria-expanded", "true");
+  if (SG.i >= 0) input.setAttribute("aria-activedescendant", SG.i === n ? "sg-all" : "sg-" + SG.i); else input.removeAttribute("aria-activedescendant");
+}
+function closeSugg() {
+  const box = $("#sugg"), input = $("#q"); if (!box || box.hidden) return;
+  box.hidden = true; SG.i = -1; input.setAttribute("aria-expanded", "false"); input.removeAttribute("aria-activedescendant");
+}
+(function wireSearch() {
+  const input = $("#q"), box = $("#sugg"); if (!input || !box) return;
+  input.addEventListener("input", () => { SG.q = input.value; SG.list = suggest(SG.q); SG.i = -1; renderSugg(); });
+  input.addEventListener("focus", () => { if (SG.q.trim().length >= 2) renderSugg(); });
+  input.addEventListener("keydown", e => {
+    if (box.hidden && e.key === "ArrowDown" && SG.q.trim().length >= 2) { renderSugg(); }
+    if (box.hidden) return;
+    const n = SG.list.length;
+    if (e.key === "ArrowDown") { SG.i = SG.i >= n ? 0 : SG.i + 1; renderSugg(); e.preventDefault(); }
+    else if (e.key === "ArrowUp") { SG.i = SG.i <= 0 ? n : SG.i - 1; renderSugg(); e.preventDefault(); }
+    else if (e.key === "Escape") { closeSugg(); e.preventDefault(); }
+    else if (e.key === "Enter" && SG.i >= 0 && SG.i < n) { e.preventDefault(); const id = SG.list[SG.i].id; input.blur(); go("/product/" + id); }
+  });
+  box.addEventListener("mousedown", e => e.preventDefault()); // keep focus in the search box while choosing
+  document.addEventListener("pointerdown", e => { if (!e.target.closest("#search-form")) closeSugg(); });
+  input.addEventListener("blur", () => setTimeout(closeSugg, 120));
+})();
 
 /* Prescription upload: photos are resized in the browser to keep uploads small */
 function readAsDataURL(file) { return new Promise((ok, no) => { const r = new FileReader(); r.onload = () => ok(r.result); r.onerror = () => no(new Error("We couldn't read that file.")); r.readAsDataURL(file); }); }
@@ -1067,6 +1256,10 @@ document.addEventListener("click", e => {
   if ("clear" in d) { S.q = ""; $("#q").value = ""; render(); return; }
   if (d.step) { saveForm(); S.step = Number(d.step); S.error = ""; render(true); return; }
   if (d.pay) { startPayment(d.pay); return; }
+  if ("receipt" in d) { if (S.track) downloadReceipt(S.track, t); return; }
+  if ("dreceipt" in d) { if (S.staff.detail) downloadReceipt(S.staff.detail, t); return; }
+  if ("again" in d) { buyAgain(S.track); return; }
+  if (d.copy) { copyText(d.copy); return; }
   if (d.dtab) { S.staff.tab = d.dtab; S.staff.sel = null; S.staff.detail = null; render(); loadDesk(true); return; }
   if (d.sel) { loadDeskOrder(d.sel); return; }
   if (d.act) { deskAction(d.act); return; }
@@ -1100,10 +1293,28 @@ document.addEventListener("change", async e => {
 const wide = window.matchMedia("(min-width: 1001px)");
 if (wide.addEventListener) wide.addEventListener("change", m => { if (m.matches) closeDrawer(true); });
 
+async function downloadReceipt(o, btn) {
+  if (!window.SYNAKO_RECEIPT) { toast("Receipts aren't available right now. Please try again later."); return; }
+  const label = btn.innerHTML; btn.disabled = true; btn.setAttribute("aria-busy", "true");
+  try { const name = await window.SYNAKO_RECEIPT.download(o); toast(`Saved ${name}`); }
+  catch (e) { toast(e && e.code === "declined" ? "Download cancelled." : "We couldn't create the file. Please try again."); }
+  btn.disabled = false; btn.removeAttribute("aria-busy"); btn.innerHTML = label;
+}
+function buyAgain(o) {
+  if (!o) return;
+  const add = o.items.filter(i => prod(i.id));
+  add.forEach(i => { const l = S.cart.find(x => x.id === i.id); if (l) l.q = Math.min(10, l.q + i.qty); else S.cart.push({ id: i.id, q: Math.min(10, i.qty) }); });
+  saveCart(); go("/basket");
+  toast(add.some(i => i.cls === "pom") ? "Added to your basket. Prescription items need a valid prescription again." : `Added ${add.length} item${add.length === 1 ? "" : "s"} to your basket.`);
+}
+async function copyText(v) {
+  try { await navigator.clipboard.writeText(v); toast(`Copied ${v}`); }
+  catch (e) { toast(`Your order number is ${v}`); }
+}
 async function startPayment(id) {
   if (!paymentsOn()) { toast("Online payment isn't switched on yet. Please contact the pharmacy to pay."); return; }
   const phone = phoneFor(id); S.busy = true; render();
-  try { const { order } = await payOrder(id, phone); S.track = order; toast("Payment received. Thank you!"); }
+  try { const { order } = await payOrder(id, phone); S.track = order; remember(order, phone); toast("Payment received. Thank you!"); }
   catch (e) { toast(e.message); }
   S.busy = false; render();
 }
@@ -1123,16 +1334,13 @@ async function deskAction(action) {
 document.addEventListener("submit", async e => {
   const f = e.target; e.preventDefault();
   if (f.id === "search-form") { doSearch($("#q").value); return; }
-  if (f.id === "drawer-search") { doSearch($("#dq").value); return; }
   if (f.id === "trackform") {
     if (!f.reportValidity()) return;
     const id = f.tid.value.trim().toUpperCase(), ph4 = f.tph.value.trim();
     S.trackId = id; S.track = null; S.trackErr = "";
     const known = S.mine.find(m => m.id === id);
-    if (!known) S.mine = S.mine.filter(m => m.id !== id);
     if (!MEMORY) { try { history.pushState({}, "", "/track/" + id); } catch (er) { /* memory */ } }
-    render(); await loadTrack(known && known.phone.slice(-4) === ph4 ? known.phone : ph4);
-    if (S.track && !known) { S.mine[0].phone = ph4; saveMine(); }
+    render(); await loadTrack(known && known.phone && known.phone.slice(-4) === ph4 ? known.phone : ph4);
     return;
   }
   if (f.id === "staffform") {
@@ -1182,15 +1390,16 @@ async function placeOrder() {
   let order;
   try { order = (await api.createOrder(payload)).order; }
   catch (e) { S.busy = false; S.error = e.message; render(); return; }
-  S.mine.unshift({ id: order.id, phone: F.phone, at: order.createdAt }); saveMine();
+  remember(order, F.phone); S.justPlaced = order.id;
   S.cart = []; saveCart(); S.rxRequest = false; S.step = 1; S.form = { name: F.name, phone: F.phone, email: F.email, dob: F.dob, state: F.state, city: F.city, addr: F.addr, landmark: F.landmark };
   S.trackId = order.id; S.track = order;
   if (!rx && order.canPay) {
-    try { S.track = (await payOrder(order.id, F.phone)).order; toast("Payment received. Thank you!"); }
+    try { S.track = (await payOrder(order.id, F.phone)).order; remember(S.track, F.phone); toast("Payment received. Thank you!"); }
     catch (e) { toast(e.message); }
   } else toast(`Order ${order.id} sent to our pharmacist.`);
   S.busy = false;
   go("/track/" + order.id);
+  S.justPlaced = order.id; render();
 }
 
 checkLive().then(() => { if (S.view === "checkout") render(); });

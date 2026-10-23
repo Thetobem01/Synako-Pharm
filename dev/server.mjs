@@ -8,10 +8,16 @@ import { pathToFileURL } from "node:url";
 
 const root = process.cwd();
 const port = Number(process.env.PORT || 3000);
-const types = { ".html": "text/html; charset=utf-8", ".js": "text/javascript", ".css": "text/css", ".png": "image/png", ".webp": "image/webp", ".jpg": "image/jpeg", ".svg": "image/svg+xml", ".txt": "text/plain", ".json": "application/json" };
+const types = { ".html": "text/html; charset=utf-8", ".js": "text/javascript", ".css": "text/css", ".png": "image/png", ".webp": "image/webp", ".jpg": "image/jpeg", ".svg": "image/svg+xml", ".txt": "text/plain", ".json": "application/json", ".webmanifest": "application/manifest+json", ".xml": "application/xml" };
+/* Same security headers as production (vercel.json), so problems show up locally */
+const vercel = JSON.parse(fs.readFileSync(path.join(root, "vercel.json"), "utf8"));
+const globalHeaders = (vercel.headers.find(h => h.source === "/(.*)") || { headers: [] }).headers;
+const REWRITE = { "/sitemap.xml": "/api/sitemap", "/robots.txt": "/api/robots" };
 
 http.createServer(async (req, res) => {
   const url = new URL(req.url, "http://localhost");
+  for (const h of globalHeaders) if (h.key !== "Strict-Transport-Security") res.setHeader(h.key, h.key === "Content-Security-Policy" ? h.value.replace("; upgrade-insecure-requests", "") : h.value);
+  if (REWRITE[url.pathname]) url.pathname = REWRITE[url.pathname];
   if (url.pathname.startsWith("/api/")) {
     const file = path.join(root, url.pathname.replace(/\/$/, "") + ".js");
     if (!file.startsWith(path.join(root, "api")) || !fs.existsSync(file) || path.basename(file).startsWith("_")) { res.statusCode = 404; return res.end('{"error":"Not found"}'); }

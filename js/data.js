@@ -161,7 +161,12 @@ window.SYNAKO = (function () {
     { id: "levo", name: "Levothyroxine 50mcg tablets", generic: "Levothyroxine", strength: "50mcg", form: "blister", pack: "28 tablets", cat: "rx-other", cls: "pom", brand: "Generic", price: 2500, c: "#B8742B",
       use: "Prescribed for an underactive thyroid.", how: "Take every morning on an empty stomach, exactly as prescribed.", warn: "Prescription only." }
   ];
-  P.forEach(p => { p.photo = "assets/products/" + p.id + ".png"; });
+  /* Product photos: upload assets/products/<id>.webp (or .png/.jpg) and add the id here.
+     Products without a photo show a drawn pack image instead. */
+  const PHOTOS = {
+    // para: "webp",
+  };
+  P.forEach(p => { if (PHOTOS[p.id]) p.photo = "assets/products/" + p.id + "." + PHOTOS[p.id]; });
 
   const STATES = ["Abia","Adamawa","Akwa Ibom","Anambra","Bauchi","Bayelsa","Benue","Borno","Cross River","Delta","Ebonyi","Edo","Ekiti","Enugu","FCT – Abuja","Gombe","Imo","Jigawa","Kaduna","Kano","Katsina","Kebbi","Kogi","Kwara","Lagos","Nasarawa","Niger","Ogun","Ondo","Osun","Oyo","Plateau","Rivers","Sokoto","Taraba","Yobe","Zamfara"];
 

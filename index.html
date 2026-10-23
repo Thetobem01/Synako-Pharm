@@ -1,75 +1,88 @@
 <!doctype html>
-<html lang="en-NG">
+<html lang="en-NG" dir="ltr">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <base href="/">
 <title>Synako Pharmacy · Your Pathway to Health and Wellness</title>
 <meta name="claude:viewport-fit-sides" content="cover">
-<meta name="description" content="Synako Pharmacy: genuine NAFDAC-registered medicines from a PCN-licensed Nigerian pharmacy. Order over-the-counter products, send a prescription, and get delivery to your door.">
+<meta name="description" content="Genuine NAFDAC-registered medicines from a registered Nigerian pharmacy. Shop over-the-counter products, send a prescription, talk to a pharmacist and get home delivery.">
+<meta name="color-scheme" content="light">
 <meta name="theme-color" content="#3362AB">
+<link rel="canonical" href="https://synakopharm.vercel.app/">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Synako Pharmacy">
+<meta property="og:locale" content="en_NG">
+<meta property="og:url" content="https://synakopharm.vercel.app/">
 <meta property="og:title" content="Synako Pharmacy · Your Pathway to Health and Wellness">
-<meta property="og:description" content="Genuine medicines from a licensed Nigerian pharmacy, checked by our pharmacists and delivered to your door.">
-<meta property="og:image" content="/assets/pharmacist-male.webp">
+<meta property="og:description" content="Genuine medicines from a registered Nigerian pharmacy, checked by our pharmacists and delivered to your door.">
+<meta property="og:image" content="https://synakopharm.vercel.app/assets/og-image.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Synako Pharmacy: Your Pathway to Health and Wellness">
 <meta name="twitter:card" content="summary_large_image">
-<link rel="icon" href="assets/logo.png">
-<link rel="apple-touch-icon" href="assets/logo.png">
+<link rel="icon" href="assets/favicon-48.png" sizes="48x48" type="image/png">
+<link rel="icon" href="assets/icon-192.png" sizes="192x192" type="image/png">
+<link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+<link rel="manifest" href="manifest.webmanifest">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700&family=Poppins:wght@400;600;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=Poppins:wght@500;600&display=swap">
 <link rel="stylesheet" href="css/styles.css">
-<script type="application/ld+json">
-{"@context":"https://schema.org","@type":"Pharmacy","name":"Synako Pharmacy","slogan":"Your Pathway to Health and Wellness","areaServed":"NG","currenciesAccepted":"NGN"}
+<script type="application/ld+json" id="ld-org">
+{"@context":"https://schema.org","@type":"Pharmacy","name":"Synako Pharmacy","url":"https://synakopharm.vercel.app/","logo":"https://synakopharm.vercel.app/assets/logo@2x.png","slogan":"Your Pathway to Health and Wellness","areaServed":"NG","currenciesAccepted":"NGN","paymentAccepted":"Card, Bank transfer, USSD"}
 </script>
 </head>
 <body>
 <a class="skip" href="#view">Skip to content</a>
 
-
 <div id="shell-customer">
-  <!-- Figma: Component 14 — top bar -->
   <div class="topbar">
-    <div class="wrap">
-      <span><span class="lbl">Open:</span>&nbsp; <span id="topbar-hours">Mon–Sat 7:30am–6:00pm</span></span>
-      <span class="mid" id="topbar-mid"></span>
-      <span class="right" id="topbar-right"></span>
+    <div class="wrap topbar-inner">
+      <p><span class="lbl">Open</span> <span id="topbar-hours">Mon–Sat 7:30am–6:00pm</span></p>
+      <p class="mid" id="topbar-mid"></p>
+      <p class="right" id="topbar-right"></p>
     </div>
   </div>
 
-  <!-- Figma: Component 14 — header -->
-  <header class="site">
-    <div class="wrap">
-      <a class="logo" href="/" data-link aria-label="Synako Pharmacy home"><img src="assets/logo.png" alt="Synako Pharmacy" width="146" height="88"></a>
-      <nav class="nav" aria-label="Main">
-        <a href="/products" data-link>PRODUCTS</a>
-        <a href="/prescriptions" data-link>PRESCRIPTIONS</a>
-        <a href="/about" data-link>ABOUT</a>
-        <a href="/contact" data-link>CONTACT</a>
-        <a class="pill pill-outline" href="/track" data-link>Track order</a>
-        <a class="pill pill-solid" href="/products" data-link>Get Started</a>
-      </nav>
+  <header class="site" id="site-header">
+    <div class="wrap header-main">
+      <a class="logo" href="/" data-link aria-label="Synako Pharmacy home"><img src="assets/logo@2x.png" alt="Synako Pharmacy" width="139" height="59"></a>
+      <form class="search" id="search-form" role="search" action="/products">
+        <label for="q" class="sr">Search medicines and health products</label>
+        <svg class="search-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M20 20l-4.6-4.6"/></svg>
+        <input id="q" name="q" type="search" placeholder="Search medicines, vitamins and health products" autocomplete="off" enterkeyhint="search">
+        <button class="btn btn-primary" type="submit">Search</button>
+      </form>
       <div class="hicons">
-        <button class="iconbtn" type="button" id="search-toggle" aria-label="Search" aria-expanded="false" aria-controls="searchbar">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M20 20l-4.6-4.6"/></svg>
-        </button>
-        <a class="iconbtn" id="basket-link" href="/basket" data-link aria-label="Basket">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4h2.4l2.2 10.2a2 2 0 0 0 2 1.6h7.6a2 2 0 0 0 2-1.5L21 8H6.3"/><circle cx="10" cy="20" r="1.4"/><circle cx="17.5" cy="20" r="1.4"/></svg>
-          <span class="badge" data-count hidden>0</span>
-        </a>
+        <a class="hlink hide-md" href="/prescriptions" data-link>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M8 14l2.5 2.5L16 11"/></svg>
+          <span>Prescriptions</span></a>
+        <a class="hlink hide-md" href="/track" data-link>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7h11v9H3zM14 10h4l3 3v3h-7z"/><circle cx="7" cy="18" r="2"/><circle cx="17" cy="18" r="2"/></svg>
+          <span>Track order</span></a>
+        <a class="hlink" id="basket-link" href="/basket" data-link aria-label="Basket">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 4h2.4l2.2 10.2a2 2 0 0 0 2 1.6h7.6a2 2 0 0 0 2-1.5L21 8H6.3"/><circle cx="10" cy="20" r="1.4"/><circle cx="17.5" cy="20" r="1.4"/></svg>
+          <span class="hide-sm">Basket</span><span class="badge" data-count hidden>0</span></a>
         <button class="iconbtn menubtn" type="button" id="menu-toggle" aria-label="Menu" aria-expanded="false" aria-controls="drawer">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
         </button>
       </div>
     </div>
-    <div class="searchbar" id="searchbar" hidden>
-      <form class="wrap" id="search-form" role="search">
-        <label for="q" class="sr">Search medicines and health products</label>
-        <input id="q" name="q" type="search" placeholder="Search entire store here..." autocomplete="off">
-        <button class="pill pill-solid" type="submit">Search</button>
-      </form>
-    </div>
+    <nav class="nav" aria-label="Main">
+      <div class="wrap nav-inner">
+        <a href="/products" data-link>All products</a>
+        <a href="/products/otc" data-link>Over-the-counter</a>
+        <a href="/products/prescription" data-link>Prescription medicines</a>
+        <a href="/products/vitamins" data-link>Vitamins</a>
+        <a href="/products/devices" data-link>Health devices</a>
+        <a href="/products/family" data-link>Mother &amp; baby</a>
+        <a href="/controlled-medicines" data-link>Controlled medicines</a>
+        <span class="nav-sep" aria-hidden="true"></span>
+        <a href="/contact" data-link>Talk to a pharmacist</a>
+        <a href="/about" data-link>About us</a>
+      </div>
+    </nav>
   </header>
 
   <!-- Mobile menu -->
@@ -77,15 +90,11 @@
     <button class="drawer-backdrop" type="button" data-close-drawer tabindex="-1" aria-label="Close menu"></button>
     <nav class="drawer-panel" aria-label="Menu">
       <div class="drawer-top">
-        <img src="assets/logo.png" alt="Synako Pharmacy" width="110" height="66">
+        <img src="assets/logo@2x.png" alt="Synako Pharmacy" width="113" height="48">
         <button class="iconbtn drawer-close" type="button" data-close-drawer aria-label="Close menu">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
         </button>
       </div>
-      <form id="drawer-search" role="search" class="drawer-search">
-        <label for="dq" class="sr">Search medicines and health products</label>
-        <input id="dq" type="search" placeholder="Search medicines…" autocomplete="off">
-      </form>
       <div class="drawer-group">
         <p class="drawer-label">Shop</p>
         <a href="/products" data-link>All products</a>
@@ -99,7 +108,7 @@
         <a href="/track" data-link>Track order</a>
         <a href="/basket" data-link>Basket <span class="badge inline" data-count hidden>0</span></a>
         <a href="/contact" data-link>Talk to a pharmacist</a>
-        <a href="/delivery" data-link>Delivery areas &amp; fees</a>
+        <a href="/delivery" data-link>Delivery</a>
       </div>
       <div class="drawer-group">
         <p class="drawer-label">Synako</p>
@@ -114,59 +123,68 @@
 
   <main id="view" tabindex="-1"></main>
 
-  <!-- Medicines directory -->
-  <section class="directory" aria-label="Medicines directory">
-    <div class="wrap dir-grid" id="directory"></div>
+  <section class="directory" aria-labelledby="dir-title">
+    <div class="wrap">
+      <h2 class="sr" id="dir-title">Medicines directory</h2>
+      <div class="dir-grid" id="directory"></div>
+    </div>
   </section>
 
   <footer class="footer">
-    <div class="wrap grid">
-      <div>
-        <div class="logo-w"><img src="assets/logo.png" alt="Synako Pharmacy" width="120" height="72"></div>
+    <div class="wrap footer-main">
+      <div class="footer-brand">
+        <img src="assets/logo@2x.png" alt="Synako Pharmacy" width="139" height="59">
+        <p class="footer-tag">Your pathway to health and wellness. Genuine medicines, checked by registered pharmacists and delivered to your door.</p>
         <div class="reg" id="reg"></div>
       </div>
-      <div><h2 class="fh2">Synako</h2><ul>
-        <li><a href="/about" data-link>About us</a></li>
-        <li><a href="/careers" data-link>Careers</a></li>
-        <li><a href="/licences" data-link>Our licences</a></li>
-        <li><a href="/pharmacist" data-link>Pharmacist Desk (staff)</a></li>
-      </ul></div>
-      <div><h2 class="fh2">Help</h2><ul>
-        <li><a href="/track" data-link>Track an order</a></li>
-        <li><a href="/delivery" data-link>Delivery areas &amp; fees</a></li>
-        <li><a href="/returns" data-link>Returns &amp; refunds</a></li>
-        <li><a href="/faq" data-link>FAQ</a></li>
-        <li><a href="/contact" data-link>Talk to a pharmacist</a></li>
-      </ul></div>
-      <div><h2 class="fh2">Legal</h2><ul>
-        <li><a href="/privacy" data-link>Privacy notice (NDPA 2023)</a></li>
-        <li><a href="/terms" data-link>Terms of sale</a></li>
-        <li><a href="/cookies" data-link>Cookies</a></li>
-      </ul></div>
+      <div class="footer-links">
+        <div><h2 class="fh2">Synako</h2><ul>
+          <li><a href="/about" data-link>About us</a></li>
+          <li><a href="/careers" data-link>Careers</a></li>
+          <li><a href="/licences" data-link>Our licences</a></li>
+          <li><a href="/pharmacist" data-link>Pharmacist Desk</a></li>
+        </ul></div>
+        <div><h2 class="fh2">Help</h2><ul>
+          <li><a href="/track" data-link>Track an order</a></li>
+          <li><a href="/delivery" data-link>Delivery</a></li>
+          <li><a href="/returns" data-link>Returns &amp; refunds</a></li>
+          <li><a href="/faq" data-link>FAQ</a></li>
+          <li><a href="/contact" data-link>Talk to a pharmacist</a></li>
+        </ul></div>
+        <div><h2 class="fh2">Legal</h2><ul>
+          <li><a href="/privacy" data-link>Privacy notice</a></li>
+          <li><a href="/terms" data-link>Terms of sale</a></li>
+          <li><a href="/cookies" data-link>Cookies</a></li>
+        </ul></div>
+      </div>
     </div>
-    <div class="wrap legal">
-      <span>Medicines are supplied to adults aged 18 and over, in Nigeria only. Prescription medicines are dispensed only against a valid prescription checked by our pharmacist. Controlled medicines are not sold online.</span>
-      <span>© 2026 Synako Pharmacy</span>
-    </div>
+    <div class="wrap"><div class="footer-pay">
+      <p><svg class="ic sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg> Secure payments by Paystack</p>
+      <ul class="paylist" aria-label="Payment methods"><li>Visa</li><li>Mastercard</li><li>Verve</li><li>Bank transfer</li><li>USSD</li></ul>
+    </div></div>
+    <div class="wrap"><div class="legal">
+      <p>Medicines are supplied to adults aged 18 and over, in Nigeria only. Prescription medicines are dispensed only against a valid prescription checked by our pharmacist. Controlled medicines are not sold online.</p>
+      <p>© <span id="year">2026</span> Synako Pharmacy. All rights reserved.</p>
+    </div></div>
   </footer>
 </div>
 
 <div id="shell-staff" hidden>
   <header class="staff-head">
-    <div class="wrap">
+    <div class="wrap staff-head-inner">
       <div class="staff-brand">
-        <a href="/" data-link class="staff-logo" aria-label="Back to the Synako store"><img src="assets/logo.png" alt="" width="96" height="58"></a>
+        <a href="/" data-link class="staff-logo" aria-label="Back to the Synako store"><img src="assets/logo@2x.png" alt="" width="94" height="40"></a>
         <div><p class="eyebrow">Synako Dispensary</p><p class="staff-title">Pharmacist Desk</p></div>
       </div>
       <div class="staff-stats" id="staff-stats" aria-label="Summary"></div>
-      <div class="staff-actions"><a class="pill pill-outline-w" href="/" data-link>Back to store</a><button class="pill pill-outline-w" type="button" id="staff-signout" hidden>Sign out</button></div>
+      <div class="staff-actions"><a class="btn btn-on-dark" href="/" data-link>Back to store</a><button class="btn btn-on-dark" type="button" id="staff-signout" hidden>Sign out</button></div>
     </div>
   </header>
   <main id="staff-view" class="wrap" tabindex="-1"></main>
 </div>
 
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
-<noscript><p style="padding:1rem;font-family:sans-serif">Please turn on JavaScript to shop at Synako Pharmacy, or visit us in store.</p></noscript>
+<noscript><p class="noscript">Please turn on JavaScript to shop at Synako Pharmacy, or visit us in store.</p></noscript>
 <script src="js/config.js"></script>
 <script src="js/data.js"></script>
 <script src="js/pricing.js"></script>

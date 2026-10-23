@@ -8,7 +8,7 @@
 
   /* Current day and minutes-since-midnight in Nigeria time */
   function clock(cfg, date) {
-    const parts = new Intl.DateTimeFormat("en-GB", { timeZone: cfg.hours.timezone || "Africa/Lagos", weekday: "short", hour: "2-digit", minute: "2-digit", hour12: false })
+    const parts = new Intl.DateTimeFormat("en-GB", { timeZone: cfg.hours.timezone || (cfg.site && cfg.site.timezone) || "Africa/Lagos", weekday: "short", hour: "2-digit", minute: "2-digit", hour12: false })
       .formatToParts(date || new Date());
     const get = t => (parts.find(p => p.type === t) || {}).value;
     const day = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].indexOf(get("weekday"));
@@ -40,7 +40,7 @@
     const opts = [
       { speed: "express", label: `Home delivery in ${d.expressMinutes} minutes`, fee: d.fees.express,
         available: local && !big && openNow,
-        reason: big ? `Orders above ₦${Number(d.nextDayThreshold).toLocaleString("en-NG")} are delivered the next day.` : !local ? "Not available in your state." : !openNow ? "Available during opening hours." : "" },
+        reason: big ? `Orders above ${fmtMoney(d.nextDayThreshold, cfg)} are delivered the next day.` : !local ? "Not available in your state." : !openNow ? "Available during opening hours." : "" },
       { speed: "sameday", label: `Same-day delivery (order before ${fmt12(d.sameDayCutoff)})`, fee: d.fees.sameDay,
         available: local && !big && beforeCutoff,
         reason: big ? "Large orders are delivered the next day." : !local ? "Not available in your state." : !beforeCutoff ? `Order before ${fmt12(d.sameDayCutoff)} for same-day delivery.` : "" },
@@ -53,7 +53,13 @@
     const deliveryFee = (lines.length || input.rxRequest) ? chosen.fee : 0;
     return { lines, subtotal, big, openNow, options: opts, speed: chosen.speed, speedLabel: chosen.label, deliveryFee, total: money(subtotal + deliveryFee) };
   }
+  /* Currency in the shop's locale, e.g. ₦1,200 or ₦999,999.99 (decimals only when needed) */
+  function fmtMoney(n, cfg) {
+    const site = (cfg && cfg.site) || {}, v = Number(n);
+    return new Intl.NumberFormat(site.locale || "en-NG", { style: "currency", currency: site.currency || "NGN", currencyDisplay: "narrowSymbol",
+      minimumFractionDigits: Number.isInteger(v) ? 0 : 2, maximumFractionDigits: 2 }).format(v);
+  }
   function fmt12(s) { const [h, m] = s.split(":").map(Number); return `${((h + 11) % 12) + 1}${m ? ":" + String(m).padStart(2, "0") : ""}${h < 12 ? "am" : "pm"}`; }
 
-  root.SYNAKO_PRICING = { quote, clock, isOpen, fmt12 };
+  root.SYNAKO_PRICING = { quote, clock, isOpen, fmt12, fmtMoney };
 })(typeof window !== "undefined" ? window : globalThis);

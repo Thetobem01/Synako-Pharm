@@ -11,19 +11,19 @@ const { CATS, P, STATES, FAQ } = window.SYNAKO;
 const B = CFG.business, L = CFG.licences, H = CFG.hours, D = CFG.delivery, C = CFG.consultation;
 
 const has = v => v != null && String(v).trim() !== "";
-const NGN = n => "₦" + Number(n).toLocaleString("en-NG", { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+const NGN = n => PR.fmtMoney(n, CFG);
 const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const $ = s => document.querySelector(s);
 const prod = id => P.find(p => p.id === id);
 const cat = id => CATS.find(c => c.id === id);
 const OTC_CATS = CATS.filter(c => c.cls === "otc"), POM_CATS = CATS.filter(c => c.cls === "pom");
-const stamp = d => new Date(d).toLocaleString("en-GB", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
+const stamp = d => new Date(d).toLocaleString(CFG.site.locale, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: CFG.site.timezone });
 const addressLine = [B.address, B.city, B.state].filter(has).join(", ");
 const cutoff = PR.fmt12(D.sameDayCutoff);
 const threshold = NGN(D.nextDayThreshold);
 
 const IMG = {
-  heroBg: "assets/hero-bg.jpg",
+  hero: "assets/hero-pharmacist.webp",
   pharmacistMale: "assets/pharmacist-male.webp",
   pharmacistFemale: "assets/pharmacist-female.webp",
   delivery: "assets/delivery.webp",
@@ -50,7 +50,8 @@ const ICONS = {
   store: '<path d="M4 9l1.5-5h13L20 9M4 9v11h16V9M4 9h16M9 20v-6h6v6"/>',
   clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
   cal: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>',
-  card: '<rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20M6 15h4"/>'
+  card: '<rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20M6 15h4"/>',
+  check: '<path d="M20 6L9 17l-5-5"/>'
 };
 const icon = (k, cls) => `<svg class="${cls || "ic"}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[k] || ICONS.box}</svg>`;
 
@@ -231,7 +232,7 @@ const link = (path, label, cls, extra) => `<a href="${path}" data-link${cls ? ` 
 /* ---------- Small pieces ---------- */
 function toast(msg) { const t = $("#toast"); t.textContent = msg; t.classList.add("show"); clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove("show"), 3200); }
 const photo = (src, style, alt) => `<img src="${src}" alt="${esc(alt || "")}" loading="lazy" decoding="async" data-swap${style ? ` style="${style}"` : ""}>`;
-const media = p => `<span class="drawn">${art(p)}</span>${photo(p.photo, "", p.name)}`;
+const media = p => p.photo ? `<span class="drawn">${art(p)}</span>${photo(p.photo, "", p.name)}` : `<span class="drawn">${art(p)}</span>`;
 const tag = p => p.cls === "pom" ? `<span class="tag rx">Prescription only</span>` : `<span class="tag otc">Over the counter</span>`;
 const alertBox = msg => msg ? `<div class="notice bad" role="alert" tabindex="-1" id="form-error"><b>Something needs attention</b><span>${esc(msg)}</span></div>` : "";
 const phoneText = () => has(B.phone) ? `<a class="tel" href="tel:${esc(B.phone.replace(/\s/g, ""))}">${esc(B.phone)}</a>` : "";
@@ -255,81 +256,93 @@ function personSVG(kind) {
 function card(p) {
   const rx = p.cls === "pom";
   return `<article class="pcard">
-    <span class="flag${rx ? " rx" : ""}">${rx ? "Prescription" : "Over the counter"}</span>
-    <div class="box">
-      <a class="shot" href="/product/${p.id}" data-link tabindex="-1" aria-hidden="true">${media(p)}</a>
-      <a class="name" href="/product/${p.id}" data-link>${esc(p.name)}</a>
-      <div class="brand">${esc(p.brand === "Generic" ? p.pack : p.brand)}</div>
-      <div class="prices">${p.was ? `<div class="was num"><span class="sr">Was </span>${NGN(p.was)}</div>` : ""}<div class="price">${p.was ? `<span class="sr">Now </span>` : ""}${NGN(p.price)}</div></div>
-      <button class="add${rx ? " rx" : ""}" type="button" data-add="${p.id}" aria-label="Add ${esc(p.name)} to basket${rx ? ", prescription needed" : ""}">${rx ? "Add · prescription" : "Add to basket"}</button>
+    <a class="pcard-media" href="/product/${p.id}" data-link tabindex="-1" aria-hidden="true"><span class="pcard-badge ${rx ? "rx" : "otc"}">${rx ? "Prescription" : "Over the counter"}</span>${media(p)}</a>
+    <div class="pcard-body">
+      <p class="pcard-brand">${esc(p.brand === "Generic" ? cat(p.cat).name : p.brand)}</p>
+      <h3 class="pcard-name"><a href="/product/${p.id}" data-link>${esc(p.name)}</a></h3>
+      <p class="pcard-pack">${esc(p.pack)}</p>
+      <p class="pcard-price"><span class="price">${p.was ? `<span class="sr">Now </span>` : ""}${NGN(p.price)}</span>${p.was ? ` <s class="was"><span class="sr">Was </span>${NGN(p.was)}</s>` : ""}</p>
+      <button class="btn ${rx ? "btn-accent-soft" : "btn-secondary"} btn-sm btn-block" type="button" data-add="${p.id}" aria-label="Add ${esc(p.name)} to basket${rx ? ", prescription needed" : ""}">${rx ? "Add · prescription" : "Add to basket"}</button>
     </div>
   </article>`;
 }
+/* Section heading: eyebrow, title, optional intro and "view all" link */
+function sectionHead(id, eyebrow, title, intro, more, center) {
+  return `<header class="shead${center ? " center" : ""}"><div>${eyebrow ? `<p class="eyebrow">${eyebrow}</p>` : ""}<h2 id="${id}">${title}</h2>${intro ? `<p class="shead-intro">${intro}</p>` : ""}</div>${more || ""}</header>`;
+}
 
-/* ---------- Home (Figma "Main Web" frame, top to bottom) ---------- */
+/* ---------- Home (follows the Figma "Main Web" frame, refined) ---------- */
 function vHome() {
   const popular = P.filter(p => p.pop).slice(0, 6);
-  const tiles = P.filter(p => p.cat === S.tab).slice(0, 6);
-  const TABS = ["body", "family", "vitamins", "devices"];
+  const TABS = [["body", "Body care"], ["family", "Mother & baby"], ["vitamins", "Vitamins"], ["devices", "Health devices"]];
+  const tabItems = P.filter(p => p.cat === S.tab).slice(0, 4);
   return `
-  <section class="hero" id="hero" aria-labelledby="hero-title"><div class="wrap">
-    <div class="copy">
-      <h1 id="hero-title">Your Pathway to<br>Health and Wellness</h1>
+  <section class="hero" aria-labelledby="hero-title"><div class="wrap hero-grid">
+    <div class="hero-copy">
+      <p class="eyebrow">Registered pharmacy · Delivery across Nigeria</p>
+      <h1 id="hero-title">Your Pathway to <br class="br-lg">Health and Wellness</h1>
       <p class="lede">Empowering you to live your healthiest life, with genuine NAFDAC-registered medicines checked by our pharmacists and delivered to your door.</p>
-      <div class="ctas">${link("/products", "Shop health products", "pill pill-solid pill-lg")}${link("/prescriptions", "Send a prescription", "pill pill-rx pill-lg")}</div>
-      <p class="note">Same-day delivery for orders placed before ${cutoff}. Open ${esc(H.label)}. For adults 18 and over.</p>
+      <div class="ctas">${link("/products", "Shop health products", "btn btn-primary btn-lg")}${link("/prescriptions", "Send a prescription", "btn btn-accent btn-lg")}</div>
+      <ul class="hero-points">
+        <li>${icon("check", "ic sm")} Home delivery in ${D.expressMinutes} minutes</li>
+        <li>${icon("check", "ic sm")} Same day for orders before ${cutoff}</li>
+        <li>${icon("check", "ic sm")} Free advice from a pharmacist</li>
+      </ul>
     </div>
-    <figure class="pharmacist"><div class="fallback">${personSVG("male")}</div>${photo(IMG.pharmacistMale, "", "A smiling Synako pharmacist")}
-      <figcaption class="card-tag"><b>Pharmacist-checked</b><span class="muted">Every order is reviewed by a registered Synako pharmacist.</span></figcaption></figure>
+    <figure class="hero-media">
+      <img src="${IMG.hero}" alt="A smiling Synako pharmacist at his desk" width="960" height="1196" fetchpriority="high" decoding="async">
+      <figcaption class="hero-card">${icon("shield", "ic")}<span><b>Pharmacist-checked</b><span>Every order is reviewed by a registered Synako pharmacist.</span></span></figcaption>
+    </figure>
   </div></section>
 
-  <div class="trust"><div class="wrap">
-    <div>${icon("shield")}<span><b>Registered pharmacy</b><span class="muted small">${has(L.pcnEPharmacy) ? `PCN e-pharmacy licence ${esc(L.pcnEPharmacy)}` : "Pharmacy Council of Nigeria"}</span></span></div>
-    <div>${icon("file")}<span><b>Prescriptions checked</b><span class="muted small">Before anything is charged</span></span></div>
-    <div>${icon("box")}<span><b>NAFDAC-registered</b><span class="muted small">From approved suppliers</span></span></div>
-    <div>${icon("truck")}<span><b>Delivery in ${D.expressMinutes} minutes</b><span class="muted small">Same day before ${cutoff}</span></span></div>
-  </div></div>
+  <section class="trust" aria-label="Why shop with Synako"><div class="wrap trust-grid">
+    <div>${icon("shield", "ic")}<p><b>Registered pharmacy</b><span>${has(L.pcnEPharmacy) ? `PCN e-pharmacy licence ${esc(L.pcnEPharmacy)}` : "Pharmacy Council of Nigeria"}</span></p></div>
+    <div>${icon("file", "ic")}<p><b>Prescriptions checked</b><span>Before anything is charged</span></p></div>
+    <div>${icon("box", "ic")}<p><b>NAFDAC-registered</b><span>From approved suppliers</span></p></div>
+    <div>${icon("card", "ic")}<p><b>Secure payment</b><span>Card, transfer or USSD by Paystack</span></p></div>
+  </div></section>
 
   <section class="section" aria-labelledby="routes-title"><div class="wrap">
-    <h2 class="stitle" id="routes-title">How would you like to shop?</h2>
+    ${sectionHead("routes-title", "Shop your way", "How would you like to shop?", "", "", true)}
     <div class="routes">
-      <a class="route" href="/products/otc" data-link>${icon("box", "ic big")}<span><b>Over-the-counter</b><span>${P.filter(p => p.cls === "otc").length} products · order straight away</span></span><span class="arrow" aria-hidden="true">→</span></a>
-      <a class="route rx" href="/products/prescription" data-link>${icon("rx", "ic big")}<span><b>Prescription medicines</b><span>${P.filter(p => p.cls === "pom").length} medicines · upload your prescription</span></span><span class="arrow" aria-hidden="true">→</span></a>
-      <a class="route lock" href="/controlled-medicines" data-link>${icon("lock", "ic big")}<span><b>Controlled medicines</b><span>In store only · not sold online</span></span><span class="arrow" aria-hidden="true">→</span></a>
+      <a class="route" href="/products/otc" data-link><span class="route-ic">${icon("box", "ic")}</span><span><b>Over-the-counter</b><span>${P.filter(p => p.cls === "otc").length} products · order straight away</span></span><span class="arrow" aria-hidden="true">→</span></a>
+      <a class="route rx" href="/products/prescription" data-link><span class="route-ic">${icon("rx", "ic")}</span><span><b>Prescription medicines</b><span>${P.filter(p => p.cls === "pom").length} medicines · upload your prescription</span></span><span class="arrow" aria-hidden="true">→</span></a>
+      <a class="route lock" href="/controlled-medicines" data-link><span class="route-ic">${icon("lock", "ic")}</span><span><b>Controlled medicines</b><span>In store only · not sold online</span></span><span class="arrow" aria-hidden="true">→</span></a>
     </div>
   </div></section>
 
-  <section class="section" style="padding-top:0" aria-labelledby="popular-title"><div class="wrap">
-    <h2 class="stitle" id="popular-title">Most Popular Products</h2>
+  <section class="section tight" aria-labelledby="popular-title"><div class="wrap">
+    ${sectionHead("popular-title", "Bestsellers", "Most popular products", "", link("/products", "View all products <span aria-hidden=\"true\">→</span>", "more"))}
     <div class="cards">${popular.map(card).join("")}</div>
-    <div style="margin-top:3rem" class="strip"><span class="tagx">Prescription medicines</span><span class="sep" aria-hidden="true"></span>
-      <span>Upload your prescription at checkout. You pay only after our pharmacist approves it.</span>${link("/prescriptions", "How it works", "linkbtn")}</div>
+    <div class="strip">${icon("rx", "ic")}<p><b>Have a prescription?</b> Upload it at checkout. You pay only after our pharmacist approves it.</p>${link("/prescriptions", "How it works <span aria-hidden=\"true\">→</span>", "more")}</div>
   </div></section>
 
-  <section class="section" style="padding-top:0" aria-label="Services"><div class="wrap pair">
-    <div class="feature"><div><h2>Talk to a<br>Pharmacist</h2>
-      <p>Don't self medicate. Talk to an expert. Reach a Synako pharmacist in <em>under ${C.freeMinutes} minutes</em> during opening hours. Need longer? Book a consultation.</p>${link("/contact", "Get Started", "btn-blue")}</div>
-      <div class="photo"><div class="fallback">${personSVG("female")}</div>${photo(IMG.pharmacistFemale, "object-position:42% 30%", "A Synako pharmacist on the phone")}</div></div>
-    <div class="feature"><div><h2>Home delivery<br>in ${D.expressMinutes} minutes</h2>
-      <p>Tired of waiting in a queue? Too weak to go down to the store and buy medicines? We bring them to you. Orders above ${threshold} are delivered the next day.</p>${link("/products", "Order Now", "btn-blue")}</div>
-      <div class="photo"><div class="fallback" style="place-items:center;color:#3362AB">${icon("truck", "ic huge")}</div>${photo(IMG.delivery, "", "A Synako delivery rider holding parcels")}</div></div>
+  <section class="section tight" aria-label="Services"><div class="wrap pair">
+    <article class="feature">
+      <div class="feature-copy"><p class="eyebrow">Free advice</p><h2>Talk to a Pharmacist</h2>
+        <p>Don't self medicate. Talk to an expert. Reach a Synako pharmacist in <strong>under ${C.freeMinutes} minutes</strong> during opening hours. Need longer? Book a consultation.</p>${link("/contact", "Get started", "btn btn-primary")}</div>
+      <div class="feature-photo"><div class="fallback">${personSVG("female")}</div>${photo(IMG.pharmacistFemale, "object-position:42% 30%", "A Synako pharmacist on the phone")}</div>
+    </article>
+    <article class="feature feature-warm">
+      <div class="feature-copy"><p class="eyebrow">Fast delivery</p><h2>Home delivery in ${D.expressMinutes} minutes</h2>
+        <p>Tired of waiting in a queue? Too weak to go to the store? We bring your medicines to you. Orders above ${threshold} are delivered the next day.</p>${link("/products", "Order now", "btn btn-primary")}</div>
+      <div class="feature-photo"><div class="fallback">${icon("truck", "ic huge")}</div>${photo(IMG.delivery, "", "A Synako delivery rider holding parcels")}</div>
+    </article>
   </div></section>
 
-  <section class="section" style="padding-top:0" aria-labelledby="browse-title"><div class="wrap">
-    <h2 class="stitle" id="browse-title">Browse medicines &amp; health products</h2>
-    <div class="tabs" role="tablist" aria-label="Product categories" style="margin-top:2rem">
-      ${TABS.map(id => `<button type="button" role="tab" id="tab-${id}" aria-controls="tabpanel" data-tab="${id}" aria-selected="${S.tab === id}" tabindex="${S.tab === id ? 0 : -1}">${{ body: "Body Care", family: "Family Care", vitamins: "Vitamins", devices: "Devices" }[id]}</button>`).join("")}
+  <section class="section tight" aria-labelledby="browse-title"><div class="wrap">
+    ${sectionHead("browse-title", "Browse", "Medicines &amp; health products", "", "", true)}
+    <div class="tabs" role="tablist" aria-label="Product categories">
+      ${TABS.map(([id, label]) => `<button type="button" role="tab" id="tab-${id}" aria-controls="tabpanel" data-tab="${id}" aria-selected="${S.tab === id}" tabindex="${S.tab === id ? 0 : -1}">${label}</button>`).join("")}
     </div>
-    <div class="tiles" role="tabpanel" id="tabpanel" aria-labelledby="tab-${S.tab}">${tiles.map(p => `<a class="tile" href="/product/${p.id}" data-link>${media(p)}<span class="cap"><span>${esc(p.name)}</span><b class="num">${NGN(p.price)}</b></span></a>`).join("")}</div>
-    <div class="center">${link("/products/" + S.tab, "View More", "btn-blue")}</div>
+    <div class="cards cards-4" role="tabpanel" id="tabpanel" aria-labelledby="tab-${S.tab}">${tabItems.map(card).join("")}</div>
+    <div class="center">${link("/products/" + S.tab, "View all " + esc(cat(S.tab).name.toLowerCase()), "btn btn-secondary")}</div>
   </div></section>
 
-  <section class="section" style="padding-top:0" aria-labelledby="steps-title"><div class="wrap">
-    <h2 class="stitle" id="steps-title">How prescription orders work</h2>
-    <p class="ssub">Required by Nigeria's Electronic Pharmacy Regulations 2026, and it keeps you safe.</p>
-    <div class="band"><div class="inner"><ol class="steps">${stepsHTML()}</ol>
-      <div class="foot">${link("/prescriptions", "Start a prescription order", "pill pill-rx pill-lg")}</div></div>
-      <p class="below">Customer reviews will appear here once real customers have ordered.</p></div>
+  <section class="section tight" aria-labelledby="steps-title"><div class="wrap">
+    ${sectionHead("steps-title", "Prescriptions", "How prescription orders work", "Required by Nigeria's Electronic Pharmacy Regulations 2026, and it keeps you safe.", "", true)}
+    <ol class="steps">${stepsHTML()}</ol>
+    <div class="center">${link("/prescriptions", "Start a prescription order", "btn btn-accent btn-lg")}</div>
   </div></section>
 
   ${mobileBanner()}`;
@@ -391,6 +404,7 @@ function vShop() {
       ${isPom ? `<div class="notice rx small" style="margin-bottom:1rem"><b>Prescription needed at checkout</b><span>You can add these to your basket, then upload a valid prescription. Our pharmacist checks it before anything is charged.</span></div>` : ""}
       <div class="toolbar"><p class="muted small" role="status">${list.length} product${list.length === 1 ? "" : "s"}${S.q ? ` · <button class="linkbtn" type="button" data-clear>Clear search</button>` : ""}</p>
         <label class="sort" for="sort">Sort by <select id="sort">${[["popular", "Most popular"], ["low", "Price: low to high"], ["high", "Price: high to low"], ["az", "Name: A to Z"]].map(([v, l]) => `<option value="${v}" ${S.sort === v ? "selected" : ""}>${l}</option>`).join("")}</select></label></div>
+      <h2 class="sr">${esc(filterTitle())}: products</h2>
       ${list.length ? `<div class="grid-shop">${list.map(card).join("")}</div>`
         : `<div class="empty"><p><b>No products match “${esc(S.q)}”.</b></p><p style="margin-top:.4rem">Try a generic name, such as paracetamol, or ${link("/contact", "ask our pharmacist", "linkbtn")} if we stock it. Controlled medicines aren't listed online.</p></div>`}
     </div>
@@ -413,10 +427,10 @@ function vProduct() {
            : `<div class="notice info"><b>Over-the-counter</b><span>Our pharmacist may contact you before sending it if they need to check it's right for you.</span></div>`}
       <div class="buy">
         <div class="qty" role="group" aria-label="Quantity"><button type="button" data-qty="-1" aria-label="Decrease quantity">−</button><span class="num" id="qty-val" aria-live="polite">${S.qty}</span><button type="button" data-qty="1" aria-label="Increase quantity">+</button></div>
-        <button class="pill ${rx ? "pill-rx" : "pill-solid"} pill-lg" type="button" data-add="${p.id}" data-withqty="1">${rx ? "Add to basket · prescription needed" : "Add to basket"}</button>
+        <button class="btn ${rx ? "btn-accent" : "btn-primary"} btn-lg" type="button" data-add="${p.id}" data-withqty="1">${rx ? "Add to basket · prescription needed" : "Add to basket"}</button>
       </div>
       <dl class="specs">
-        <dt>Active ingredient</dt><dd>${esc(p.generic)}</dd>
+        <dt>${p.cls === "pom" || p.strength || !["device", "thermo", "kit", "strips", "bar"].includes(p.form) && !["body", "devices", "sexual"].includes(p.cat) ? "Active ingredient" : "Product type"}</dt><dd>${esc(p.generic)}</dd>
         ${p.strength ? `<dt>Strength</dt><dd>${esc(p.strength)}</dd>` : ""}
         <dt>Pack size</dt><dd>${esc(p.pack)}</dd>
         <dt>Classification</dt><dd>${rx ? "Prescription-only medicine (POM)" : "Over-the-counter (OTC)"}</dd>
@@ -432,7 +446,7 @@ function vProduct() {
       <p class="small muted">Questions about this product? ${link("/contact", "Talk to a pharmacist", "linkbtn")}.</p>
     </div>
   </div>
-  ${related.length ? `<section class="wrap" style="padding-bottom:3rem" aria-labelledby="rel-title"><h2 class="stitle left" id="rel-title">More in ${esc(c.name)}</h2><div class="grid-shop">${related.map(card).join("")}</div></section>` : ""}`;
+  ${related.length ? `<section class="wrap related" aria-labelledby="rel-title">${sectionHead("rel-title", "", "More in " + esc(c.name), "", link("/products/" + p.cat, "View all <span aria-hidden=\"true\">→</span>", "more"))}<div class="cards cards-4">${related.map(card).join("")}</div></section>` : ""}`;
 }
 
 /* ---------- Controlled medicines (information only, nothing for sale) ---------- */
@@ -459,7 +473,7 @@ function vControlled() {
     <aside class="panel" style="display:grid;gap:.75rem;align-content:start">
       <h2 class="h3">Our pharmacy</h2>
       <dl class="kv">${addressLine ? `<dt>Address</dt><dd>${esc(addressLine)}</dd>` : ""}${has(B.phone) ? `<dt>Phone</dt><dd>${phoneText()}</dd>` : ""}<dt>Hours</dt><dd>${esc(H.label)}</dd></dl>
-      ${link("/contact", "Contact the pharmacy", "pill pill-solid")}
+      ${link("/contact", "Contact the pharmacy", "btn btn-primary")}
       <p class="small muted">Looking for other medicines? ${link("/products/prescription", "Prescription medicines", "linkbtn")} and ${link("/products/otc", "over-the-counter products", "linkbtn")} can be ordered online.</p>
     </aside>
   </div>`;
@@ -485,7 +499,7 @@ function vBasket() {
   const list = items();
   if (!list.length && !S.rxRequest) return `<div class="wrap page-head"><h1>Your basket</h1></div>
     <div class="wrap" style="padding-bottom:3rem"><div class="empty"><p><b>Your basket is empty.</b></p><p style="margin:.4rem 0 1rem">Browse products, or send a prescription and we'll prepare it for you.</p>
-    <div style="display:flex;gap:.75rem;justify-content:center;flex-wrap:wrap">${link("/products", "Shop products", "pill pill-solid")}${link("/prescriptions", "Send a prescription", "pill pill-rx")}</div></div></div>`;
+    <div style="display:flex;gap:.75rem;justify-content:center;flex-wrap:wrap">${link("/products", "Shop products", "btn btn-primary")}${link("/prescriptions", "Send a prescription", "btn btn-accent")}</div></div></div>`;
   return `<div class="wrap page-head"><h1>Your basket</h1></div>
   <div class="wrap two"><section class="panel" aria-label="Items in your basket">
     ${list.map(l => `<div class="line"><a class="thumb" href="/product/${l.p.id}" data-link tabindex="-1" aria-hidden="true">${media(l.p)}</a>
@@ -494,7 +508,7 @@ function vBasket() {
         <div class="qty" role="group" aria-label="Quantity of ${esc(l.p.name)}"><button type="button" data-lineqty="${l.id}" data-d="-1" aria-label="Decrease">−</button><span class="num" aria-live="polite">${l.q}</span><button type="button" data-lineqty="${l.id}" data-d="1" aria-label="Increase">+</button></div>
         <button class="rm" type="button" data-remove="${l.id}" aria-label="Remove ${esc(l.p.name)}">Remove</button></div></div>`).join("")}
     ${S.rxRequest ? `<div class="line"><div class="thumb rxthumb" aria-hidden="true">℞</div><div><b>Prescription request</b><div class="muted small">Our pharmacist will add the medicines on your prescription and confirm the price.</div></div><div class="right"><button class="rm" type="button" data-rxreq-remove>Remove</button></div></div>` : ""}
-  </section>${summary(`${link("/checkout", "Go to checkout", "pill pill-solid pill-lg full")}${link("/products", "Continue shopping", "linkbtn center-self")}`)}</div>`;
+  </section>${summary(`${link("/checkout", "Go to checkout", "btn btn-primary btn-lg full")}${link("/products", "Continue shopping", "linkbtn center-self")}`)}</div>`;
 }
 function stepList() { const s = [{ n: 1, l: "Your details" }, { n: 2, l: "Delivery" }]; if (hasRx()) s.push({ n: 3, l: "Prescription" }); s.push({ n: 4, l: hasRx() ? "Review & submit" : "Review & pay" }); return s; }
 function vCheckout() {
@@ -512,7 +526,7 @@ function vCheckout() {
     <label for="dob">Date of birth<span class="hint">We supply medicines to adults 18 and over only.</span><input id="dob" name="dob" type="date" required value="${v("dob")}" autocomplete="bday"></label></div>
     <label class="check"><input type="checkbox" id="adult" name="adult" required ${F.adult ? "checked" : ""}><span>I confirm I am 18 or over and the medicines are for me or someone I care for.</span></label>
     <label class="check"><input type="checkbox" id="consent" name="consent" required ${F.consent ? "checked" : ""}><span>I agree to Synako processing my health information to supply my order, as set out in the ${link("/privacy", "privacy notice", "linkbtn")}.</span></label>
-    <div class="actions">${link("/basket", "Back to basket", "pill pill-ghost")}<button class="pill pill-solid" type="submit">Continue to delivery</button></div></form>`;
+    <div class="actions">${link("/basket", "Back to basket", "btn btn-ghost")}<button class="btn btn-primary" type="submit">Continue to delivery</button></div></form>`;
   if (S.step === 2) body = `<form class="f" id="f2" novalidate><h2>Delivery</h2><p class="muted small">We deliver within Nigeria only.</p>
     <div class="row2"><label for="st">State<select id="st" name="state" required><option value="">Choose a state</option>${STATES.map(s => `<option ${F.state === s ? "selected" : ""}>${s}</option>`).join("")}</select></label>
     <label for="city">City / LGA<input id="city" name="city" required value="${v("city")}" autocomplete="address-level2"></label></div>
@@ -524,7 +538,7 @@ function vCheckout() {
       ${q.big ? `<p class="small muted">Orders above ${threshold} are delivered the next day.</p>` : ""}
       ${!q.openNow ? `<p class="small muted">We're closed right now (open ${esc(H.label)}). You can still order; we'll start on it when we open.</p>` : ""}
     </fieldset>
-    <div class="actions"><button class="pill pill-ghost" type="button" data-step="1">Back</button><button class="pill pill-solid" type="submit">${rx ? "Continue to prescription" : "Continue to payment"}</button></div></form>`;
+    <div class="actions"><button class="btn btn-ghost" type="button" data-step="1">Back</button><button class="btn btn-primary" type="submit">${rx ? "Continue to prescription" : "Continue to payment"}</button></div></form>`;
   if (S.step === 3) body = `<form class="f" id="f3" novalidate><h2>Your prescription</h2>
     <div class="notice rx small"><b>What makes a prescription valid</b><span>Issued within the last 6 months by a licensed prescriber, showing their name, signature, registration number, phone number, and a clinic or hospital address in Nigeria.</span></div>
     <div class="drop"><label for="rxfile"><b>Upload a photo or scan</b></label><span class="muted small" id="rxhint">JPG, PNG or PDF. Make sure all four corners are visible. Photos are resized automatically.</span>
@@ -538,15 +552,15 @@ function vCheckout() {
       <label for="pclinic">Clinic or hospital address in Nigeria<input id="pclinic" name="pclinic" required value="${v("pclinic")}"></label></fieldset>
     <label for="allg">Allergies or other medicines you take<span class="hint">Optional, but it helps our pharmacist.</span><textarea id="allg" name="allergies" rows="2">${v("allergies")}</textarea></label>
     <p class="small muted">If your prescription includes a controlled medicine, we'll contact you to arrange collection of that item in store.</p>
-    <div class="actions"><button class="pill pill-ghost" type="button" data-step="2">Back</button><button class="pill pill-solid" type="submit">Continue to review</button></div></form>`;
+    <div class="actions"><button class="btn btn-ghost" type="button" data-step="2">Back</button><button class="btn btn-primary" type="submit">Continue to review</button></div></form>`;
   if (S.step === 4) body = `<form class="f" id="f4" novalidate aria-busy="${S.busy}"><h2>Review and ${rx ? "submit" : "pay"}</h2>
     ${alertBox(S.error)}
     <div class="panel" style="padding:1rem"><dl class="kv"><dt>Name</dt><dd>${v("name")}</dd><dt>Phone</dt><dd>${v("phone")}</dd><dt>Deliver to</dt><dd>${v("addr")}, ${v("city")}, ${v("state")}</dd><dt>Delivery</dt><dd>${esc(q.speedLabel)}</dd>${rx ? `<dt>Prescription</dt><dd>${F.rxfile ? esc(F.rxfile.name) : "Attached"} · ${v("pname")}</dd>` : ""}</dl></div>
     <div class="paybox">${icon("card", "ic big")}<div><b>${rx ? "You'll pay after approval" : `Pay ${NGN(q.total)} securely with Paystack`}</b>
       <p class="small muted">Card (Verve, Mastercard, Visa), bank transfer or USSD. Synako never sees your card number.${rx ? ` Once our pharmacist approves your prescription, a <b>Pay now</b> button appears on your order page.` : ""}</p></div></div>
     <label class="check"><input type="checkbox" id="terms" name="terms" required ${F.terms ? "checked" : ""}><span>I agree to the ${link("/terms", "terms of sale", "linkbtn")}.</span></label>
-    <div class="actions"><button class="pill pill-ghost" type="button" data-step="${rx ? 3 : 2}" ${S.busy ? "disabled" : ""}>Back</button>
-      <button class="pill ${rx ? "pill-rx" : "pill-solid"}" type="submit" ${S.busy ? "disabled" : ""}>${S.busy ? (rx ? "Sending…" : "Opening payment…") : rx ? "Submit for pharmacist review" : `Place order and pay ${NGN(q.total)}`}</button></div>
+    <div class="actions"><button class="btn btn-ghost" type="button" data-step="${rx ? 3 : 2}" ${S.busy ? "disabled" : ""}>Back</button>
+      <button class="btn ${rx ? "btn-accent" : "btn-primary"}" type="submit" ${S.busy ? "disabled" : ""}>${S.busy ? (rx ? "Sending…" : "Opening payment…") : rx ? "Submit for pharmacist review" : `Place order and pay ${NGN(q.total)}`}</button></div>
     ${DEMO ? `<p class="small muted">Design preview: orders and payments here are simulated. Nothing is charged.</p>` : ""}</form>`;
   return `<div class="wrap page-head"><h1>Checkout</h1></div>
   <div class="wrap two"><div class="panel">
@@ -559,10 +573,10 @@ function vRx() {
     <h1>Send us your prescription</h1><p class="muted lead">Upload a valid prescription and our pharmacist will prepare it. You only pay once it's approved.</p></div>
   <div class="wrap two">
     <div style="display:grid;gap:1rem">
-      <div class="panel" style="display:grid;gap:.75rem"><h2 class="h3">Option 1 · You know the medicine</h2><p class="muted small">Find it in the shop, add it to your basket, and upload the prescription at checkout.</p><div>${link("/products/prescription", "Browse prescription medicines", "pill pill-solid")}</div></div>
-      <div class="panel" style="display:grid;gap:.75rem"><h2 class="h3">Option 2 · Just upload it</h2><p class="muted small">Send the prescription as it is. Our pharmacist reads it, adds the medicines, and confirms the price before you pay.</p><div><button class="pill pill-rx" type="button" data-rxreq>Upload a prescription</button></div></div>
+      <div class="panel" style="display:grid;gap:.75rem"><h2 class="h3">Option 1 · You know the medicine</h2><p class="muted small">Find it in the shop, add it to your basket, and upload the prescription at checkout.</p><div>${link("/products/prescription", "Browse prescription medicines", "btn btn-primary")}</div></div>
+      <div class="panel" style="display:grid;gap:.75rem"><h2 class="h3">Option 2 · Just upload it</h2><p class="muted small">Send the prescription as it is. Our pharmacist reads it, adds the medicines, and confirms the price before you pay.</p><div><button class="btn btn-accent" type="button" data-rxreq>Upload a prescription</button></div></div>
       <div class="panel" style="display:grid;gap:.6rem"><h2 class="h3">Controlled medicines</h2><p class="muted small">These can't be sold online. If your prescription includes one, our pharmacist will arrange in-store collection. ${link("/controlled-medicines", "How it works", "linkbtn")}</p></div>
-      <div class="band slim"><div class="inner"><ol class="steps">${stepsHTML()}</ol></div></div>
+      <ol class="steps steps-compact">${stepsHTML()}</ol>
     </div>
     <aside class="panel" style="display:grid;gap:.7rem;align-content:start"><h2 class="h3">A valid prescription shows</h2>
       <ul class="small" style="margin:0;padding-left:1.1rem;display:grid;gap:.3rem"><li>The prescriber's full name and signature</li><li>Their registration number</li><li>Their phone number</li><li>A clinic or hospital address in Nigeria</li><li>A date within the last 6 months</li><li>The medicine, strength and directions</li></ul>
@@ -608,7 +622,7 @@ function vTrack() {
       <form class="f panel" id="trackform" novalidate><h2 class="h3">Find an order</h2>
         <label for="tid">Order number<input id="tid" name="tid" placeholder="SYN-XXXXXX" class="mono" required value="${esc(S.trackId || "")}" autocapitalize="characters"></label>
         <label for="tph">Last 4 digits of your phone number<input id="tph" name="tph" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" required autocomplete="off" value="${needPhone ? "" : esc(phoneFor(S.trackId).slice(-4))}"></label>
-        <button class="pill pill-solid" type="submit">Find order</button></form>
+        <button class="btn btn-primary" type="submit">Find order</button></form>
       ${S.mine.length ? `<nav class="order-list" aria-label="Your recent orders"><h2 class="h3">Your recent orders</h2>${S.mine.map(m => `<a class="order-pick" href="/track/${m.id}" data-link aria-current="${m.id === S.trackId ? "page" : "false"}"><b class="mono">${m.id}</b><span class="small muted">${m.at ? stamp(m.at) : ""}</span></a>`).join("")}</nav>` : ""}
     </div>
     <section class="panel" style="display:grid;gap:1.25rem;align-content:start" aria-live="polite" aria-busy="${S.trackId && !o && !S.trackErr && !needPhone}">
@@ -620,7 +634,7 @@ function vTrack() {
         ${o.status === "rejected" ? `<div class="notice rx"><b>We couldn't approve this prescription</b><span>${esc(o.note || "Our pharmacist will contact you to explain.")} You have not been charged.</span></div>` : ""}
         ${o.status === "info_needed" ? `<div class="notice rx"><b>Our pharmacist needs more information</b><span>${esc(o.note || "We'll call you shortly.")}</span></div>` : ""}
         ${o.status === "pending_review" ? `<div class="notice info"><b>Your prescription is with our pharmacist</b><span>Usually within an hour during opening hours (${esc(H.label)}). This page updates when it's approved.</span></div>` : ""}
-        ${o.canPay ? `<div class="paybox go">${icon("card", "ic big")}<div><b>${o.status === "approved_awaiting_payment" ? "Approved! " : ""}Pay ${NGN(o.total)} to confirm your order</b><p class="small muted">Card, bank transfer or USSD through Paystack.</p></div><button class="pill pill-solid pill-lg" type="button" data-pay="${esc(o.id)}" ${S.busy ? "disabled" : ""}>${S.busy ? "Opening payment…" : "Pay now"}</button></div>` : ""}
+        ${o.canPay ? `<div class="paybox go">${icon("card", "ic big")}<div><b>${o.status === "approved_awaiting_payment" ? "Approved! " : ""}Pay ${NGN(o.total)} to confirm your order</b><p class="small muted">Card, bank transfer or USSD through Paystack.</p></div><button class="btn btn-primary btn-lg" type="button" data-pay="${esc(o.id)}" ${S.busy ? "disabled" : ""}>${S.busy ? "Opening payment…" : "Pay now"}</button></div>` : ""}
         ${o.rxRequest && !o.priced ? `<p class="small muted">Our pharmacist will add your prescription items and their price when they approve it.</p>` : ""}
         <ol class="timeline">${st.map((s, i) => { const c = i < stage ? "done" : (i === stage && !bad && !final ? "now" : "next"); return `<li class="${c}"><span class="dot ${c}" aria-hidden="true">${i < stage ? "✓" : i + 1}</span><div><b>${s}</b>${c === "now" ? `<div class="small muted">In progress</div>` : ""}<span class="sr">${c === "done" ? " (done)" : c === "now" ? " (current step)" : ""}</span></div></li>`; }).join("")}</ol>
         <details class="facts"><summary>Order details</summary>
@@ -656,14 +670,14 @@ const CONTENT = {
           <div class="row2"><label for="cn">Your name<input id="cn" name="name" required autocomplete="name"></label><label for="cp">Phone number<input id="cp" name="phone" type="tel" required minlength="10" autocomplete="tel"></label></div>
           <label for="ctopic">What's it about?<select id="ctopic" name="topic"><option>Advice about a medicine</option><option>My order</option><option>A prescription</option><option>Controlled medicine collection</option><option>Something else</option></select></label>
           <label for="cmsg">Message<textarea id="cmsg" name="message" rows="4" required></textarea></label>
-          <div><button class="pill pill-solid" type="submit">Send message</button></div></form>
+          <div><button class="btn btn-primary" type="submit">Send message</button></div></form>
         <form class="f panel" id="apptform" novalidate><h2>${icon("cal", "ic")} Book a consultation</h2>
           <p class="small muted">Anything longer than ${C.freeMinutes} minutes, such as a medicines review or advice on a long-term condition, is by appointment. ${C.fee ? `A consultation costs ${NGN(C.fee)}.` : "A consultation fee applies; we'll confirm it when we call to confirm your appointment."}</p>
           <div class="row2"><label for="an">Your name<input id="an" name="name" required autocomplete="name"></label><label for="ap">Phone number<input id="ap" name="phone" type="tel" required minlength="10" autocomplete="tel"></label></div>
           <div class="row2"><label for="ad">Date<input id="ad" name="date" type="date" required min="${new Date().toISOString().slice(0, 10)}"></label>
             <label for="at">Time<select id="at" name="time" required><option value="">Choose a time</option>${slots().map(t => `<option value="${t}">${PR.fmt12(t)}</option>`).join("")}</select></label></div>
           <label for="areason">What would you like to discuss?<textarea id="areason" name="message" rows="3"></textarea></label>
-          <div><button class="pill pill-solid" type="submit">Request appointment</button></div></form>
+          <div><button class="btn btn-primary" type="submit">Request appointment</button></div></form>
         <p class="small muted">In an emergency, go to your nearest hospital or call 112. Don't wait for a reply.</p>
       </div>
       <aside class="panel" style="display:grid;gap:.9rem;align-content:start">
@@ -726,7 +740,7 @@ const CONTENT = {
       <div class="row2"><label for="kn">Full name<input id="kn" name="name" required autocomplete="name"></label><label for="ke">Email<input id="ke" name="email" type="email" required autocomplete="email"></label></div>
       <div class="row2"><label for="kr">Role you're interested in<select id="kr" name="role"><option>Pharmacist</option><option>Pharmacy technician</option><option>Dispatch rider</option><option>Customer support</option><option>Other</option></select></label>
       <label for="kc">PCN registration number<span class="hint">Pharmacists and technicians only.</span><input id="kc" name="pcn"></label></div>
-      <div><button class="pill pill-solid" type="submit">Register interest</button></div></form>` })
+      <div><button class="btn btn-primary" type="submit">Register interest</button></div></form>` })
 };
 function slots() { const out = []; for (let m = 7 * 60 + 30; m <= 17 * 60; m += 30) out.push(`${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`); return out; }
 function vPage() {
@@ -736,7 +750,7 @@ function vPage() {
 }
 function vNotFound() {
   return `<div class="wrap page-head"><h1>Page not found</h1><p class="muted lead">The page you're looking for isn't here.</p></div>
-    <div class="wrap" style="padding-bottom:3rem;display:flex;gap:.75rem;flex-wrap:wrap">${link("/", "Go to the home page", "pill pill-solid")}${link("/products", "Browse products", "pill pill-ghost")}</div>`;
+    <div class="wrap" style="padding-bottom:3rem;display:flex;gap:.75rem;flex-wrap:wrap">${link("/", "Go to the home page", "btn btn-primary")}${link("/products", "Browse products", "btn btn-ghost")}</div>`;
 }
 
 /* ---------- Pharmacist Desk (staff) ---------- */
@@ -768,7 +782,7 @@ function vStaff() {
       ${alertBox(st.err)}
       <label for="sname">Your name<span class="hint">Recorded against every decision you make.</span><input id="sname" name="sname" required autocomplete="name" value="${esc(st.name)}"></label>
       <label for="spw">Desk password<input id="spw" name="spw" type="password" required autocomplete="current-password"></label>
-      <button class="pill pill-solid" type="submit">Sign in</button>
+      <button class="btn btn-primary" type="submit">Sign in</button>
       ${DEMO ? `<p class="small muted">Design preview: any password works.</p>` : ""}</form></div>`;
   const d = st.list;
   if (!d) return `<div class="wrap"><p class="muted" style="padding:2rem 0">Loading the desk…</p></div>`;
@@ -810,7 +824,7 @@ function deskDetail() {
     { l: "Issued within the last 6 months", ok: months <= 6 && months >= 0 }
   ] : [];
   const f = st.file;
-  const fileView = f ? (f.data.startsWith("data:application/pdf") ? `<p><a class="pill pill-ghost" href="${f.data}" download="${esc(f.name || "prescription.pdf")}">Open prescription PDF</a></p>` : `<a href="${f.data}" target="_blank" rel="noopener"><img class="rx-img" src="${f.data}" alt="Uploaded prescription for order ${esc(o.id)}"></a>`) : (o.rx ? `<p class="muted small">No prescription file.</p>` : "");
+  const fileView = f ? (f.data.startsWith("data:application/pdf") ? `<p><a class="btn btn-ghost" href="${f.data}" download="${esc(f.name || "prescription.pdf")}">Open prescription PDF</a></p>` : `<a href="${f.data}" target="_blank" rel="noopener"><img class="rx-img" src="${f.data}" alt="Uploaded prescription for order ${esc(o.id)}"></a>`) : (o.rx ? `<p class="muted small">No prescription file.</p>` : "");
   const A = o.actions || [];
   const reviewing = A.includes("approve");
   return `<div style="display:flex;justify-content:space-between;gap:1rem;flex-wrap:wrap"><div><div class="muted small">Order</div><h2 class="mono" style="font-size:1.35rem">${esc(o.id)}</h2><div class="muted small">${stamp(o.createdAt)} · ${esc(o.delivery.label)}</div></div>${statusTag(o)}</div>
@@ -837,14 +851,17 @@ function deskDetail() {
       </fieldset>` : ""}
       ${A.some(a => ["info", "reject", "cancel"].includes(a)) ? `<label for="anote">Note to the customer<span class="hint">Required if you ask for information or don't approve.</span><textarea id="anote" rows="2"></textarea></label>` : ""}
       <div class="actions">${A.map(a => {
-        const L2 = { approve: ["Approve and request payment", "pill-ok"], info: ["Ask for more information", "pill-ghost"], reject: ["Don't approve", "pill-bad"], resume: ["Back to review", "pill-ghost"], cancel: ["Cancel order", "pill-bad"], packed: ["Mark as packed", "pill-solid"], dispatched: ["Mark out for delivery", "pill-solid"], delivered: ["Mark as delivered", "pill-ok"] }[a];
-        return `<button class="pill ${L2[1]}" type="button" data-act="${a}" ${S.busy ? "disabled" : ""}>${L2[0]}</button>`; }).join("")}</div>
+        const L2 = { approve: ["Approve and request payment", "btn-success"], info: ["Ask for more information", "btn-ghost"], reject: ["Don't approve", "btn-danger"], resume: ["Back to review", "btn-ghost"], cancel: ["Cancel order", "btn-danger"], packed: ["Mark as packed", "btn-primary"], dispatched: ["Mark out for delivery", "btn-primary"], delivered: ["Mark as delivered", "btn-success"] }[a];
+        return `<button class="btn ${L2[1]}" type="button" data-act="${a}" ${S.busy ? "disabled" : ""}>${L2[0]}</button>`; }).join("")}</div>
     </form>` : ""}
     <div><h3 class="h4" style="margin-bottom:.5rem">Order record</h3><div class="audit">${o.history.slice().reverse().map(l => `<div><span>${stamp(l.t)}</span><b style="font-weight:500">${esc(l.m)}</b></div>`).join("")}</div></div>`;
 }
 
 /* ---------- Shell: top bar, footer details, directory, drawer ---------- */
 function renderShell() {
+  document.documentElement.lang = CFG.site.locale || "en";
+  const yr = $("#year"); if (yr) yr.textContent = new Date().getFullYear();
+  orgLd();
   $("#topbar-hours").textContent = H.label;
   $("#topbar-mid").innerHTML = addressLine ? `Visit our pharmacy at ${esc(addressLine)} ${link("/contact", "Contact Us")}` : `Genuine medicines, checked by our pharmacists ${link("/contact", "Contact Us")}`;
   $("#topbar-right").innerHTML = (has(B.phone) ? `<span class="callus">Call Us: ${phoneText()}</span>` : "") +
@@ -855,9 +872,9 @@ function renderShell() {
   $("#drawer-foot").innerHTML = `${has(B.phone) ? `<span>Pharmacist line: ${phoneText()}</span>` : ""}<span>Open ${esc(H.label)}</span>`;
   const col = cats => cats.map(c => `<li><a href="/products/${c.id}" data-link>${c.name} <span>${P.filter(p => p.cat === c.id).length}</span></a></li>`).join("");
   $("#directory").innerHTML = `
-    <div><h2>${icon("box", "ic sm")} Over-the-counter medicines</h2><p>Order online straight away.</p><ul>${col(OTC_CATS)}</ul>${link("/products/otc", "All over-the-counter →", "dir-all")}</div>
-    <div><h2>${icon("rx", "ic sm")} Prescription medicines</h2><p>Upload a valid prescription; pay after our pharmacist approves it.</p><ul>${col(POM_CATS)}</ul>${link("/products/prescription", "All prescription medicines →", "dir-all")}${link("/prescriptions", "Send a prescription →", "dir-all")}</div>
-    <div class="lock"><h2>${icon("lock", "ic sm")} Controlled medicines</h2><p>Not sold online under the Electronic Pharmacy Regulations 2026. Collect in store with your original prescription and photo ID, after our pharmacist checks it.</p>${link("/controlled-medicines", "How to get a controlled medicine →", "dir-all")}</div>`;
+    <div><h2>${icon("box", "ic sm")} Over-the-counter medicines</h2><p>Order online straight away.</p><ul>${col(OTC_CATS)}</ul>${link("/products/otc", "All over-the-counter <span aria-hidden=\"true\">→</span>", "dir-all")}</div>
+    <div><h2>${icon("rx", "ic sm")} Prescription medicines</h2><p>Upload a valid prescription; pay after our pharmacist approves it.</p><ul>${col(POM_CATS)}</ul>${link("/products/prescription", "All prescription medicines <span aria-hidden=\"true\">→</span>", "dir-all")}${link("/prescriptions", "Send a prescription <span aria-hidden=\"true\">→</span>", "dir-all")}</div>
+    <div class="lock"><h2>${icon("lock", "ic sm")} Controlled medicines</h2><p>Not sold online under the Electronic Pharmacy Regulations 2026. Collect in store with your original prescription and photo ID, after our pharmacist checks it.</p>${link("/controlled-medicines", "How to get a controlled medicine <span aria-hidden=\"true\">→</span>", "dir-all")}</div>`;
 }
 const drawer = () => $("#drawer");
 let lastFocus = null;
@@ -878,10 +895,81 @@ function closeDrawer(silent) {
   if (!silent && lastFocus) lastFocus.focus();
 }
 
+/* ---------- Search engines and link previews ---------- */
+const SITE_URL = String(CFG.site.url || location.origin).replace(/\/$/, "");
+const DEFAULT_DESC = "Genuine NAFDAC-registered medicines from a registered Nigerian pharmacy. Shop over-the-counter products, send a prescription, talk to a pharmacist and get home delivery.";
+function metaTag(attr, key) {
+  let m = document.head.querySelector(`meta[${attr}="${key}"]`);
+  if (!m) { m = document.createElement("meta"); m.setAttribute(attr, key); document.head.appendChild(m); }
+  return m;
+}
+function setLd(id, data) {
+  let el = document.getElementById(id);
+  if (!data) { if (el) el.remove(); return; }
+  if (!el) { el = document.createElement("script"); el.type = "application/ld+json"; el.id = id; document.head.appendChild(el); }
+  el.textContent = JSON.stringify(data);
+}
+function pageMeta() {
+  const strip = t => String(t).replace(/<[^>]+>/g, "").replace(/&amp;/g, "&").replace(/&[^;]+;/g, "");
+  if (S.mode === "staff") return { title: "Pharmacist Desk", noindex: true };
+  switch (S.view) {
+    case "home": return { title: "", desc: DEFAULT_DESC };
+    case "shop": {
+      const t = strip(filterTitle());
+      return { title: t, desc: S.filter === "pom" || (cat(S.filter) && cat(S.filter).cls === "pom")
+        ? `${t} from Synako Pharmacy. Upload a valid prescription; our pharmacist checks it before you pay.`
+        : `Shop ${t.toLowerCase()} from Synako Pharmacy, a registered Nigerian pharmacy. Genuine NAFDAC-registered products with home delivery.`, noindex: !!S.q };
+    }
+    case "product": {
+      const p = prod(S.product), rx = p.cls === "pom";
+      return { title: p.name, desc: `${p.name} (${p.pack}). ${p.use}${rx ? " Prescription only." : ""}`, type: "product",
+        ld: rx ? null : { "@context": "https://schema.org", "@type": "Product", name: p.name, description: p.use, sku: p.id, category: cat(p.cat).name,
+          brand: { "@type": "Brand", name: p.brand === "Generic" ? "Synako Pharmacy" : p.brand },
+          image: p.photo ? `${SITE_URL}/${p.photo}` : undefined,
+          offers: { "@type": "Offer", price: String(p.price), priceCurrency: CFG.site.currency, availability: "https://schema.org/InStock", url: `${SITE_URL}/product/${p.id}`, seller: { "@type": "Organization", name: B.name } } } };
+    }
+    case "controlled": return { title: "Controlled medicines", desc: "Controlled medicines are not sold online. How to collect one from Synako Pharmacy in store with your original prescription and photo ID." };
+    case "rx": return { title: "Send a prescription", desc: "Upload a valid prescription online. Synako's pharmacist checks it, and you pay only once it's approved." };
+    case "page": { const c = (CONTENT[S.page] || CONTENT.about)(); return { title: c.title, desc: strip(c.lead || "") || DEFAULT_DESC }; }
+    case "basket": return { title: "Your basket", noindex: true };
+    case "checkout": return { title: "Checkout", noindex: true };
+    case "track": return { title: "Track your order", noindex: true };
+    default: return { title: "Page not found", noindex: true };
+  }
+}
+function applyMeta() {
+  const m = pageMeta(), brand = B.name || "Synako Pharmacy";
+  const title = m.title ? `${m.title} | ${brand}` : `${brand} · Your Pathway to Health and Wellness`;
+  const url = SITE_URL + (S.mode === "staff" ? "/pharmacist" : pathFor());
+  document.title = title;
+  metaTag("name", "description").setAttribute("content", m.desc || DEFAULT_DESC);
+  metaTag("name", "robots").setAttribute("content", m.noindex ? "noindex, nofollow" : "index, follow");
+  metaTag("property", "og:title").setAttribute("content", title);
+  metaTag("property", "og:description").setAttribute("content", m.desc || DEFAULT_DESC);
+  metaTag("property", "og:url").setAttribute("content", url);
+  metaTag("property", "og:type").setAttribute("content", m.type === "product" ? "product" : "website");
+  let c = document.head.querySelector('link[rel="canonical"]');
+  if (!c) { c = document.createElement("link"); c.rel = "canonical"; document.head.appendChild(c); }
+  c.href = url;
+  setLd("ld-page", m.ld || null);
+}
+function orgLd() {
+  const days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+  const hours = Object.keys(H.open).map(d => ({ "@type": "OpeningHoursSpecification", dayOfWeek: days[d], opens: H.open[d][0], closes: H.open[d][1] }));
+  const ld = { "@context": "https://schema.org", "@type": "Pharmacy", name: B.name, url: SITE_URL + "/", logo: SITE_URL + "/assets/logo@2x.png", image: SITE_URL + "/assets/og-image.jpg",
+    slogan: "Your Pathway to Health and Wellness", areaServed: CFG.site.country, currenciesAccepted: CFG.site.currency, paymentAccepted: "Card, Bank transfer, USSD", openingHoursSpecification: hours };
+  if (has(B.phone)) ld.telephone = B.phone;
+  if (has(B.email)) ld.email = B.email;
+  if (has(B.companyName)) ld.legalName = B.companyName;
+  if (addressLine) ld.address = { "@type": "PostalAddress", streetAddress: B.address, addressLocality: B.city, addressRegion: B.state, addressCountry: CFG.site.country };
+  const same = [B.facebook, B.instagram].filter(has); if (same.length) ld.sameAs = same;
+  setLd("ld-org", ld);
+  setLd("ld-site", { "@context": "https://schema.org", "@type": "WebSite", name: B.name, url: SITE_URL + "/",
+    potentialAction: { "@type": "SearchAction", target: SITE_URL + "/products?q={search_term_string}", "query-input": "required name=search_term_string" } });
+}
+
 /* ---------- Render ---------- */
-const TITLES = { home: "Synako Pharmacy · Your Pathway to Health and Wellness", rx: "Send a prescription", controlled: "Controlled medicines", basket: "Your basket", checkout: "Checkout", track: "Track your order", notfound: "Page not found" };
 function renderCount() { const n = S.cart.reduce((s, l) => s + l.q, 0) + (S.rxRequest ? 1 : 0); document.querySelectorAll("[data-count]").forEach(b => { b.textContent = n; b.hidden = !n; }); const bl = $("#basket-link"); if (bl) bl.setAttribute("aria-label", `Basket, ${n} item${n === 1 ? "" : "s"}`); }
-function loadHeroBg() { const h = $("#hero"); if (!h) return; const im = new Image(); im.onload = () => { h.style.setProperty("--hero-bg", `url("${IMG.heroBg}")`); h.classList.add("has-bg"); }; im.src = IMG.heroBg; }
 function render(scroll) {
   const staff = S.mode === "staff";
   $("#shell-customer").hidden = staff; $("#shell-staff").hidden = !staff;
@@ -897,7 +985,6 @@ function render(scroll) {
     const V = { home: vHome, shop: vShop, product: vProduct, controlled: vControlled, basket: vBasket, checkout: vCheckout, rx: vRx, track: vTrack, page: vPage, notfound: vNotFound }[S.view] || vHome;
     $("#view").innerHTML = V();
     renderCount();
-    if (S.view === "home") loadHeroBg();
     if (S.view === "track" && S.track && !["delivered", "rejected", "cancelled"].includes(S.track.status)) trackTimer = setInterval(() => loadTrack(), 15000);
     const here = pathFor();
     document.querySelectorAll(".nav a[data-link], .drawer a[data-link]").forEach(a => {
@@ -905,9 +992,9 @@ function render(scroll) {
       const cur = h === here || (h === "/products" && S.view === "shop" && S.filter === "all") || (h === "/track" && S.view === "track");
       if (cur) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current");
     });
-    title = S.view === "shop" ? filterTitle().replace(/<[^>]+>/g, "").replace(/&[^;]+;/g, "") : S.view === "product" ? prod(S.product).name : S.view === "page" ? (CONTENT[S.page] || CONTENT.about)().title : TITLES[S.view];
   }
-  document.title = S.view === "home" && !staff ? TITLES.home : `${title} | Synako Pharmacy`;
+  applyMeta();
+  if (staff && /^\(\d+\)/.test(title)) document.title = `${title} | ${B.name}`;
   if (scroll) window.scrollTo(0, 0);
   const err = $("#form-error"); if (err && S.error) err.focus();
 }
@@ -968,7 +1055,6 @@ document.addEventListener("click", e => {
   const d = t.dataset;
   if (t.id === "menu-toggle") { drawer().hidden ? openDrawer() : closeDrawer(); return; }
   if ("closeDrawer" in d) { closeDrawer(); return; }
-  if (t.id === "search-toggle") { const bar = $("#searchbar"); bar.hidden = !bar.hidden; t.setAttribute("aria-expanded", String(!bar.hidden)); if (!bar.hidden) $("#q").focus(); return; }
   if (t.id === "staff-signout") { signOut(); return; }
   if ("app" in d) { toast("The Synako app is coming soon. You can order on this website from any phone in the meantime."); return; }
   if (d.tab) { S.tab = d.tab; render(); const nt = $(`#tab-${d.tab}`); if (nt) nt.focus(); return; }
@@ -1109,5 +1195,6 @@ async function placeOrder() {
 
 checkLive().then(() => { if (S.view === "checkout") render(); });
 renderShell();
+try { const q0 = new URLSearchParams(location.search).get("q"); if (q0) { S.q = q0.slice(0, 80); $("#q").value = S.q; } } catch (e) { /* no query */ }
 go(MEMORY ? "/" : location.pathname, { replace: true });
 })();

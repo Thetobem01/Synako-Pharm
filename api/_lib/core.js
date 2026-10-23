@@ -15,7 +15,7 @@ export function site() {
     vm.runInContext(fs.readFileSync(path.join(process.cwd(), f), "utf8"), sandbox, { filename: f });
   }
   const w = sandbox.window;
-  cache = { config: w.SYNAKO_CONFIG, P: w.SYNAKO.P, pricing: w.SYNAKO_PRICING };
+  cache = { config: w.SYNAKO_CONFIG, P: w.SYNAKO.P, CATS: w.SYNAKO.CATS, pricing: w.SYNAKO_PRICING };
   return cache;
 }
 

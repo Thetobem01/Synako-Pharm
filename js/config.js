@@ -5,6 +5,13 @@
 (function (root) {
   "use strict";
   root.SYNAKO_CONFIG = {
+    site: {
+      url: "https://synakopharm.vercel.app", // change to your domain when it's connected (no trailing slash)
+      locale: "en-NG",            // language and region for dates and numbers (BCP 47)
+      currency: "NGN",            // ISO 4217 currency code
+      country: "NG",              // ISO 3166 country you sell in
+      timezone: "Africa/Lagos"
+    },
     business: {
       name: "Synako Pharmacy",
       companyName: "",            // registered company name, e.g. "Synako Pharmacy Ltd"

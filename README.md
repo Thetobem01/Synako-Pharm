@@ -11,7 +11,7 @@ and run orders from the **Pharmacist Desk** at `/pharmacist`.
 |---|---|
 | Website (all pages, mobile menu, checkout, tracking, desk) | `index.html`, `css/`, `js/app.js` |
 | **Business details, hours, delivery rules and fees** | `js/config.js` ← edit this |
-| Products and prices | `js/data.js` |
+| Products, prices, departments and wholesale options | `js/data.js` |
 | Delivery options and totals (used by site *and* server) | `js/pricing.js` |
 | Order API (Vercel serverless functions) | `api/` |
 
@@ -50,6 +50,9 @@ Regulations 2026); `/controlled-medicines` explains in-store collection.
    | `PAYSTACK_SECRET_KEY` | Same page (`sk_test_…`, then `sk_live_…`). Never put this in the code. |
    | `STAFF_PASSWORD` | A strong password for the Pharmacist Desk |
    | `SESSION_SECRET` | Any long random text (signs staff sign-ins) |
+   | `RESEND_API_KEY` | *Optional, recommended.* From resend.com → API Keys. Turns on order emails. |
+   | `MAIL_FROM` | Sender, e.g. `Synako Pharmacy <orders@yourdomain.com>` (verify the domain in Resend first) |
+   | `STAFF_EMAIL` | Where new-order, payment and message alerts go, e.g. the pharmacist's inbox |
 
 4. **Paystack webhook:** in Paystack → Settings → API Keys & Webhooks, set the webhook URL to
    `https://YOUR-DOMAIN/api/paystack-webhook`.
@@ -58,6 +61,37 @@ Regulations 2026); `/controlled-medicines` explains in-store collection.
 
 Until storage and Paystack are connected, the checkout shows a "call us to order" message instead
 of taking orders.
+
+The Pharmacist Desk lists any hosting settings that are still missing.
+
+## Launch checklist
+
+Work through this before switching to live Paystack keys and sharing the address:
+
+- [ ] All business and licence details filled in `js/config.js` (the desk shows what's missing)
+- [ ] Real prices in `js/data.js`, and every product's OTC / prescription-only status confirmed by the superintendent pharmacist
+- [ ] Privacy notice, terms of sale and returns policy reviewed by your lawyer, then the "draft" notice removed from those pages (`DRAFT` in `js/app.js`)
+- [ ] Real delivery fees, express area and consultation fee set in `js/config.js`
+- [ ] Upstash Redis connected, and `STAFF_PASSWORD` and `SESSION_SECRET` set to long random values
+- [ ] Order emails set up (`RESEND_API_KEY`, `MAIL_FROM`, `STAFF_EMAIL`) and one test email received
+- [ ] One full test order with Paystack's test card: pay, pack, dispatch, deliver
+- [ ] One test prescription order: approve on the desk, then pay from the customer's tracking page
+- [ ] Paystack webhook URL set, then switch to `pk_live_…` / `sk_live_…` keys and redeploy
+- [ ] Custom domain connected and `site.url` updated in `js/config.js`
+- [ ] Sitemap submitted in Google Search Console (`https://YOUR-DOMAIN/sitemap.xml`)
+
+## Emails
+
+With the three email settings above, the site sends:
+
+- **To the customer:** order received, payment received, prescription approved (with a link to pay), more information needed, not approved, out for delivery, delivered. Each email links to the order's tracking page.
+- **To `STAFF_EMAIL`:** a new order or prescription to review, a payment received, and a new message or consultation request. Staff alerts contain only the order number and a link to the desk, never health details.
+
+Emails are best-effort: if Resend is down, the order still goes through.
+
+## Abuse protection
+
+Each visitor (by IP address) is limited to 10 orders an hour, 6 messages per 10 minutes, 40 order look-ups per 10 minutes and 8 staff sign-in attempts per 15 minutes. Messages also carry a hidden field that only spam bots fill in; those are dropped without being stored. Limits use the same Redis database as orders.
 
 ## Fill in your details
 
@@ -79,6 +113,20 @@ superintendent pharmacist confirm each product's OTC / prescription-only classif
 - **Accessibility:** WCAG 2.2 AA colour contrast, keyboard navigation, skip link, labelled forms, screen-reader headings and reduced-motion support.
 - **Region settings:** language, currency, country and time zone live in `site` in `js/config.js`; prices and dates are formatted from them.
 
+## Departments, retail and wholesale
+
+The store has seven departments (`DEPTS` in `js/data.js`): Medicines (also browsable as tablets & capsules, syrups & liquids, creams & ointments), Prescription medicines, Medical equipment, Surgical supplies, Personal care, Provisions & beverages, and Wines & spirits. Each category in `CATS` belongs to one department.
+
+**Wholesale:** every product can be bought singly or in bulk units (dozen, carton, case, pack), each with its own price. The usual options per department are in `BULK` in `js/data.js`. A product can set its own with `bulk: [["Carton of 48", 48, 8]]` (label, how many, % off the single price), or `bulk: []` for single packs only. Bulk prices are rounded to the nearest ₦50, and the server recalculates every line, so prices can't be changed in the browser.
+
+- Prescription-only medicines are sold in single packs only (up to 10 per order). Licensed premises buy them in bulk through a trade quote.
+- Online orders are capped at `orders.maxOnlineTotal` in `js/config.js` (₦10,000,000). Anything larger is sent to the **trade quote** form on `/wholesale`, and those requests appear on the Pharmacist Desk under *Messages & bookings*.
+- Single packs go up to 50 per line, and bulk units up to 100 per line.
+
+**Wines & spirits:** visitors confirm they're 18 or over before the section opens, alcohol stays out of general product lists until they do, checkout requires a date of birth showing 18+, and the Pharmacist Desk flags every order with alcohol for a photo-ID check on delivery. **Before launch, confirm with your superintendent pharmacist and lawyer that selling alcohol fits your PCN premises registration and your state's liquor licensing rules**, and keep the drinks physically separate from the dispensary if required.
+
+**Prices for the new departments are placeholders**, like the rest of the catalogue. Brand names (Milo, Peak, Guinness and others) are listed as products you stock; replace or remove any you don't carry.
+
 ## Product photos
 
 Products show a drawn pack until you add a photo. Save it as `assets/products/<product id>.webp` (square, at least 800×800, white background), then add the id to the `PHOTOS` list at the top of `js/data.js`, e.g. `para: "webp",`.
@@ -87,12 +135,15 @@ Products show a drawn pack until you add a photo. Save it as `assets/products/<p
 
 ```bash
 npm run dev          # http://localhost:3000 · test storage and payments · desk password "desk"
+npm test             # pricing rules and the full order API (place, pay, review, track)
+npm run check        # syntax check of every script
 ```
+
+The tests run automatically on GitHub for every pull request (`.github/workflows/ci.yml`).
 
 ## Fonts
 
-Taken from the Figma file: **DM Sans** (headings, navigation, buttons, body) and **Poppins**
-(top bar and product cards), both loaded from Google Fonts.
+**Inter** for all text (headings, navigation, buttons, body and prices, with tabular figures so amounts line up), loaded from Google Fonts. To change it, edit the Google Fonts link in `index.html` and `--font` in `css/styles.css`.
 
 ## Images to export from Figma
 

@@ -52,6 +52,14 @@
       expressArea: "",            // where 30-minute delivery applies, e.g. "Ikeja and surrounding areas"
       localStates: []             // states that get express / same-day, e.g. ["Lagos"]; empty = all
     },
+    orders: {
+      maxOnlineTotal: 10000000,   // ₦ — larger orders are asked to request a trade quote instead of paying online
+      maxLines: 60                // most different products in one order
+    },
+    wholesale: {
+      minTradeOrder: 100000,      // ₦ — smallest order for a trade quote; set to 0 for none
+      note: "Pharmacies, patent medicine stores, hospitals, clinics, schools, hotels, supermarkets and event planners are welcome."
+    },
     consultation: {
       freeMinutes: 5,             // free pharmacist chat up to this many minutes
       fee: null                   // ₦ for a booked consultation; null = "confirmed when we call"

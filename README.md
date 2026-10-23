@@ -10,7 +10,7 @@ and run orders from the **Pharmacist Desk** at `/pharmacist`.
 | Part | Where |
 |---|---|
 | Website (all pages, mobile menu, checkout, tracking, desk) | `index.html`, `css/`, `js/app.js` |
-| **Business details, hours, delivery rules and fees** | `js/config.js` ← edit this |
+| **Business details, hours, delivery rules and fees, pausing orders** | `js/config.js` ← edit this |
 | Products, prices, departments and wholesale options | `js/data.js` |
 | Delivery options and totals (used by site *and* server) | `js/pricing.js` |
 | Order API (Vercel serverless functions) | `api/` |
@@ -52,17 +52,52 @@ Regulations 2026); `/controlled-medicines` explains in-store collection.
    | `SESSION_SECRET` | Any long random text (signs staff sign-ins) |
    | `RESEND_API_KEY` | *Optional, recommended.* From resend.com → API Keys. Turns on order emails. |
    | `MAIL_FROM` | Sender, e.g. `Synako Pharmacy <orders@yourdomain.com>` (verify the domain in Resend first) |
+   | `SITE_URL` | Your public address once a domain is connected, e.g. `https://www.synakopharmacy.com` |
    | `STAFF_EMAIL` | Where new-order, payment and message alerts go, e.g. the pharmacist's inbox |
 
 4. **Paystack webhook:** in Paystack → Settings → API Keys & Webhooks, set the webhook URL to
    `https://YOUR-DOMAIN/api/paystack-webhook`.
 5. **Redeploy**, then place a test order with Paystack's test card before switching to live keys.
-6. **Domain:** add it under *Settings* → *Domains*, then change `site.url` in `js/config.js` to the new address (no trailing slash). The sitemap, robots file, share previews and search-engine data all follow it.
+6. **Domain:** see *Connect your domain* below.
 
 Until storage and Paystack are connected, the checkout shows a "call us to order" message instead
 of taking orders.
 
 The Pharmacist Desk lists any hosting settings that are still missing.
+
+## Connect your domain
+
+**Option A: buy it in Vercel (simplest).** In the Vercel project, open *Settings* → *Domains* → *Buy*. Search for the name (for example `synakopharmacy.com` or `synakopharmacy.com.ng`), pay, and Vercel connects it and sets up HTTPS for you. Nothing else to configure.
+
+**Option B: buy it at GoDaddy (or any registrar).**
+1. In Vercel, open *Settings* → *Domains*, type your domain (e.g. `synakopharmacy.com`) and press *Add*. Choose the recommended setup: `www.synakopharmacy.com` as the main address, with the bare domain redirecting to it.
+2. In GoDaddy, open *My Products* → your domain → *DNS* → *DNS Records*, and set exactly what Vercel shows. Usually:
+
+   | Type | Name | Value |
+   |---|---|---|
+   | A | `@` | `76.76.21.21` |
+   | CNAME | `www` | `cname.vercel-dns.com` |
+
+   Delete any other `A` record for `@` and any GoDaddy "parked" or forwarding record, or they'll fight with Vercel.
+3. Wait until Vercel shows *Valid Configuration* (minutes, sometimes a few hours). HTTPS is added automatically.
+
+**Then tell the site its address:** add an environment variable `SITE_URL` = `https://www.synakopharmacy.com` (no trailing slash) and redeploy, or change `site.url` in `js/config.js`. Emails use this address for tracking links. The sitemap, robots file and page links already switch to your custom domain automatically when visitors arrive on it, so nothing breaks if you forget, but set it anyway. Also update the Paystack webhook URL to the new domain.
+
+## Running the shop day to day
+
+- **Out of stock:** add `out: true` to the product in `js/data.js` and redeploy. It stays visible but can't be ordered, and baskets holding it are asked to remove it. Remove `out: true` when it's back.
+- **Pause online orders** (public holiday, stock count, no riders): write the reason in `orders.paused` in `js/config.js` and redeploy. Customers can still browse, and checkout shows your message and your phone number. Set it back to `""` to reopen.
+- **Search:** the search box suggests products, departments and popular searches as customers type, and understands common brand names (Panadol, Flagyl, Buscopan, Vicks and more). Add local names to `SYNONYMS` in `js/data.js`.
+- **Pharmacist Desk** (`/pharmacist`): review prescriptions, move orders through packed, out for delivery and delivered, **print a delivery note** for the rider, **download orders as CSV** for your accounts, and **mark messages, bookings and trade quotes as handled**.
+- **Customers** can see recently viewed products, reorder a past order with one tap from its tracking page, share a product, and add a note at checkout (sizes, delivery instructions). If you set `business.whatsapp`, product pages and the basket also offer *Ask on WhatsApp* / *Send us this basket*.
+- **Opening hours** in the top bar show live "Open now until 6pm" or "Closed. Opens 7:30am today", from `hours` in `js/config.js`.
+
+## Keep an eye on it
+
+- **Uptime:** add `https://YOUR-DOMAIN/api/health` to a free monitor such as UptimeRobot or Better Stack, so you get an alert if the site goes down.
+- **Errors:** Vercel → your project → *Logs* shows every API error. Paystack's dashboard shows every payment and webhook delivery.
+- **Visitors (optional):** Vercel → *Analytics* → *Enable* gives privacy-friendly visitor counts without cookies. It also needs its script added to `index.html` (Vercel shows the line to copy); the security policy already allows it because it's served from your own domain.
+- **Backups:** Upstash keeps daily backups on paid plans. On the free plan, download orders as CSV from the desk regularly.
 
 ## Launch checklist
 
@@ -77,7 +112,8 @@ Work through this before switching to live Paystack keys and sharing the address
 - [ ] One full test order with Paystack's test card: pay, pack, dispatch, deliver
 - [ ] One test prescription order: approve on the desk, then pay from the customer's tracking page
 - [ ] Paystack webhook URL set, then switch to `pk_live_…` / `sk_live_…` keys and redeploy
-- [ ] Custom domain connected and `site.url` updated in `js/config.js`
+- [ ] Custom domain connected, `SITE_URL` set, and the Paystack webhook pointing at the new domain
+- [ ] `/api/health` added to an uptime monitor
 - [ ] Sitemap submitted in Google Search Console (`https://YOUR-DOMAIN/sitemap.xml`)
 
 ## Emails

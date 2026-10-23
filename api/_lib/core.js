@@ -53,14 +53,14 @@ export const db = {
   async latest(list, n) { return (await redis(["ZREVRANGE", list, "0", String(n - 1)])) || []; }
 };
 
-/* ---------- Rate limits (fixed window per visitor IP) ---------- */
+/* ---------- Rate limits (per visitor IP; the window starts at their first attempt) ---------- */
 export function clientIp(req) {
   const h = req.headers || {};
   return String(h["x-real-ip"] || String(h["x-forwarded-for"] || "").split(",")[0] || (req.socket && req.socket.remoteAddress) || "unknown").trim();
 }
 export async function limit(req, bucket, max, seconds, message) {
   if (process.env.RATE_LIMIT_OFF === "1") return;
-  const key = `rl:${bucket}:${clientIp(req)}:${Math.floor(Date.now() / (seconds * 1000))}`;
+  const key = `rl:${bucket}:${clientIp(req)}`;
   let n;
   try { n = await redis(["INCR", key]); if (n === 1) await redis(["EXPIRE", key, String(seconds)]); }
   catch (e) { console.error("Rate limit check failed", e); return; } // never block customers because the counter is down
@@ -173,7 +173,14 @@ export async function sendEmail(to, subject, lines) {
   } catch (e) { console.error("Email failed", e); return false; }
 }
 const link = (href, label) => ({ html: `<a href="${htmlEsc(href)}">${htmlEsc(label)}</a>`, text: `${label}: ${href}` });
-const baseUrl = () => String(site().config.site.url).replace(/\/$/, "");
+/* The shop's public address: SITE_URL in the hosting settings wins, then site.url in js/config.js */
+export const baseUrl = () => String(process.env.SITE_URL || site().config.site.url).replace(/\/$/, "");
+/* For pages served to a visitor (sitemap, robots): a custom domain they reached us on beats a *.vercel.app default */
+export function publicUrl(req) {
+  const host = String((req.headers || {})["x-forwarded-host"] || (req.headers || {}).host || "").split(",")[0].trim().toLowerCase();
+  if (process.env.SITE_URL || !host || /localhost|127\.0\.0\.1|\.vercel\.app$/.test(host) || !/^[a-z0-9.-]+(:\d+)?$/.test(host)) return baseUrl();
+  return "https://" + host;
+}
 const naira = n => site().pricing.fmtMoney(n, site().config);
 const CUSTOMER_MAIL = {
   placed: o => o.rx ? [`Thank you. We've received your order ${o.id} and your prescription. A pharmacist will review it during opening hours, and we'll email you when it's approved and ready to pay.`]

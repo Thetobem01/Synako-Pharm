@@ -7,6 +7,8 @@ const clean = (s, n = 200) => String(s == null ? "" : s).trim().slice(0, n);
 export default handle(async (req, res) => {
   if (!only(req, res, "POST")) return;
   if (!storageReady()) throw fail(503, "Online ordering isn't switched on yet. Please call the pharmacy to order.");
+  const paused = (site().config.orders || {}).paused;
+  if (paused) throw fail(503, `Online ordering is paused. ${paused}`);
   await limit(req, "orders", 10, 3600, "You've placed several orders in a short time. Please call the pharmacy if you need to place more.");
   const b = await body(req);
   const { config, P, pricing } = site();
@@ -17,11 +19,12 @@ export default handle(async (req, res) => {
   const age = (Date.now() - new Date(customer.dob)) / (365.25 * 864e5);
   if (!(age >= 18)) throw fail(400, "Our medicines can only be supplied to adults aged 18 or over.");
   if (!b.consent) throw fail(400, "Please agree to the privacy notice to continue.");
-  const delivery = { state: clean(d.state, 40), city: clean(d.city, 60), addr: clean(d.addr, 200), landmark: clean(d.landmark, 120) };
+  const delivery = { state: clean(d.state, 40), city: clean(d.city, 60), addr: clean(d.addr, 200), landmark: clean(d.landmark, 120), note: clean(d.note, 300) };
   if (!delivery.state || !delivery.city || !delivery.addr) throw fail(400, "Please enter your full delivery address.");
 
   const rxRequest = !!b.rxRequest;
   const q = pricing.quote({ items: b.items || [], state: delivery.state, speed: d.speed, rxRequest }, config, P);
+  if (q.unavailable.length) throw fail(409, `Sorry, ${q.unavailable.join(", ")} ${q.unavailable.length === 1 ? "is" : "are"} out of stock. Please remove ${q.unavailable.length === 1 ? "it" : "them"} from your basket.`);
   if (!q.lines.length && !rxRequest) throw fail(400, "Your basket is empty.");
   if (q.overLimit) throw fail(400, `Orders above ${pricing.fmtMoney(q.maxTotal, config)} are handled as trade orders. Please request a quote on our Wholesale page and we'll confirm stock and delivery.`);
   const rx = rxRequest || q.lines.some(l => l.cls === "pom");

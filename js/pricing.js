@@ -29,11 +29,12 @@
   /* input: { items: [{id, q, u}], state, speed }   u = unit id: "1" single, or a bulk count such as "12"
      returns lines, subtotal, delivery options with availability, chosen speed, fee and total */
   function quote(input, cfg, P, date) {
-    const d = cfg.delivery, lines = [], seen = {};
+    const d = cfg.delivery, lines = [], seen = {}, unavailable = [];
     (input.items || []).slice(0, (cfg.orders && cfg.orders.maxLines) || 60).forEach(it => {
       const p = P.find(x => x.id === (it && it.id)), unit = p && unitOf(p, it.u);
       if (!unit || seen[p.id + "|" + unit.id]) return; // unknown products or units, and repeats, are dropped
       seen[p.id + "|" + unit.id] = 1;
+      if (p.out) { unavailable.push(p.name); return; } // out of stock: never charged
       const q = Math.max(1, Math.min(maxQty(p, unit), parseInt(it.q, 10) || 1));
       lines.push({ id: p.id, unit: unit.id, n: unit.n, unitLabel: unit.n > 1 ? `${unit.label} (${unit.n} × ${p.pack})` : p.pack,
         name: unit.n > 1 ? `${p.name} · ${unit.label} of ${unit.n}` : p.name, cls: p.cls, age: p.age || 0, price: unit.price, qty: q, total: money(unit.price * q) });
@@ -60,7 +61,7 @@
     const chosen = opts.find(o => o.speed === input.speed && o.available) || cheapest || opts[opts.length - 1];
     const deliveryFee = (lines.length || input.rxRequest) ? chosen.fee : 0;
     const maxTotal = (cfg.orders && cfg.orders.maxOnlineTotal) || Infinity;
-    return { lines, subtotal, big, openNow, overLimit: subtotal > maxTotal, maxTotal, packs: lines.reduce((t, l) => t + l.qty * l.n, 0), age: Math.max(0, ...lines.map(l => l.age)), options: opts, speed: chosen.speed, speedLabel: chosen.label, deliveryFee, total: money(subtotal + deliveryFee) };
+    return { lines, unavailable, subtotal, big, openNow, overLimit: subtotal > maxTotal, maxTotal, packs: lines.reduce((t, l) => t + l.qty * l.n, 0), age: Math.max(0, ...lines.map(l => l.age)), options: opts, speed: chosen.speed, speedLabel: chosen.label, deliveryFee, total: money(subtotal + deliveryFee) };
   }
   /* Currency in the shop's locale, e.g. ₦1,200 or ₦999,999.99 (decimals only when needed) */
   function fmtMoney(n, cfg) {

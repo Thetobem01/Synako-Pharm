@@ -53,6 +53,7 @@
       localStates: []             // states that get express / same-day, e.g. ["Lagos"]; empty = all
     },
     orders: {
+      paused: "",                 // to stop online orders for a while, write the reason here, e.g. "We're closed for the public holiday and back on Tuesday." Leave "" to take orders.
       maxOnlineTotal: 10000000,   // ₦ — larger orders are asked to request a trade quote instead of paying online
       maxLines: 60                // most different products in one order
     },

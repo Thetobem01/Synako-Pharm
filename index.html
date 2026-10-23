@@ -39,7 +39,7 @@
 <div id="shell-customer">
   <div class="topbar">
     <div class="wrap topbar-inner">
-      <p><span class="lbl">Open</span> <span id="topbar-hours">Mon–Sat 7:30am–6:00pm</span></p>
+      <p><span id="topbar-hours"><span class="lbl">Open</span> Mon–Sat 7:30am–6:00pm</span></p>
       <p class="mid" id="topbar-mid"></p>
       <p class="right" id="topbar-right"></p>
     </div>
@@ -51,8 +51,9 @@
       <form class="search" id="search-form" role="search" action="/products">
         <label for="q" class="sr">Search the store</label>
         <svg class="search-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M20 20l-4.6-4.6"/></svg>
-        <input id="q" name="q" type="search" placeholder="Search medicines, equipment, provisions and more" autocomplete="off" enterkeyhint="search">
+        <input id="q" name="q" type="search" placeholder="Search medicines, equipment, provisions and more" autocomplete="off" enterkeyhint="search" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="suggest" maxlength="80">
         <button class="btn btn-primary" type="submit">Search</button>
+        <div class="suggest" id="suggest" role="listbox" aria-label="Search suggestions" hidden></div>
       </form>
       <div class="hicons">
         <a class="hlink hide-md" href="/prescriptions" data-link>

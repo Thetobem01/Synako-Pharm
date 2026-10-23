@@ -166,6 +166,23 @@ test("messages are stored, and bot submissions are quietly dropped", async () =>
   assert.ok(!names.includes("Bot"));
 });
 
+test("staff can mark a message as handled", async () => {
+  const sent = await api("requests", { body: { type: "message", name: "Bola", phone: "08031234567", message: "Is Milo in stock?" }, headers: ip(16) });
+  const token = (await api("staff/login", { body: { password: "desk" }, headers: ip(17) })).json.token;
+  assert.equal((await api("staff/request", { body: { id: sent.json.id, status: "done" } })).status, 401);
+  const done = await api("staff/request", { token, body: { id: sent.json.id, status: "done", by: "Pharm. Test" } });
+  assert.equal(done.json.request.status, "done");
+  assert.equal(done.json.request.handledBy, "Pharm. Test");
+  assert.equal((await api("staff/request", { token, body: { id: "MSG-NOPE00", status: "done" } })).status, 404);
+});
+
+test("the order note reaches the pharmacist", async () => {
+  const placed = await api("orders", { body: { items: [{ id: "glove-latex", q: 1 }], customer, delivery: { ...delivery, note: "Size L please" }, consent: true }, headers: ip(18) });
+  const token = (await api("staff/login", { body: { password: "desk" }, headers: ip(19) })).json.token;
+  const full = (await api(`staff/order?id=${placed.json.order.id}`, { token })).json.order;
+  assert.equal(full.delivery.note, "Size L please");
+});
+
 test("webhook calls without Paystack's signature are refused", async () => {
   const r = await api("paystack-webhook", { body: { event: "charge.success", data: { reference: "x" } }, headers: { "x-paystack-signature": "bad" } });
   assert.equal(r.status, 401);
@@ -177,6 +194,14 @@ test("repeated wrong staff passwords are slowed down", async () => {
   assert.equal(last.status, 429);
   const other = await api("staff/login", { body: { password: "desk" }, headers: ip(11) });
   assert.equal(other.status, 200, "other visitors aren't affected");
+});
+
+test("sitemap follows a custom domain and leaves out alcohol", async () => {
+  const sm = await (await fetch(BASE + "/sitemap.xml", { headers: { "x-forwarded-host": "www.synakopharmacy.com" } })).text();
+  assert.match(sm, /<loc>https:\/\/www\.synakopharmacy\.com\/product\/para<\/loc>/);
+  assert.doesNotMatch(sm, /\/product\/sweet-red/);
+  const odd = await (await fetch(BASE + "/robots.txt", { headers: { "x-forwarded-host": "evil.com/<x>" } })).text();
+  assert.doesNotMatch(odd, /evil/);
 });
 
 test("sitemap and robots follow the catalogue and site address", async () => {

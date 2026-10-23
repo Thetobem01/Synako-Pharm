@@ -49,6 +49,13 @@ test("orders above the online limit are flagged", () => {
   assert.equal(pricing.quote({ items: [{ id: "para", q: 1 }] }, cfg, P, at("10:00")).overLimit, false);
 });
 
+test("out-of-stock products are never charged", () => {
+  const P2 = P.map(p => p.id === "ibu" ? Object.assign({}, p, { out: true }) : p);
+  const q = pricing.quote({ items: [{ id: "para", q: 1 }, { id: "ibu", q: 1 }] }, config, P2, at("10:00"));
+  assert.deepEqual(list(q.lines.map(l => l.id)), ["para"]);
+  assert.deepEqual(list(q.unavailable), [P.find(p => p.id === "ibu").name]);
+});
+
 test("alcohol marks the order as 18+", () => {
   assert.equal(pricing.quote({ items: [{ id: "lager", q: 1, u: "24" }] }, config, P, at("10:00")).age, 18);
   assert.equal(pricing.quote({ items: [{ id: "milo", q: 1 }] }, config, P, at("10:00")).age, 0);
@@ -96,6 +103,10 @@ test("other states get the interstate option only", () => {
 
 test("an empty basket has no delivery fee", () => {
   assert.equal(pricing.quote({ items: [] }, config, P, at("10:00")).total, 0);
+});
+
+test("the store ships with online ordering switched on", () => {
+  assert.equal(config.orders.paused, "", "orders.paused in js/config.js must be empty for the shop to take orders");
 });
 
 test("money is shown in Naira", () => {

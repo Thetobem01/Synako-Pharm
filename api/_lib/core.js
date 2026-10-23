@@ -173,7 +173,14 @@ export async function sendEmail(to, subject, lines) {
   } catch (e) { console.error("Email failed", e); return false; }
 }
 const link = (href, label) => ({ html: `<a href="${htmlEsc(href)}">${htmlEsc(label)}</a>`, text: `${label}: ${href}` });
-const baseUrl = () => String(site().config.site.url).replace(/\/$/, "");
+/* The shop's public address: SITE_URL in the hosting settings wins, then site.url in js/config.js */
+export const baseUrl = () => String(process.env.SITE_URL || site().config.site.url).replace(/\/$/, "");
+/* For pages served to a visitor (sitemap, robots): a custom domain they reached us on beats a *.vercel.app default */
+export function publicUrl(req) {
+  const host = String((req.headers || {})["x-forwarded-host"] || (req.headers || {}).host || "").split(",")[0].trim().toLowerCase();
+  if (process.env.SITE_URL || !host || /localhost|127\.0\.0\.1|\.vercel\.app$/.test(host) || !/^[a-z0-9.-]+(:\d+)?$/.test(host)) return baseUrl();
+  return "https://" + host;
+}
 const naira = n => site().pricing.fmtMoney(n, site().config);
 const CUSTOMER_MAIL = {
   placed: o => o.rx ? [`Thank you. We've received your order ${o.id} and your prescription. A pharmacist will review it during opening hours, and we'll email you when it's approved and ready to pay.`]

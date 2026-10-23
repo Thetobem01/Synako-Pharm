@@ -54,7 +54,8 @@ window.SYNAKO = (function () {
      box, bottle, syrup, tube, sachet, blister, jar, spray, inhaler, device, thermo, kit, strips, bar, drops,
      wine, spirit, can, tin, pouch, steth, scale
      bulk = wholesale options as [label, how many, % off]; leave it out to use the department's usual
-     options (BULK below), or set bulk: [] for single packs only. */
+     options (BULK below), or set bulk: [] for single packs only.
+     out: true = out of stock (still shown, but can't be ordered until you remove it). */
   const P = [
     // Pain & fever
     { id: "para", name: "Paracetamol 500mg tablets", generic: "Paracetamol", strength: "500mg", form: "box", pack: "96 tablets", cat: "pain", cls: "otc", brand: "Generic", price: 1200, c: "#3362AB", pop: 1,
@@ -384,6 +385,22 @@ window.SYNAKO = (function () {
       ({ id: String(n), n, label, price: round50(p.price * n * (1 - off / 100)), save: off })));
   });
 
+  /* Other names customers search for, mapped to words in our product names or generics.
+     Add local brand names here so search finds the generic we stock. */
+  const SYNONYMS = {
+    panadol: "paracetamol", emzor: "paracetamol", tylenol: "paracetamol", calpol: "paracetamol suspension",
+    advil: "ibuprofen", nurofen: "ibuprofen", brufen: "ibuprofen", voltaren: "diclofenac",
+    flagyl: "metronidazole", augmentin: "amoxicillin/clavulanate", amoxil: "amoxicillin", cipro: "ciprofloxacin",
+    coartem: "artemether", lonart: "artemether", "malaria drug": "artemether",
+    buscopan: "hyoscine", piriton: "chlorphenamine", zyrtec: "cetirizine", clarityne: "loratadine",
+    ventolin: "salbutamol", inhaler: "salbutamol", "blood pressure": "bp monitor", bp: "blood pressure",
+    glucometer: "glucose meter", "sugar test": "glucose", sanitizer: "sanitiser", nose: "nasal",
+    zentel: "albendazole", dewormer: "albendazole", "worm": "albendazole", vicks: "vapour rub", robb: "vapour rub",
+    vaseline: "petroleum jelly", mask: "face masks", "nose mask": "face masks", glove: "gloves", syringe: "syringes",
+    scale: "weighing scale", "weight": "scale", milo: "milo", beverage: "tea milo bournvita", cornflakes: "corn flakes",
+    beer: "lager stout", wine: "wine", whisky: "whiskey", drink: "juice water"
+  };
+
   const STATES = ["Abia","Adamawa","Akwa Ibom","Anambra","Bauchi","Bayelsa","Benue","Borno","Cross River","Delta","Ebonyi","Edo","Ekiti","Enugu","FCT – Abuja","Gombe","Imo","Jigawa","Kaduna","Kano","Katsina","Kebbi","Kogi","Kwara","Lagos","Nasarawa","Niger","Ogun","Ondo","Osun","Oyo","Plateau","Rivers","Sokoto","Taraba","Yobe","Zamfara"];
 
   const FAQ = [
@@ -403,5 +420,5 @@ window.SYNAKO = (function () {
     ["How is my health information protected?", "We handle it under the Nigeria Data Protection Act 2023. Only our pharmacists see your prescriptions, and we never sell your data. See the Privacy notice."]
   ];
 
-  return { DEPTS, CATS, P, STATES, FAQ };
+  return { DEPTS, CATS, P, STATES, FAQ, SYNONYMS };
 })();

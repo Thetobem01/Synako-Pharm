@@ -169,11 +169,11 @@ test("messages are stored, and bot submissions are quietly dropped", async () =>
 test("staff can mark a message as handled", async () => {
   const sent = await api("requests", { body: { type: "message", name: "Bola", phone: "08031234567", message: "Is Milo in stock?" }, headers: ip(16) });
   const token = (await api("staff/login", { body: { password: "desk" }, headers: ip(17) })).json.token;
-  assert.equal((await api("staff/request", { body: { id: sent.json.id, status: "done" } })).status, 401);
-  const done = await api("staff/request", { token, body: { id: sent.json.id, status: "done", by: "Pharm. Test" } });
+  assert.equal((await api("staff/orders", { body: { id: sent.json.id, status: "done" } })).status, 401);
+  const done = await api("staff/orders", { token, body: { id: sent.json.id, status: "done", by: "Pharm. Test" } });
   assert.equal(done.json.request.status, "done");
   assert.equal(done.json.request.handledBy, "Pharm. Test");
-  assert.equal((await api("staff/request", { token, body: { id: "MSG-NOPE00", status: "done" } })).status, 404);
+  assert.equal((await api("staff/orders", { token, body: { id: "MSG-NOPE00", status: "done" } })).status, 404);
 });
 
 test("the order note reaches the pharmacist", async () => {

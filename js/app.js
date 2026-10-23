@@ -1319,7 +1319,7 @@ function reorder() {
 async function markRequest(id, status) {
   try {
     if (DEMO) { const r = S.staff.list.requests.find(x => x.id === id); if (r) { r.status = status; r.handledBy = status === "done" ? S.staff.name : ""; } }
-    else await call("staff/request", { method: "POST", body: { id, status, by: S.staff.name }, token: S.staff.token });
+    else await call("staff/orders", { method: "POST", body: { id, status, by: S.staff.name }, token: S.staff.token });
     toast(status === "done" ? "Marked as handled." : "Marked as new."); await loadDesk(true);
   } catch (e) { if (e.status === 401) signOut(); else toast(e.message); }
   render();

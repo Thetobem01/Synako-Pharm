@@ -1,8 +1,20 @@
-import { handle, only, send, requireStaff, db, site, STATUS, emailReady, paystackReady } from "../_lib/core.js";
-/* Pharmacist Desk: recent orders and requests, plus site details still missing */
+import { handle, only, send, body, fail, requireStaff, db, site, STATUS, emailReady, paystackReady } from "../_lib/core.js";
+/* Pharmacist Desk. GET: recent orders and requests, plus site details still missing.
+   POST: mark a message, booking or quote request as handled (or back to new).
+   (One file for both keeps the API within Vercel Hobby's 12-function limit.) */
 export default handle(async (req, res) => {
-  if (!only(req, res, "GET")) return;
+  if (!only(req, res, "GET", "POST")) return;
   requireStaff(req);
+  if (req.method === "POST") {
+    const b = await body(req);
+    const r = b.id ? await db.get("req:" + String(b.id)) : null;
+    if (!r) throw fail(404, "Request not found.");
+    r.status = b.status === "new" ? "new" : "done";
+    r.handledBy = r.status === "done" ? String(b.by || "Staff").trim().slice(0, 60) : "";
+    r.handledAt = r.status === "done" ? new Date().toISOString() : "";
+    await db.set("req:" + r.id, r);
+    return send(res, 200, { request: r });
+  }
   const ids = await db.latest("orders", 200);
   const orders = (await Promise.all(ids.map(id => db.get("order:" + id)))).filter(Boolean).map(o => ({
     id: o.id, createdAt: o.createdAt, status: o.status, statusLabel: STATUS[o.status], rx: o.rx, rxRequest: o.rxRequest,

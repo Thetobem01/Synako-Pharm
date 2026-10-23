@@ -53,14 +53,14 @@ export const db = {
   async latest(list, n) { return (await redis(["ZREVRANGE", list, "0", String(n - 1)])) || []; }
 };
 
-/* ---------- Rate limits (fixed window per visitor IP) ---------- */
+/* ---------- Rate limits (per visitor IP; the window starts at their first attempt) ---------- */
 export function clientIp(req) {
   const h = req.headers || {};
   return String(h["x-real-ip"] || String(h["x-forwarded-for"] || "").split(",")[0] || (req.socket && req.socket.remoteAddress) || "unknown").trim();
 }
 export async function limit(req, bucket, max, seconds, message) {
   if (process.env.RATE_LIMIT_OFF === "1") return;
-  const key = `rl:${bucket}:${clientIp(req)}:${Math.floor(Date.now() / (seconds * 1000))}`;
+  const key = `rl:${bucket}:${clientIp(req)}`;
   let n;
   try { n = await redis(["INCR", key]); if (n === 1) await redis(["EXPIRE", key, String(seconds)]); }
   catch (e) { console.error("Rate limit check failed", e); return; } // never block customers because the counter is down

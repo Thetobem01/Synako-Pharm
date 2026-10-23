@@ -21,14 +21,22 @@
 
   const money = n => Math.round(Number(n) * 100) / 100;
 
-  /* input: { items: [{id, q}], state, speed }
+  /* Most of one line a customer can order online: prescription medicines are limited per order,
+     single packs up to a box-load, wholesale units (dozens, cartons, cases) up to a truck-load */
+  function maxQty(p, unit) { return p.cls === "pom" ? 10 : unit.n > 1 ? 100 : 50; }
+  function unitOf(p, u) { return (p.units || [{ id: "1", n: 1, label: "Single", price: p.price }]).find(x => x.id === String(u || "1")); }
+
+  /* input: { items: [{id, q, u}], state, speed }   u = unit id: "1" single, or a bulk count such as "12"
      returns lines, subtotal, delivery options with availability, chosen speed, fee and total */
   function quote(input, cfg, P, date) {
-    const d = cfg.delivery, lines = [];
-    (input.items || []).forEach(it => {
-      const p = P.find(x => x.id === it.id);
-      const q = Math.max(1, Math.min(10, parseInt(it.q, 10) || 1));
-      if (p) lines.push({ id: p.id, name: p.name, cls: p.cls, price: p.price, qty: q, total: money(p.price * q) });
+    const d = cfg.delivery, lines = [], seen = {};
+    (input.items || []).slice(0, (cfg.orders && cfg.orders.maxLines) || 60).forEach(it => {
+      const p = P.find(x => x.id === (it && it.id)), unit = p && unitOf(p, it.u);
+      if (!unit || seen[p.id + "|" + unit.id]) return; // unknown products or units, and repeats, are dropped
+      seen[p.id + "|" + unit.id] = 1;
+      const q = Math.max(1, Math.min(maxQty(p, unit), parseInt(it.q, 10) || 1));
+      lines.push({ id: p.id, unit: unit.id, n: unit.n, unitLabel: unit.n > 1 ? `${unit.label} (${unit.n} × ${p.pack})` : p.pack,
+        name: unit.n > 1 ? `${p.name} · ${unit.label} of ${unit.n}` : p.name, cls: p.cls, age: p.age || 0, price: unit.price, qty: q, total: money(unit.price * q) });
     });
     const subtotal = money(lines.reduce((s, l) => s + l.total, 0));
     const c = clock(cfg, date), today = cfg.hours.open[c.day];
@@ -51,7 +59,8 @@
     const cheapest = opts.filter(o => o.available).sort((x, y) => x.fee - y.fee)[0];
     const chosen = opts.find(o => o.speed === input.speed && o.available) || cheapest || opts[opts.length - 1];
     const deliveryFee = (lines.length || input.rxRequest) ? chosen.fee : 0;
-    return { lines, subtotal, big, openNow, options: opts, speed: chosen.speed, speedLabel: chosen.label, deliveryFee, total: money(subtotal + deliveryFee) };
+    const maxTotal = (cfg.orders && cfg.orders.maxOnlineTotal) || Infinity;
+    return { lines, subtotal, big, openNow, overLimit: subtotal > maxTotal, maxTotal, packs: lines.reduce((t, l) => t + l.qty * l.n, 0), age: Math.max(0, ...lines.map(l => l.age)), options: opts, speed: chosen.speed, speedLabel: chosen.label, deliveryFee, total: money(subtotal + deliveryFee) };
   }
   /* Currency in the shop's locale, e.g. ₦1,200 or ₦999,999.99 (decimals only when needed) */
   function fmtMoney(n, cfg) {
@@ -61,5 +70,5 @@
   }
   function fmt12(s) { const [h, m] = s.split(":").map(Number); return `${((h + 11) % 12) + 1}${m ? ":" + String(m).padStart(2, "0") : ""}${h < 12 ? "am" : "pm"}`; }
 
-  root.SYNAKO_PRICING = { quote, clock, isOpen, fmt12, fmtMoney };
+  root.SYNAKO_PRICING = { quote, clock, isOpen, fmt12, fmtMoney, unitOf, maxQty };
 })(typeof window !== "undefined" ? window : globalThis);

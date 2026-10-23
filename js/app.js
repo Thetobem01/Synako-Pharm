@@ -7,7 +7,7 @@
 "use strict";
 
 const CFG = window.SYNAKO_CONFIG, PR = window.SYNAKO_PRICING, art = window.SYNAKO_ART;
-const { CATS, P, STATES, FAQ } = window.SYNAKO;
+const { DEPTS, CATS, P, STATES, FAQ } = window.SYNAKO;
 const B = CFG.business, L = CFG.licences, H = CFG.hours, D = CFG.delivery, C = CFG.consultation;
 
 const has = v => v != null && String(v).trim() !== "";
@@ -17,6 +17,21 @@ const $ = s => document.querySelector(s);
 const prod = id => P.find(p => p.id === id);
 const cat = id => CATS.find(c => c.id === id);
 const OTC_CATS = CATS.filter(c => c.cls === "otc"), POM_CATS = CATS.filter(c => c.cls === "pom");
+const dept = id => DEPTS.find(d => d.id === id);
+const deptCats = id => CATS.filter(c => c.dept === id);
+const W = CFG.wholesale || {};
+/* Medicines by form: worked out from the pack and name so new products sort themselves */
+const DOSES = [["tablets", "Tablets & capsules"], ["liquids", "Syrups & liquids"], ["ointments", "Creams & ointments"]];
+function doseOf(p) {
+  if (p.dept !== "otc") return "";
+  const t = (p.name + " " + p.pack).toLowerCase();
+  if (/tablet|capsule|caplet/.test(t)) return "tablets";
+  if (["tube", "jar"].includes(p.form) || /cream|ointment|gel|balm|rub\b/.test(t)) return "ointments";
+  if (["syrup", "spray", "drops"].includes(p.form) || /\bml\b|lotion|solution|suspension|syrup/.test(t)) return "liquids";
+  return "";
+}
+const isBulk = p => p.units && p.units.length > 1;
+const eachFrom = p => Math.min(...p.units.map(u => u.price / u.n));
 const stamp = d => new Date(d).toLocaleString(CFG.site.locale, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: CFG.site.timezone });
 const addressLine = [B.address, B.city, B.state].filter(has).join(", ");
 const cutoff = PR.fmt12(D.sameDayCutoff);
@@ -51,7 +66,10 @@ const ICONS = {
   clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
   cal: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>',
   card: '<rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20M6 15h4"/>',
-  check: '<path d="M20 6L9 17l-5-5"/>'
+  check: '<path d="M20 6L9 17l-5-5"/>',
+  wine: '<path d="M8 3h8l-.5 6a3.5 3.5 0 0 1-7 0zM12 12.5V20M8.5 21h7"/>',
+  scale: '<rect x="4" y="4" width="16" height="16" rx="3"/><path d="M8.5 9.5a5 5 0 0 1 7 0M12 9.5l1.2-1.6"/>',
+  layers: '<path d="M12 3l9 5-9 5-9-5zM3 13l9 5 9-5M3 17.5l9 5 9-5" />'
 };
 const icon = (k, cls) => `<svg class="${cls || "ic"}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[k] || ICONS.box}</svg>`;
 
@@ -63,8 +81,8 @@ const store = {
   sset(k, v) { try { v ? sessionStorage.setItem(k, v) : sessionStorage.removeItem(k); } catch (e) { /* storage unavailable */ } }
 };
 const S = {
-  mode: "shop", view: "home", filter: "all", tab: "body", q: "", sort: "popular", product: null, qty: 1, page: "about",
-  cart: store.get("synako.cart", []), rxRequest: false, step: 1, form: {}, busy: false, error: "",
+  mode: "shop", view: "home", filter: "all", tab: "vitamins", q: "", sort: "popular", product: null, qty: 1, unit: "1", page: "about", age18: store.get("synako.age18", false),
+  cart: store.get("synako.cart", []).filter(l => l && prod(l.id)).map(l => ({ id: l.id, q: l.q, u: l.u || "1" })), rxRequest: false, step: 1, form: {}, busy: false, error: "",
   mine: store.get("synako.orders", []), trackId: null, track: null, trackErr: "",
   staff: { token: store.sget("synako.staff"), name: store.sget("synako.staffName"), list: null, sel: null, detail: null, file: null, tab: "review", err: "", updated: null }
 };
@@ -176,13 +194,13 @@ async function payOrder(id, phone) {
 }
 
 /* ---------- Router ---------- */
-const PAGES = ["about", "contact", "faq", "delivery", "returns", "privacy", "terms", "licences", "cookies", "careers"];
+const PAGES = ["about", "contact", "faq", "delivery", "returns", "privacy", "terms", "licences", "cookies", "careers", "wholesale"];
 function parse(path) {
   const seg = path.replace(/^\/+|\/+$/g, "").split("/").filter(Boolean);
   const r = { view: "home" };
   if (!seg.length || seg[0] === "index.html") return r;
   const [a, b] = seg;
-  if (a === "products") { r.view = "shop"; r.filter = b === "otc" ? "otc" : b === "prescription" ? "pom" : (b && cat(b)) ? b : "all"; }
+  if (a === "products") { r.view = "shop"; r.filter = b === "prescription" ? "pom" : (b && (FILTERS.includes(b) || dept(b) || cat(b))) ? b : b ? "unknown" : "all"; if (r.filter === "unknown") r.view = "notfound"; }
   else if (a === "product" && b && prod(b)) { r.view = "product"; r.product = b; }
   else if (a === "prescriptions") r.view = "rx";
   else if (a === "controlled-medicines") r.view = "controlled";
@@ -193,7 +211,8 @@ function parse(path) {
   else r.view = "notfound";
   return r;
 }
-const fpath = f => "/products" + (f === "all" ? "" : f === "otc" ? "/otc" : f === "pom" ? "/prescription" : "/" + f);
+const FILTERS = ["otc", "bulk"].concat(DOSES.map(d => d[0]));
+const fpath = f => "/products" + (f === "all" ? "" : f === "pom" ? "/prescription" : "/" + f);
 function pathFor() {
   if (S.mode === "staff") return "/pharmacist";
   switch (S.view) {
@@ -215,7 +234,7 @@ function go(path, opts) {
   S.view = r.view;
   S.error = "";
   if (r.filter) S.filter = r.filter;
-  if (r.product) { S.product = r.product; S.qty = 1; }
+  if (r.product) { S.product = r.product; S.qty = 1; S.unit = "1"; }
   if (r.page) S.page = r.page;
   if (r.view === "track") { S.trackId = r.trackId || S.trackId; }
   if (!MEMORY && !opts.noHistory) { try { history[opts.replace ? "replaceState" : "pushState"]({}, "", pathFor()); } catch (e) { /* stay in memory */ } }
@@ -233,7 +252,9 @@ const link = (path, label, cls, extra) => `<a href="${path}" data-link${cls ? ` 
 function toast(msg) { const t = $("#toast"); t.textContent = msg; t.classList.add("show"); clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove("show"), 3200); }
 const photo = (src, style, alt) => `<img src="${src}" alt="${esc(alt || "")}" loading="lazy" decoding="async" data-swap${style ? ` style="${style}"` : ""}>`;
 const media = p => p.photo ? `<span class="drawn">${art(p)}</span>${photo(p.photo, "", p.name)}` : `<span class="drawn">${art(p)}</span>`;
-const tag = p => p.cls === "pom" ? `<span class="tag rx">Prescription only</span>` : `<span class="tag otc">Over the counter</span>`;
+const tag = p => (p.cls === "pom" ? `<span class="tag rx">Prescription only</span>` : p.cls === "otc" ? `<span class="tag otc">Over the counter</span>` : `<span class="tag gen">${esc(dept(p.dept).name)}</span>`)
+  + (p.age ? ` <span class="tag age">${p.age}+ only</span>` : "");
+const badge = p => p.cls === "pom" ? ["rx", "Prescription"] : p.cls === "otc" ? ["otc", "Over the counter"] : p.age ? ["age", `${p.age}+`] : ["gen", dept(p.dept).short];
 const alertBox = msg => msg ? `<div class="notice bad" role="alert" tabindex="-1" id="form-error"><b>Something needs attention</b><span>${esc(msg)}</span></div>` : "";
 const phoneText = () => has(B.phone) ? `<a class="tel" href="tel:${esc(B.phone.replace(/\s/g, ""))}">${esc(B.phone)}</a>` : "";
 const contactLine = () => has(B.phone) ? `call ${phoneText()}` : `use the ${link("/contact", "contact page", "linkbtn")}`;
@@ -254,14 +275,15 @@ function personSVG(kind) {
     <path d="M136 262l34 74 34-74c-10-4-22-6-34-6s-24 2-34 6z" fill="#3362AB"/></svg>`;
 }
 function card(p) {
-  const rx = p.cls === "pom";
+  const rx = p.cls === "pom", [bc, bl] = badge(p);
   return `<article class="pcard">
-    <a class="pcard-media" href="/product/${p.id}" data-link tabindex="-1" aria-hidden="true"><span class="pcard-badge ${rx ? "rx" : "otc"}">${rx ? "Prescription" : "Over the counter"}</span>${media(p)}</a>
+    <a class="pcard-media" href="/product/${p.id}" data-link tabindex="-1" aria-hidden="true"><span class="pcard-badge ${bc}">${esc(bl)}</span>${media(p)}</a>
     <div class="pcard-body">
       <p class="pcard-brand">${esc(p.brand === "Generic" ? cat(p.cat).name : p.brand)}</p>
       <h3 class="pcard-name"><a href="/product/${p.id}" data-link>${esc(p.name)}</a></h3>
       <p class="pcard-pack">${esc(p.pack)}</p>
       <p class="pcard-price"><span class="price">${p.was ? `<span class="sr">Now </span>` : ""}${NGN(p.price)}</span>${p.was ? ` <s class="was"><span class="sr">Was </span>${NGN(p.was)}</s>` : ""}</p>
+      ${isBulk(p) ? `<p class="pcard-bulk">${icon("layers", "ic sm")}<span>Bulk from <b>${NGN(Math.round(eachFrom(p)))}</b> each</span></p>` : ""}
       <button class="btn ${rx ? "btn-accent-soft" : "btn-secondary"} btn-sm btn-block" type="button" data-add="${p.id}" aria-label="Add ${esc(p.name)} to basket${rx ? ", prescription needed" : ""}">${rx ? "Add · prescription" : "Add to basket"}</button>
     </div>
   </article>`;
@@ -271,18 +293,29 @@ function sectionHead(id, eyebrow, title, intro, more, center) {
   return `<header class="shead${center ? " center" : ""}"><div>${eyebrow ? `<p class="eyebrow">${eyebrow}</p>` : ""}<h2 id="${id}">${title}</h2>${intro ? `<p class="shead-intro">${intro}</p>` : ""}</div>${more || ""}</header>`;
 }
 
+/* ---------- Age check for wines & spirits ---------- */
+const ageOK = () => !!S.age18;
+function ageGate() {
+  return `<div class="wrap" style="padding-block:2rem 3rem"><section class="panel agegate" aria-labelledby="age-title">${icon("wine", "ic big")}
+    <h1 id="age-title" class="h2">Are you 18 or over?</h1>
+    <p class="muted">Wines, spirits and beer are sold only to adults aged 18 and over. We check your date of birth at checkout, and our rider will ask for photo ID on delivery.</p>
+    <div class="ctas"><button class="btn btn-primary btn-lg" type="button" data-age="yes">Yes, I'm 18 or over</button>${link("/", "No, take me back", "btn btn-ghost btn-lg")}</div>
+    <p class="small muted">Please drink responsibly. Don't drink alcohol if you're pregnant, driving, or taking medicines that warn against it. ${link("/contact", "Ask our pharmacist", "linkbtn")} if you're not sure.</p>
+  </section></div>`;
+}
+
 /* ---------- Home (follows the Figma "Main Web" frame, refined) ---------- */
 function vHome() {
-  const popular = P.filter(p => p.pop).slice(0, 6);
-  const TABS = [["body", "Body care"], ["family", "Mother & baby"], ["vitamins", "Vitamins"], ["devices", "Health devices"]];
+  const popular = P.filter(p => p.pop && !p.age).slice(0, 6);
+  const TABS = [["vitamins", "Vitamins"], ["scales", "Weighing scales"], ["gloves", "Gloves"], ["hot-drinks", "Tea & Milo"], ["breakfast", "Breakfast"], ["body", "Body care"]];
   const tabItems = P.filter(p => p.cat === S.tab).slice(0, 4);
   return `
   <section class="hero" aria-labelledby="hero-title"><div class="wrap hero-grid">
     <div class="hero-copy">
-      <p class="eyebrow">Registered pharmacy · Delivery across Nigeria</p>
+      <p class="eyebrow">Retail &amp; wholesale pharmacy · Delivery across Nigeria</p>
       <h1 id="hero-title">Your Pathway to <br class="br-lg">Health and Wellness</h1>
-      <p class="lede">Empowering you to live your healthiest life, with genuine NAFDAC-registered medicines checked by our pharmacists and delivered to your door.</p>
-      <div class="ctas">${link("/products", "Shop health products", "btn btn-primary btn-lg")}${link("/prescriptions", "Send a prescription", "btn btn-accent btn-lg")}</div>
+      <p class="lede">Genuine NAFDAC-registered medicines checked by our pharmacists, plus medical equipment, surgical supplies and provisions. Buy one pack or a whole carton, and we'll deliver it to your door.</p>
+      <div class="ctas">${link("/products", "Shop all products", "btn btn-primary btn-lg")}${link("/prescriptions", "Send a prescription", "btn btn-accent btn-lg")}</div>
       <ul class="hero-points">
         <li>${icon("check", "ic sm")} Home delivery in ${D.expressMinutes} minutes</li>
         <li>${icon("check", "ic sm")} Same day for orders before ${cutoff}</li>
@@ -303,10 +336,9 @@ function vHome() {
   </div></section>
 
   <section class="section" aria-labelledby="routes-title"><div class="wrap">
-    ${sectionHead("routes-title", "Shop your way", "How would you like to shop?", "", "", true)}
-    <div class="routes">
-      <a class="route" href="/products/otc" data-link><span class="route-ic">${icon("box", "ic")}</span><span><b>Over-the-counter</b><span>${P.filter(p => p.cls === "otc").length} products · order straight away</span></span><span class="arrow" aria-hidden="true">→</span></a>
-      <a class="route rx" href="/products/prescription" data-link><span class="route-ic">${icon("rx", "ic")}</span><span><b>Prescription medicines</b><span>${P.filter(p => p.cls === "pom").length} medicines · upload your prescription</span></span><span class="arrow" aria-hidden="true">→</span></a>
+    ${sectionHead("routes-title", "Shop by department", "Everything in our store, online", "", "", true)}
+    <div class="routes depts">
+      ${DEPTS.map(d => `<a class="route${d.id === "pom" ? " rx" : d.age ? " age" : ""}" href="${fpath(d.id)}" data-link><span class="route-ic">${icon(d.icon, "ic")}</span><span><b>${esc(d.name)}</b><span>${P.filter(p => p.dept === d.id).length} products${d.age ? ` · ${d.age}+ only` : d.id === "pom" ? " · prescription needed" : ""}</span></span><span class="arrow" aria-hidden="true">→</span></a>`).join("")}
       <a class="route lock" href="/controlled-medicines" data-link><span class="route-ic">${icon("lock", "ic")}</span><span><b>Controlled medicines</b><span>In store only · not sold online</span></span><span class="arrow" aria-hidden="true">→</span></a>
     </div>
   </div></section>
@@ -316,6 +348,8 @@ function vHome() {
     <div class="cards">${popular.map(card).join("")}</div>
     <div class="strip">${icon("rx", "ic")}<p><b>Have a prescription?</b> Upload it at checkout. You pay only after our pharmacist approves it.</p>${link("/prescriptions", "How it works <span aria-hidden=\"true\">→</span>", "more")}</div>
   </div></section>
+
+  ${wholesaleBand()}
 
   <section class="section tight" aria-label="Services"><div class="wrap pair">
     <article class="feature">
@@ -347,6 +381,18 @@ function vHome() {
 
   ${mobileBanner()}`;
 }
+/* Retail or wholesale: the same shop, choose how much you buy */
+function wholesaleBand() {
+  return `<section class="section tight" aria-labelledby="ws-title"><div class="wrap"><div class="wsband">
+    <div><p class="eyebrow">Retail &amp; wholesale</p><h2 id="ws-title">One pack or a whole carton, your choice</h2>
+      <p>Every product shows its wholesale options: dozens, cartons, cases and packs, each with its own bulk price. Choose the quantity you want, pay online by card, transfer or USSD, and we'll deliver anywhere in Nigeria.</p>
+      <div class="ctas">${link("/products/bulk", "Shop wholesale prices", "btn btn-primary")}${link("/wholesale", "How wholesale works", "btn btn-secondary")}</div></div>
+    <ul class="wspoints">
+      <li>${icon("layers", "ic")}<span><b>Bulk prices on ${P.filter(isBulk).length} products</b><span>Save up to ${Math.max(...P.flatMap(p => p.units.map(u => u.save)))}% per pack</span></span></li>
+      <li>${icon("truck", "ic")}<span><b>Delivered nationwide</b><span>All 36 states and the FCT</span></span></li>
+      <li>${icon("store", "ic")}<span><b>For shops, clinics and homes</b><span>Large order? Request a trade quote</span></span></li>
+    </ul></div></div></section>`;
+}
 /* The "Try it now on mobile" banner, as designed */
 function mobileBanner() {
   return `<section class="mbanner" aria-labelledby="mb-title"><div class="wrap mb-grid">
@@ -373,80 +419,112 @@ function stepsHTML() {
 }
 
 /* ---------- Shop ---------- */
+const filterAge = f => (dept(f) && dept(f).age) || (cat(f) && cat(f).age) || 0;
+function matches(p, f) {
+  if (f === "all") return true;
+  if (f === "bulk") return isBulk(p);
+  if (DOSES.some(d => d[0] === f)) return doseOf(p) === f;
+  if (dept(f)) return p.dept === f;
+  return p.cat === f;
+}
 function filtered() {
-  let list = P.slice();
-  if (S.filter === "otc" || S.filter === "pom") list = list.filter(p => p.cls === S.filter);
-  else if (S.filter !== "all") list = list.filter(p => p.cat === S.filter);
-  if (S.q) { const q = S.q.toLowerCase(); list = list.filter(p => [p.name, p.generic, p.brand, p.use, cat(p.cat).name].join(" ").toLowerCase().includes(q)); }
+  let list = P.filter(p => matches(p, S.filter));
+  if (!ageOK() && !filterAge(S.filter)) list = list.filter(p => !p.age); // alcohol stays out of general lists until the visitor confirms their age
+  if (S.q) { const q = S.q.toLowerCase(); list = list.filter(p => [p.name, p.generic, p.brand, p.use, cat(p.cat).name, dept(p.dept).name].join(" ").toLowerCase().includes(q)); }
   const by = { popular: (a, b) => (b.pop || 0) - (a.pop || 0), low: (a, b) => a.price - b.price, high: (a, b) => b.price - a.price, az: (a, b) => a.name.localeCompare(b.name) }[S.sort];
   return list.sort(by);
 }
 function filterTitle() {
   if (S.q) return `Results for “${esc(S.q)}”`;
-  return S.filter === "all" ? "All products" : S.filter === "otc" ? "Over-the-counter" : S.filter === "pom" ? "Prescription medicines" : esc(cat(S.filter).name);
+  if (S.filter === "all") return "All products";
+  if (S.filter === "bulk") return "Wholesale &amp; bulk prices";
+  const d = DOSES.find(x => x[0] === S.filter); if (d) return esc(d[1]);
+  return esc((dept(S.filter) || cat(S.filter)).name);
 }
 function vShop() {
+  if (filterAge(S.filter) && !ageOK()) return ageGate();
   const list = filtered();
-  const count = f => f === "all" ? P.length : (f === "otc" || f === "pom") ? P.filter(p => p.cls === f).length : P.filter(p => p.cat === f).length;
+  const count = f => P.filter(p => matches(p, f) && (ageOK() || !p.age || filterAge(f))).length;
   const fb = (f, label) => `<a href="${fpath(f)}" data-link aria-current="${S.filter === f ? "page" : "false"}"><span>${label}</span><span class="ct">${count(f)}</span></a>`;
-  const chips = [["all", "All"], ["otc", "Over the counter"], ["pom", "Prescription"]].concat(CATS.map(c => [c.id, c.name]));
+  const here = dept(S.filter) ? S.filter : cat(S.filter) ? cat(S.filter).dept : DOSES.some(d => d[0] === S.filter) ? "otc" : "";
+  const chips = [["all", "All"], ["bulk", "Wholesale"]].concat(DEPTS.map(d => [d.id, d.short]), here ? [[here, "All " + dept(here).short.toLowerCase()]].concat(here === "otc" ? DOSES : [], deptCats(here).map(c => [c.id, c.name])) : []);
   const isPom = S.filter === "pom" || (cat(S.filter) && cat(S.filter).cls === "pom");
-  return `<div class="wrap page-head"><nav class="crumbs" aria-label="Breadcrumb">${link("/", "Home")}<span aria-hidden="true">/</span>${link("/products", "Products")}</nav><h1>${filterTitle()}</h1></div>
+  const ws = W.minTradeOrder ? ` for orders over ${NGN(W.minTradeOrder)}` : "";
+  return `<div class="wrap page-head"><nav class="crumbs" aria-label="Breadcrumb">${link("/", "Home")}<span aria-hidden="true">/</span>${link("/products", "Products")}${cat(S.filter) ? `<span aria-hidden="true">/</span>${link(fpath(cat(S.filter).dept), esc(dept(cat(S.filter).dept).name))}` : ""}</nav><h1>${filterTitle()}</h1>${dept(S.filter) && !S.q ? `<p class="muted lead">${esc(dept(S.filter).intro)}</p>` : ""}</div>
   <div class="wrap shop">
-    <nav class="filters" aria-label="Product categories">
-      ${fb("all", "All products")}
-      <h2 class="fh">Over the counter</h2>${fb("otc", "All over-the-counter")}${OTC_CATS.map(c => fb(c.id, c.name)).join("")}
-      <h2 class="fh">Prescription only</h2>${fb("pom", "All prescription")}${POM_CATS.map(c => fb(c.id, c.name)).join("")}
+    <nav class="filters" aria-label="Product departments">
+      ${fb("all", "All products")}${fb("bulk", "Wholesale &amp; bulk prices")}
+      ${DEPTS.map(d => `<h2 class="fh">${esc(d.name)}${d.age ? ` <span class="tag age">${d.age}+</span>` : ""}</h2>${fb(d.id, "All " + esc(d.short.toLowerCase()))}${d.id === "otc" ? DOSES.map(([f, l]) => fb(f, l)).join("") : ""}${deptCats(d.id).map(c => fb(c.id, esc(c.name))).join("")}`).join("")}
       <h2 class="fh">Controlled medicines</h2><a href="/controlled-medicines" data-link><span>In store only</span><span class="ct">${icon("lock", "ic sm")}</span></a>
     </nav>
     <div style="min-width:0">
-      <nav class="chips" aria-label="Product categories">${chips.map(([f, l]) => `<a href="${fpath(f)}" data-link aria-current="${S.filter === f ? "page" : "false"}">${l}</a>`).join("")}</nav>
-      ${isPom ? `<div class="notice rx small" style="margin-bottom:1rem"><b>Prescription needed at checkout</b><span>You can add these to your basket, then upload a valid prescription. Our pharmacist checks it before anything is charged.</span></div>` : ""}
+      <nav class="chips" aria-label="Product departments">${chips.map(([f, l]) => `<a href="${fpath(f)}" data-link aria-current="${S.filter === f ? "page" : "false"}">${esc(l)}</a>`).join("")}</nav>
+      ${isPom ? `<div class="notice rx small" style="margin-bottom:1rem"><b>Prescription needed at checkout</b><span>You can add these to your basket, then upload a valid prescription. Our pharmacist checks it before anything is charged. Prescription medicines are sold in single packs; licensed pharmacies and hospitals can ${link("/wholesale", "request a trade quote", "linkbtn")}.</span></div>` : ""}
+      ${S.filter === "bulk" ? `<div class="notice info small" style="margin-bottom:1rem"><b>Buy by the dozen, carton or case</b><span>Open any product and choose a wholesale option to see its bulk price. You pay online at checkout as usual. Need more than we sell online, or prescription medicines for a licensed premises? ${link("/wholesale", "Request a trade quote", "linkbtn")}${ws}.</span></div>` : ""}
+      ${filterAge(S.filter) ? `<div class="notice rx small" style="margin-bottom:1rem"><b>18+ only · ID checked on delivery</b><span>Please drink responsibly. Alcohol doesn't mix with many medicines; ${link("/contact", "ask our pharmacist", "linkbtn")} if you're unsure.</span></div>` : ""}
       <div class="toolbar"><p class="muted small" role="status">${list.length} product${list.length === 1 ? "" : "s"}${S.q ? ` · <button class="linkbtn" type="button" data-clear>Clear search</button>` : ""}</p>
         <label class="sort" for="sort">Sort by <select id="sort">${[["popular", "Most popular"], ["low", "Price: low to high"], ["high", "Price: high to low"], ["az", "Name: A to Z"]].map(([v, l]) => `<option value="${v}" ${S.sort === v ? "selected" : ""}>${l}</option>`).join("")}</select></label></div>
-      <h2 class="sr">${esc(filterTitle())}: products</h2>
+      <h2 class="sr">${filterTitle()}: products</h2>
       ${list.length ? `<div class="grid-shop">${list.map(card).join("")}</div>`
-        : `<div class="empty"><p><b>No products match “${esc(S.q)}”.</b></p><p style="margin-top:.4rem">Try a generic name, such as paracetamol, or ${link("/contact", "ask our pharmacist", "linkbtn")} if we stock it. Controlled medicines aren't listed online.</p></div>`}
+        : `<div class="empty"><p><b>No products match${S.q ? ` “${esc(S.q)}”` : " here yet"}.</b></p><p style="margin-top:.4rem">Try a generic name, such as paracetamol, or ${link("/contact", "ask our pharmacist", "linkbtn")} if we stock it. Controlled medicines aren't listed online.</p></div>`}
     </div>
   </div>`;
 }
 
+const STORAGE = { wines: "Store upright in a cool, dark place.", provisions: "Store in a cool, dry place. Check the best-before date on the pack.", equipment: "Store in a clean, dry place.", surgical: "Store in a clean, dry place away from direct sunlight.", "personal-care": "Store below 30°C, away from direct sunlight." };
+function unitPicker(p) {
+  if (!isBulk(p)) return "";
+  return `<fieldset class="units"><legend>Choose how you buy</legend>${p.units.map(u => `<label class="unit${S.unit === u.id ? " on" : ""}"><input type="radio" name="unit" value="${u.id}" ${S.unit === u.id ? "checked" : ""}>
+    <span class="unit-l"><b>${u.n > 1 ? esc(u.label) : "Single"}</b><span>${u.n > 1 ? `${u.n} × ${esc(p.pack)}` : esc(p.pack)}</span></span>
+    <span class="unit-p"><b class="num">${NGN(u.price)}</b><span>${u.n > 1 ? `${NGN(Math.round(u.price / u.n))} each${u.save ? ` · <span class="save">save ${u.save}%</span>` : ""}` : "Retail price"}</span></span></label>`).join("")}</fieldset>`;
+}
 function vProduct() {
   const p = prod(S.product); if (!p) return vNotFound();
-  const rx = p.cls === "pom", c = cat(p.cat);
+  if (p.age && !ageOK()) return ageGate();
+  const rx = p.cls === "pom", c = cat(p.cat), d = dept(p.dept), med = p.cls !== "gen";
+  const unit = PR.unitOf(p, S.unit) || p.units[0], max = PR.maxQty(p, unit);
+  if (S.qty > max) S.qty = max;
   const related = P.filter(x => x.cat === p.cat && x.id !== p.id).slice(0, 4);
-  return `<div class="wrap page-head" style="padding-bottom:.5rem"><nav class="crumbs" aria-label="Breadcrumb">${link("/", "Home")}<span aria-hidden="true">/</span>${link(rx ? "/products/prescription" : "/products/otc", rx ? "Prescription" : "Over the counter")}<span aria-hidden="true">/</span>${link("/products/" + p.cat, c.name)}</nav></div>
+  return `<div class="wrap page-head" style="padding-bottom:.5rem"><nav class="crumbs" aria-label="Breadcrumb">${link("/", "Home")}<span aria-hidden="true">/</span>${link(fpath(p.dept), esc(d.name))}<span aria-hidden="true">/</span>${link("/products/" + p.cat, esc(c.name))}</nav></div>
   <div class="wrap pdp">
     <div class="visual">${media(p)}</div>
     <div class="info">
-      ${tag(p)}
+      <div>${tag(p)}</div>
       <h1>${esc(p.name)}</h1>
       <div class="brand">${esc(p.brand)} · <span class="muted" style="font-weight:400">${esc(p.pack)}</span></div>
-      <div>${p.was ? `<span class="muted num" style="text-decoration:line-through;margin-right:.5rem"><span class="sr">Was </span>${NGN(p.was)}</span>` : ""}<span class="price num">${NGN(p.price)}</span></div>
+      <div>${p.was ? `<span class="muted num" style="text-decoration:line-through;margin-right:.5rem"><span class="sr">Was </span>${NGN(p.was)}</span>` : ""}<span class="price num">${NGN(p.price)}</span>${isBulk(p) ? ` <span class="muted small">· wholesale from ${NGN(Math.round(eachFrom(p)))} each</span>` : ""}</div>
       ${rx ? `<div class="notice rx"><b>Prescription required</b><span>Add it to your basket, then upload your prescription at checkout. Our pharmacist checks it before you pay, and we only supply it if the prescription is valid.</span></div>`
-           : `<div class="notice info"><b>Over-the-counter</b><span>Our pharmacist may contact you before sending it if they need to check it's right for you.</span></div>`}
+        : p.age ? `<div class="notice rx"><b>${p.age}+ only</b><span>We confirm your date of birth at checkout, and our rider checks photo ID on delivery. Please drink responsibly.</span></div>`
+        : med ? `<div class="notice info"><b>Over-the-counter</b><span>Our pharmacist may contact you before sending it if they need to check it's right for you.</span></div>` : ""}
+      ${unitPicker(p)}
       <div class="buy">
         <div class="qty" role="group" aria-label="Quantity"><button type="button" data-qty="-1" aria-label="Decrease quantity">−</button><span class="num" id="qty-val" aria-live="polite">${S.qty}</span><button type="button" data-qty="1" aria-label="Increase quantity">+</button></div>
         <button class="btn ${rx ? "btn-accent" : "btn-primary"} btn-lg" type="button" data-add="${p.id}" data-withqty="1">${rx ? "Add to basket · prescription needed" : "Add to basket"}</button>
       </div>
+      <p class="small muted" id="buy-total" aria-live="polite">${buyTotal(p)}</p>
       <dl class="specs">
-        <dt>${p.cls === "pom" || p.strength || !["device", "thermo", "kit", "strips", "bar"].includes(p.form) && !["body", "devices", "sexual"].includes(p.cat) ? "Active ingredient" : "Product type"}</dt><dd>${esc(p.generic)}</dd>
+        <dt>${rx || p.strength || doseOf(p) ? "Active ingredient" : "Product type"}</dt><dd>${esc(p.generic)}</dd>
         ${p.strength ? `<dt>Strength</dt><dd>${esc(p.strength)}</dd>` : ""}
         <dt>Pack size</dt><dd>${esc(p.pack)}</dd>
-        <dt>Classification</dt><dd>${rx ? "Prescription-only medicine (POM)" : "Over-the-counter (OTC)"}</dd>
+        <dt>${med ? "Classification" : "Department"}</dt><dd>${rx ? "Prescription-only medicine (POM)" : med ? "Over-the-counter (OTC)" : esc(d.name)}</dd>
+        ${isBulk(p) ? `<dt>Wholesale</dt><dd>${p.units.slice(1).map(u => `${esc(u.label)} of ${u.n}`).join(", ")}</dd>` : ""}
         ${has(p.nafdac) ? `<dt>NAFDAC reg. no.</dt><dd>${esc(p.nafdac)}</dd>` : ""}
-        <dt>Storage</dt><dd>Store below 30°C in a dry place, away from sunlight and out of reach of children.</dd>
+        <dt>Storage</dt><dd>${STORAGE[p.dept] || "Store below 30°C in a dry place, away from sunlight and out of reach of children."}</dd>
       </dl>
       <div class="facts">
-        <details open><summary>What it's for</summary><p>${esc(p.use)}</p></details>
-        <details><summary>How to use</summary><p>${esc(p.how)} Always read the label and patient leaflet.</p></details>
-        <details><summary>Warnings</summary><p>${esc(p.warn)}</p></details>
-        <details><summary>Delivery</summary><p>Home delivery in ${D.expressMinutes} minutes during opening hours, or same-day delivery for orders placed before ${cutoff}. Orders above ${threshold} are delivered the next day. We deliver within Nigeria only.</p></details>
+        <details open><summary>${med ? "What it's for" : "About this product"}</summary><p>${esc(p.use)}</p></details>
+        ${p.how ? `<details><summary>How to use</summary><p>${esc(p.how)}${med ? " Always read the label and patient leaflet." : ""}</p></details>` : ""}
+        ${p.warn ? `<details><summary>Warnings</summary><p>${esc(p.warn)}</p></details>` : ""}
+        <details><summary>Delivery</summary><p>Home delivery in ${D.expressMinutes} minutes during opening hours, or same-day delivery for orders placed before ${cutoff}. Orders above ${threshold} are delivered the next day. Other states take 2–4 working days. We deliver within Nigeria only.</p></details>
       </div>
-      <p class="small muted">Questions about this product? ${link("/contact", "Talk to a pharmacist", "linkbtn")}.</p>
+      <p class="small muted">Questions about this product, or need a larger quantity? ${link("/contact", "Talk to us", "linkbtn")} or ${link("/wholesale", "request a trade quote", "linkbtn")}.</p>
     </div>
   </div>
   ${related.length ? `<section class="wrap related" aria-labelledby="rel-title">${sectionHead("rel-title", "", "More in " + esc(c.name), "", link("/products/" + p.cat, "View all <span aria-hidden=\"true\">→</span>", "more"))}<div class="cards cards-4">${related.map(card).join("")}</div></section>` : ""}`;
+}
+function buyTotal(p) {
+  const u = PR.unitOf(p, S.unit) || p.units[0];
+  return u.n > 1 || S.qty > 1 ? `${S.qty} × ${u.n > 1 ? `${esc(u.label)} of ${u.n}` : "single"} = <b class="num">${NGN(u.price * S.qty)}</b>${u.n > 1 ? ` · ${S.qty * u.n} packs` : ""}` : "";
 }
 
 /* ---------- Controlled medicines (information only, nothing for sale) ---------- */
@@ -480,18 +558,21 @@ function vControlled() {
 }
 
 /* ---------- Basket & checkout ---------- */
-const items = () => S.cart.filter(l => prod(l.id)).map(l => Object.assign({}, l, { p: prod(l.id) }));
+const lineKey = l => l.id + "|" + (l.u || "1");
+const items = () => S.cart.filter(l => prod(l.id) && PR.unitOf(prod(l.id), l.u)).map(l => Object.assign({}, l, { p: prod(l.id), unit: PR.unitOf(prod(l.id), l.u), key: lineKey(l) }));
 const hasRx = () => S.rxRequest || S.cart.some(l => prod(l.id) && prod(l.id).cls === "pom");
 const quoteNow = () => PR.quote({ items: S.cart, state: S.form.state, speed: S.form.speed, rxRequest: S.rxRequest }, CFG, P);
 function summary(cta) {
   const q = quoteNow();
   return `<aside class="panel summary" aria-labelledby="sum-title"><h2 class="h3" id="sum-title">Order summary</h2>
-    ${items().map(l => `<div class="r small"><span>${l.q} × ${esc(l.p.name)}</span><span class="num">${NGN(l.p.price * l.q)}</span></div>`).join("")}
+    ${q.lines.map(l => `<div class="r small"><span>${l.qty} × ${esc(l.name)}</span><span class="num">${NGN(l.total)}</span></div>`).join("")}
     ${S.rxRequest ? `<div class="r small"><span>Prescription items</span><span class="muted">Priced by pharmacist</span></div>` : ""}
     <div class="r"><span>Subtotal</span><span class="num">${NGN(q.subtotal)}</span></div>
     <div class="r"><span>Delivery <span class="muted small">(${esc(q.speedLabel)})</span></span><span class="num">${NGN(q.deliveryFee)}</span></div>
     <div class="r total"><span>Total</span><span class="num">${NGN(q.total)}${S.rxRequest ? "+" : ""}</span></div>
     ${q.big ? `<div class="notice info small"><b>Next-day delivery</b><span>Orders above ${threshold} are delivered the next day.</span></div>` : ""}
+    ${q.overLimit ? `<div class="notice bad small"><b>Too large to pay online</b><span>Orders above ${NGN(q.maxTotal)} are handled as trade orders. ${link("/wholesale", "Request a trade quote", "linkbtn")} and we'll confirm stock and delivery.</span></div>` : ""}
+    ${q.age >= 18 ? `<div class="notice rx small"><b>Contains alcohol</b><span>Our rider will check photo ID on delivery. We can't hand alcohol to anyone under 18.</span></div>` : ""}
     ${hasRx() ? `<div class="notice rx small"><b>Pay after approval</b><span>Your order has prescription items, so nothing is charged until our pharmacist approves the prescription.</span></div>` : ""}
     ${cta || ""}</aside>`;
 }
@@ -503,16 +584,17 @@ function vBasket() {
   return `<div class="wrap page-head"><h1>Your basket</h1></div>
   <div class="wrap two"><section class="panel" aria-label="Items in your basket">
     ${list.map(l => `<div class="line"><a class="thumb" href="/product/${l.p.id}" data-link tabindex="-1" aria-hidden="true">${media(l.p)}</a>
-      <div style="min-width:0">${link("/product/" + l.p.id, esc(l.p.name), "linkbtn dark")}<div class="muted small">${esc(l.p.pack)}</div><div style="margin-top:.35rem">${tag(l.p)}</div></div>
-      <div class="right"><b class="num">${NGN(l.p.price * l.q)}</b>
-        <div class="qty" role="group" aria-label="Quantity of ${esc(l.p.name)}"><button type="button" data-lineqty="${l.id}" data-d="-1" aria-label="Decrease">−</button><span class="num" aria-live="polite">${l.q}</span><button type="button" data-lineqty="${l.id}" data-d="1" aria-label="Increase">+</button></div>
-        <button class="rm" type="button" data-remove="${l.id}" aria-label="Remove ${esc(l.p.name)}">Remove</button></div></div>`).join("")}
+      <div style="min-width:0">${link("/product/" + l.p.id, esc(l.p.name), "linkbtn dark")}<div class="muted small">${l.unit.n > 1 ? `<b>${esc(l.unit.label)}</b> · ${l.unit.n} × ${esc(l.p.pack)} · ${NGN(l.unit.price)} each ${esc(l.unit.label.toLowerCase())}` : `${esc(l.p.pack)} · ${NGN(l.unit.price)} each`}</div><div style="margin-top:.35rem">${tag(l.p)}</div></div>
+      <div class="right"><b class="num">${NGN(l.unit.price * l.q)}</b>
+        <div class="qty" role="group" aria-label="Quantity of ${esc(l.p.name)}"><button type="button" data-lineqty="${l.key}" data-d="-1" aria-label="Decrease">−</button><span class="num" aria-live="polite">${l.q}</span><button type="button" data-lineqty="${l.key}" data-d="1" aria-label="Increase">+</button></div>
+        <button class="rm" type="button" data-remove="${l.key}" aria-label="Remove ${esc(l.p.name)}">Remove</button></div></div>`).join("")}
     ${S.rxRequest ? `<div class="line"><div class="thumb rxthumb" aria-hidden="true">℞</div><div><b>Prescription request</b><div class="muted small">Our pharmacist will add the medicines on your prescription and confirm the price.</div></div><div class="right"><button class="rm" type="button" data-rxreq-remove>Remove</button></div></div>` : ""}
-  </section>${summary(`${link("/checkout", "Go to checkout", "btn btn-primary btn-lg full")}${link("/products", "Continue shopping", "linkbtn center-self")}`)}</div>`;
+  </section>${summary(`${quoteNow().overLimit ? link("/wholesale", "Request a trade quote", "btn btn-primary btn-lg full") : link("/checkout", "Go to checkout", "btn btn-primary btn-lg full")}${link("/products", "Continue shopping", "linkbtn center-self")}`)}</div>`;
 }
 function stepList() { const s = [{ n: 1, l: "Your details" }, { n: 2, l: "Delivery" }]; if (hasRx()) s.push({ n: 3, l: "Prescription" }); s.push({ n: 4, l: hasRx() ? "Review & submit" : "Review & pay" }); return s; }
 function vCheckout() {
   if (!S.cart.length && !S.rxRequest) return vBasket();
+  if (quoteNow().overLimit) return vBasket();
   if (LIVE.checked && !ordersOn()) return `<div class="wrap page-head"><h1>Checkout</h1></div><div class="wrap" style="padding-bottom:3rem"><div class="notice info"><b>Online ordering opens soon</b><span>We're finishing our online checkout. To order now, ${contactLine()} during opening hours (${esc(H.label)}).</span></div></div>`;
   const steps = stepList();
   if (!steps.some(s => s.n === S.step)) S.step = 1;
@@ -733,6 +815,32 @@ const CONTENT = {
       ${has(L.pcnPremises) ? `<dt>PCN premises certificate</dt><dd>${esc(L.pcnPremises)}</dd>` : ""}${has(L.pcnEPharmacy) ? `<dt>PCN e-pharmacy licence</dt><dd>${esc(L.pcnEPharmacy)} (renewed annually)</dd>` : ""}
       ${has(L.superintendentName) ? `<dt>Superintendent pharmacist</dt><dd>${esc(L.superintendentName)}${has(L.superintendentPcnReg) ? `, PCN reg. no. ${esc(L.superintendentPcnReg)}` : ""}</dd>` : ""}${addressLine ? `<dt>Registered address</dt><dd>${esc(addressLine)}</dd>` : ""}</dl></div>
     <p class="muted" style="margin-top:1rem">You can confirm a pharmacy's registration with the Pharmacy Council of Nigeria.</p>` }),
+  wholesale: () => ({ title: "Wholesale & bulk buying", lead: "Buy one pack or a whole carton. Retail and wholesale customers shop the same store and pay the same secure way.", body: `
+    <ol class="steps">
+      <li class="step"><span class="n" aria-hidden="true">1</span><h3>Choose your quantity</h3><p>Every product shows its options, such as single, dozen, carton, case or pack, each with its own bulk price.</p></li>
+      <li class="step"><span class="n" aria-hidden="true">2</span><h3>Mix and match</h3><p>Combine single packs and cartons from any department in one basket: medicines, equipment, surgical supplies, provisions and drinks.</p></li>
+      <li class="step"><span class="n" aria-hidden="true">3</span><h3>Pay at the end</h3><p>Pay online by card, bank transfer or USSD through Paystack. Prices are checked on our server, so what you see is what you pay.</p></li>
+      <li class="step"><span class="n" aria-hidden="true">4</span><h3>We deliver anywhere</h3><p>Same-day or next-day delivery near our pharmacy, and 2–4 working days to every other state.</p></li>
+    </ol>
+    <div class="two flat even" style="margin-top:1.5rem">
+      <div class="panel prose"><h2>Who buys wholesale from us</h2>
+        <p>${esc(W.note || "Shops, clinics and families buying in bulk.")}</p>
+        <ul><li><b>Bulk prices online</b> on ${P.filter(isBulk).length} products, with savings of up to ${Math.max(...P.flatMap(p => p.units.map(u => u.save)))}% per pack. ${link("/products/bulk", "See wholesale prices", "linkbtn")}.</li>
+          <li><b>Online orders up to ${NGN((CFG.orders || {}).maxOnlineTotal || 10000000)}.</b> Above that, or for mixed pallets and regular supply, request a trade quote.</li>
+          <li><b>Prescription-only medicines</b> are sold to the public in single packs against a prescription. Licensed pharmacies, hospitals and clinics can buy them in bulk through a trade quote with their PCN or facility licence number.</li>
+          <li><b>Wines and spirits</b> are sold to adults aged 18 and over only, with ID checked on delivery.</li>
+          <li><b>Every item is genuine:</b> NAFDAC-registered stock from approved manufacturers and distributors, with batch and expiry recorded.</li></ul></div>
+      <form class="f panel" id="tradeform" novalidate><h2>${icon("store", "ic")} Request a trade quote</h2>
+        <p class="small muted">Tell us what you need and we'll reply within one working day with prices, stock and delivery${W.minTradeOrder ? `. Trade quotes start from ${NGN(W.minTradeOrder)}` : ""}.</p>
+        <div class="row2"><label for="tb">Business or organisation<input id="tb" name="business" required autocomplete="organization"></label>
+          <label for="tt">Type<select id="tt" name="bizType"><option>Pharmacy</option><option>Patent medicine store</option><option>Hospital or clinic</option><option>School or company</option><option>Supermarket or shop</option><option>Hotel, restaurant or events</option><option>Individual or family</option><option>Other</option></select></label></div>
+        <div class="row2"><label for="tn">Your name<input id="tn" name="name" required autocomplete="name"></label><label for="tp">Phone number<input id="tp" name="phone" type="tel" required minlength="10" autocomplete="tel"></label></div>
+        <div class="row2"><label for="te">Email<input id="te" name="email" type="email" autocomplete="email"></label>
+          <label for="ts">Deliver to<select id="ts" name="state" required><option value="">Choose a state</option>${STATES.map(x => `<option>${esc(x)}</option>`).join("")}</select></label></div>
+        <label for="tm">Products and quantities<span class="hint">For example: Paracetamol 500mg × 20 cartons, nitrile gloves size M × 50 boxes.</span><textarea id="tm" name="message" rows="5" required></textarea></label>
+        <label for="tl">PCN or facility licence number<span class="hint">Only needed for prescription medicines.</span><input id="tl" name="pcn"></label>
+        <div><button class="btn btn-primary" type="submit">Request quote</button></div></form>
+    </div>` }),
   cookies: () => ({ title: "Cookies", lead: "", body: `${DRAFT}<div class="panel prose"><p>We don't use advertising or tracking cookies. Your browser stores your basket and the orders you've placed on this device so they're there when you come back. If we add analytics later, we'll ask for your consent first and list them here.</p></div>` }),
   careers: () => ({ title: "Careers at Synako", lead: "Join a pharmacy team that puts patients first.", body: `
     <div class="panel prose"><h2>Open roles</h2><p>We don't have open roles right now, but we'd love to hear from pharmacists, pharmacy technicians, dispatch riders and customer support staff. Register your interest and we'll contact you when a role opens.</p></div>
@@ -801,9 +909,9 @@ function vStaff() {
     ${st.err ? alertBox(st.err) : ""}
     ${d.missing && d.missing.length ? `<details class="setup"><summary><b>${d.missing.length} site details still missing</b> · customers can't see these yet</summary><p class="small">Add them in <code>js/config.js</code>: ${d.missing.map(esc).join(", ")}.</p></details>` : ""}
     ${d.setup && d.setup.length ? `<details class="setup"><summary><b>${d.setup.length} hosting setting${d.setup.length === 1 ? "" : "s"} to add</b> · in Vercel, Settings → Environment Variables</summary><p class="small">${d.setup.map(esc).join(", ")}. See the README for what each one does.</p></details>` : ""}
-    ${st.tab === "requests" ? `<div class="requests">${d.requests.length ? d.requests.map(r => `<article class="panel req"><div class="top"><b>${{ appointment: "Consultation booking", message: "Message", careers: "Careers interest" }[r.type]}</b><span class="small muted">${stamp(r.createdAt)}</span></div>
+    ${st.tab === "requests" ? `<div class="requests">${d.requests.length ? d.requests.map(r => `<article class="panel req"><div class="top"><b>${{ appointment: "Consultation booking", message: "Message", careers: "Careers interest", trade: "Wholesale quote request" }[r.type]}</b><span class="small muted">${stamp(r.createdAt)}</span></div>
         <div class="small"><b>${esc(r.name)}</b> · ${r.phone ? `<a href="tel:${esc(r.phone)}">${esc(r.phone)}</a>` : ""} ${esc(r.email || "")}</div>
-        ${r.type === "appointment" ? `<div class="small">Wants: <b>${esc(r.date)} at ${esc(PR.fmt12(r.time || "00:00"))}</b></div>` : ""}${r.topic ? `<div class="small">${esc(r.topic)}</div>` : ""}${r.role ? `<div class="small">${esc(r.role)} ${r.pcn ? `· PCN ${esc(r.pcn)}` : ""}</div>` : ""}
+        ${r.type === "appointment" ? `<div class="small">Wants: <b>${esc(r.date)} at ${esc(PR.fmt12(r.time || "00:00"))}</b></div>` : ""}${r.topic ? `<div class="small">${esc(r.topic)}</div>` : ""}${r.role ? `<div class="small">${esc(r.role)} ${r.pcn ? `· PCN ${esc(r.pcn)}` : ""}</div>` : ""}${r.business ? `<div class="small"><b>${esc(r.business)}</b>${r.bizType ? ` · ${esc(r.bizType)}` : ""}${r.state ? ` · ${esc(r.state)}` : ""}${r.pcn && !r.role ? ` · Licence ${esc(r.pcn)}` : ""}</div>` : ""}
         ${r.message ? `<p class="small">${esc(r.message)}</p>` : ""}</article>`).join("") : `<p class="muted">No messages or bookings yet.</p>`}</div>`
     : `<div class="desk">
       <nav class="queue" aria-label="Orders">${list.length ? list.map(o => `<button type="button" class="q ${o.status}" data-sel="${o.id}" aria-current="${o.id === st.sel}">
@@ -833,7 +941,7 @@ function deskDetail() {
       <div style="display:grid;gap:.8rem;align-content:start">
         <dl class="kv"><dt>Customer</dt><dd>${esc(o.customer.name)}</dd><dt>Phone</dt><dd><a href="tel:${esc(o.customer.phone)}">${esc(o.customer.phone)}</a></dd><dt>Email</dt><dd>${esc(o.customer.email)}</dd>${o.customer.dob ? `<dt>Date of birth</dt><dd>${esc(o.customer.dob)}</dd>` : ""}
           <dt>Deliver to</dt><dd>${esc([o.delivery.addr, o.delivery.landmark, o.delivery.city, o.delivery.state].filter(has).join(", "))}</dd></dl>
-        <div class="small" style="display:grid;gap:.3rem">${o.items.map(i => `<div class="r"><span>${i.qty} × ${esc(i.name)} ${i.cls === "pom" ? `<span class="tag rx">POM</span>` : ""}</span><span class="num">${NGN(i.total)}</span></div>`).join("")}
+        <div class="small" style="display:grid;gap:.3rem">${o.items.map(i => `<div class="r"><span>${i.qty} × ${esc(i.name)} ${i.cls === "pom" ? `<span class="tag rx">POM</span>` : ""}${i.age ? `<span class="tag age">18+ ID</span>` : ""}${i.n > 1 ? `<span class="muted"> (${i.qty * i.n} packs)</span>` : ""}</span><span class="num">${NGN(i.total)}</span></div>`).join("")}
           <div class="r"><span>Delivery</span><span class="num">${NGN(o.deliveryFee)}</span></div><div class="r"><b>Total</b><b class="num">${o.priced === false ? "to price" : NGN(o.total)}</b></div></div>
       </div>
       ${o.rx ? `<div style="display:grid;gap:.8rem;align-content:start">
@@ -872,10 +980,10 @@ function renderShell() {
     <div><p class="reg-title">Registered with the Pharmacy Council of Nigeria</p>${rows.length ? `<dl>${rows.map(([k, v]) => `<dt>${k}</dt><dd>${esc(v)}</dd>`).join("")}</dl>` : ""}<p class="small">Open ${esc(H.label)}</p></div>`;
   $("#drawer-foot").innerHTML = `${has(B.phone) ? `<span>Pharmacist line: ${phoneText()}</span>` : ""}<span>Open ${esc(H.label)}</span>`;
   const col = cats => cats.map(c => `<li><a href="/products/${c.id}" data-link>${c.name} <span>${P.filter(p => p.cat === c.id).length}</span></a></li>`).join("");
-  $("#directory").innerHTML = `
-    <div><h2>${icon("box", "ic sm")} Over-the-counter medicines</h2><p>Order online straight away.</p><ul>${col(OTC_CATS)}</ul>${link("/products/otc", "All over-the-counter <span aria-hidden=\"true\">→</span>", "dir-all")}</div>
-    <div><h2>${icon("rx", "ic sm")} Prescription medicines</h2><p>Upload a valid prescription; pay after our pharmacist approves it.</p><ul>${col(POM_CATS)}</ul>${link("/products/prescription", "All prescription medicines <span aria-hidden=\"true\">→</span>", "dir-all")}${link("/prescriptions", "Send a prescription <span aria-hidden=\"true\">→</span>", "dir-all")}</div>
-    <div class="lock"><h2>${icon("lock", "ic sm")} Controlled medicines</h2><p>Not sold online under the Electronic Pharmacy Regulations 2026. Collect in store with your original prescription and photo ID, after our pharmacist checks it.</p>${link("/controlled-medicines", "How to get a controlled medicine <span aria-hidden=\"true\">→</span>", "dir-all")}</div>`;
+  const dcol = (id, extra) => { const d = dept(id); return `<div><h2>${icon(d.icon, "ic sm")} ${esc(d.name)}</h2><ul>${col(deptCats(id))}</ul>${link(fpath(id), `All ${esc(d.short.toLowerCase())} <span aria-hidden="true">→</span>`, "dir-all")}${extra || ""}</div>`; };
+  $("#directory").innerHTML = dcol("otc") + dcol("pom", link("/prescriptions", "Send a prescription <span aria-hidden=\"true\">→</span>", "dir-all") + link("/controlled-medicines", "Controlled medicines: in store only <span aria-hidden=\"true\">→</span>", "dir-all"))
+    + `<div>${["equipment", "surgical"].map(id => `<h2>${icon(dept(id).icon, "ic sm")} ${esc(dept(id).name)}</h2><ul>${col(deptCats(id))}</ul>`).join("")}${link("/wholesale", "Wholesale &amp; trade quotes <span aria-hidden=\"true\">→</span>", "dir-all")}</div>`
+    + `<div>${["personal-care", "provisions", "wines"].map(id => `<h2>${icon(dept(id).icon, "ic sm")} ${esc(dept(id).name)}</h2><ul>${col(deptCats(id))}</ul>`).join("")}</div>`;
 }
 const drawer = () => $("#drawer");
 let lastFocus = null;
@@ -898,7 +1006,7 @@ function closeDrawer(silent) {
 
 /* ---------- Search engines and link previews ---------- */
 const SITE_URL = String(CFG.site.url || location.origin).replace(/\/$/, "");
-const DEFAULT_DESC = "Genuine NAFDAC-registered medicines from a registered Nigerian pharmacy. Shop over-the-counter products, send a prescription, talk to a pharmacist and get home delivery.";
+const DEFAULT_DESC = "Retail and wholesale pharmacy in Nigeria: genuine NAFDAC-registered medicines, medical equipment, surgical supplies, provisions and drinks. Buy single packs or in bulk, send a prescription and get delivery nationwide.";
 function metaTag(attr, key) {
   let m = document.head.querySelector(`meta[${attr}="${key}"]`);
   if (!m) { m = document.createElement("meta"); m.setAttribute(attr, key); document.head.appendChild(m); }
@@ -919,12 +1027,12 @@ function pageMeta() {
       const t = strip(filterTitle());
       return { title: t, desc: S.filter === "pom" || (cat(S.filter) && cat(S.filter).cls === "pom")
         ? `${t} from Synako Pharmacy. Upload a valid prescription; our pharmacist checks it before you pay.`
-        : `Shop ${t.toLowerCase()} from Synako Pharmacy, a registered Nigerian pharmacy. Genuine NAFDAC-registered products with home delivery.`, noindex: !!S.q };
+        : `Shop ${t.toLowerCase()} from Synako Pharmacy, a registered Nigerian retail and wholesale pharmacy. Buy single packs or in bulk, with delivery across Nigeria.`, noindex: !!S.q };
     }
     case "product": {
       const p = prod(S.product), rx = p.cls === "pom";
       return { title: p.name, desc: `${p.name} (${p.pack}). ${p.use}${rx ? " Prescription only." : ""}`, type: "product",
-        ld: rx ? null : { "@context": "https://schema.org", "@type": "Product", name: p.name, description: p.use, sku: p.id, category: cat(p.cat).name,
+        ld: rx || p.age ? null : { "@context": "https://schema.org", "@type": "Product", name: p.name, description: p.use, sku: p.id, category: cat(p.cat).name,
           brand: { "@type": "Brand", name: p.brand === "Generic" ? "Synako Pharmacy" : p.brand },
           image: p.photo ? `${SITE_URL}/${p.photo}` : undefined,
           offers: { "@type": "Offer", price: String(p.price), priceCurrency: CFG.site.currency, availability: "https://schema.org/InStock", url: `${SITE_URL}/product/${p.id}`, seller: { "@type": "Organization", name: B.name } } } };
@@ -998,18 +1106,23 @@ function render(scroll) {
   if (staff && /^\(\d+\)/.test(title)) document.title = `${title} | ${B.name}`;
   if (scroll) window.scrollTo(0, 0);
   const err = $("#form-error"); if (err && S.error) err.focus();
+  const chip = document.querySelector('.chips [aria-current="page"]'); // keep the chosen chip in view on phones
+  if (chip) chip.parentNode.scrollLeft = chip.offsetLeft - chip.parentNode.offsetLeft - 16;
 }
 
 /* Real photos replace the drawn images as soon as they load */
 document.addEventListener("load", e => { const t = e.target; if (t.tagName === "IMG" && t.hasAttribute("data-swap")) t.parentNode.classList.add("has-img"); }, true);
 document.addEventListener("error", e => { const t = e.target; if (t.tagName === "IMG" && t.hasAttribute("data-swap")) t.remove(); }, true);
 
-function addToCart(id, q) {
-  const l = S.cart.find(x => x.id === id);
-  if (l) l.q = Math.min(10, l.q + q); else S.cart.push({ id, q });
+function addToCart(id, q, u) {
+  const p = prod(id); u = u || "1";
+  if (p.age && !ageOK()) { go("/product/" + id); return; }
+  const unit = PR.unitOf(p, u), max = PR.maxQty(p, unit);
+  const l = S.cart.find(x => x.id === id && x.u === u);
+  if (l) l.q = Math.min(max, l.q + q); else S.cart.push({ id, q: Math.min(max, q), u });
   saveCart();
-  const p = prod(id);
-  toast(p.cls === "pom" ? `Added ${p.name}. Upload your prescription at checkout.` : `Added ${p.name} to your basket.`);
+  const what = unit.n > 1 ? `${q} × ${unit.label.toLowerCase()} of ${p.name}` : p.name;
+  toast(p.cls === "pom" ? `Added ${what}. Upload your prescription at checkout.` : `Added ${what} to your basket.`);
   renderCount();
 }
 function saveForm() {
@@ -1059,10 +1172,11 @@ document.addEventListener("click", e => {
   if (t.id === "staff-signout") { signOut(); return; }
   if ("app" in d) { toast("The Synako app is coming soon. You can order on this website from any phone in the meantime."); return; }
   if (d.tab) { S.tab = d.tab; render(); const nt = $(`#tab-${d.tab}`); if (nt) nt.focus(); return; }
-  if (d.add) { addToCart(d.add, d.withqty ? S.qty : 1); return; }
-  if (d.qty) { S.qty = Math.max(1, Math.min(10, S.qty + Number(d.qty))); $("#qty-val").textContent = S.qty; return; }
-  if (d.lineqty) { const l = S.cart.find(x => x.id === d.lineqty); l.q = Math.max(1, Math.min(10, l.q + Number(d.d))); saveCart(); render(); return; }
-  if (d.remove) { S.cart = S.cart.filter(x => x.id !== d.remove); saveCart(); render(); toast("Removed from your basket."); return; }
+  if (d.add) { addToCart(d.add, d.withqty ? S.qty : 1, d.withqty ? S.unit : "1"); return; }
+  if (d.qty) { const p = prod(S.product); S.qty = Math.max(1, Math.min(PR.maxQty(p, PR.unitOf(p, S.unit) || p.units[0]), S.qty + Number(d.qty))); $("#qty-val").textContent = S.qty; $("#buy-total").innerHTML = buyTotal(p); return; }
+  if (d.lineqty) { const l = S.cart.find(x => lineKey(x) === d.lineqty); if (l) { const p = prod(l.id); l.q = Math.max(1, Math.min(PR.maxQty(p, PR.unitOf(p, l.u)), l.q + Number(d.d))); saveCart(); } render(); return; }
+  if (d.remove) { S.cart = S.cart.filter(x => lineKey(x) !== d.remove); saveCart(); render(); toast("Removed from your basket."); return; }
+  if (d.age === "yes") { S.age18 = true; store.set("synako.age18", true); render(); return; }
   if ("rxreq" in d) { S.rxRequest = true; S.step = 1; go("/checkout"); toast("Prescription request started."); return; }
   if ("rxreqRemove" in d) { S.rxRequest = false; render(); return; }
   if ("clear" in d) { S.q = ""; $("#q").value = ""; render(); return; }
@@ -1091,6 +1205,7 @@ document.addEventListener("keydown", e => {
 document.addEventListener("change", async e => {
   const t = e.target;
   if (t.id === "sort") { S.sort = t.value; render(); return; }
+  if (t.name === "unit" && S.view === "product") { S.unit = t.value; S.qty = 1; render(); const el = document.querySelector(`input[name=unit][value="${t.value}"]`); if (el) el.focus(); return; }
   if (t.id === "st" || t.name === "speed") { saveForm(); render(); const el = $(t.id === "st" ? "#st" : `#sp-${S.form.speed}`); if (el) el.focus(); return; }
   if (t.id === "rxfile" && t.files[0]) {
     const status = $("#rxstatus"); status.innerHTML = `<span class="tag otc">Preparing ${esc(t.files[0].name)}…</span>`;
@@ -1143,13 +1258,13 @@ document.addEventListener("submit", async e => {
     catch (er) { S.staff.err = er.message; render(); }
     return;
   }
-  if (["contactform", "apptform", "careersform"].includes(f.id)) {
+  if (["contactform", "apptform", "careersform", "tradeform"].includes(f.id)) {
     if (!f.reportValidity()) return;
     if (f.id === "apptform") { const day = new Date(f.date.value + "T12:00:00").getDay(); if (!H.open[day]) { f.date.setCustomValidity("We're closed that day. Please choose Monday to Saturday."); f.reportValidity(); f.date.setCustomValidity(""); return; } }
     const data = Object.fromEntries(new FormData(f).entries());
-    data.type = { contactform: "message", apptform: "appointment", careersform: "careers" }[f.id];
+    data.type = { contactform: "message", apptform: "appointment", careersform: "careers", tradeform: "trade" }[f.id];
     const btn = f.querySelector("[type=submit]"); btn.disabled = true;
-    try { await api.request(data); f.reset(); toast({ message: "Thanks. A pharmacist will reply shortly.", appointment: "Thanks. We'll call you to confirm your appointment.", careers: "Thanks. We'll be in touch when a role opens." }[data.type]); }
+    try { await api.request(data); f.reset(); toast({ message: "Thanks. A pharmacist will reply shortly.", appointment: "Thanks. We'll call you to confirm your appointment.", careers: "Thanks. We'll be in touch when a role opens.", trade: "Thanks. We'll send your quote within one working day." }[data.type]); }
     catch (er) { toast(er.message); }
     btn.disabled = false; return;
   }

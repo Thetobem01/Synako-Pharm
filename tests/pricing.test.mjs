@@ -16,9 +16,51 @@ test("prices come from the catalogue, not the browser", () => {
   assert.equal(q.subtotal, para.price * 2);
 });
 
-test("unknown products are dropped and quantities are kept between 1 and 10", () => {
-  const q = pricing.quote({ items: [{ id: "nope", q: 3 }, { id: "para", q: 99 }, { id: "para", q: -4 }] }, config, P, at("10:00"));
-  assert.deepEqual(list(q.lines.map(l => l.qty)), [10, 1]);
+test("unknown products are dropped, repeats are merged away and quantities are kept in range", () => {
+  const q = pricing.quote({ items: [{ id: "nope", q: 3 }, { id: "para", q: 99 }, { id: "para", q: 2 }, { id: "ibu", q: -4 }, { id: "amox", q: 50 }] }, config, P, at("10:00"));
+  assert.deepEqual(list(q.lines.map(l => [l.id, l.qty])), [["para", 50], ["ibu", 1], ["amox", 10]]);
+});
+
+test("wholesale units are priced from the catalogue, cheaper per pack", () => {
+  const carton = para.units.find(u => u.n === 50);
+  const q = pricing.quote({ items: [{ id: "para", q: 2, u: "50", price: 1 }] }, config, P, at("10:00"));
+  assert.equal(q.lines[0].price, carton.price);
+  assert.equal(q.lines[0].total, carton.price * 2);
+  assert.equal(q.packs, 100);
+  assert.ok(carton.price / 50 < para.price);
+  assert.match(q.lines[0].name, /Carton of 50/);
+});
+
+test("single and carton of the same product can sit in one basket", () => {
+  const q = pricing.quote({ items: [{ id: "para", q: 1 }, { id: "para", q: 1, u: "12" }] }, config, P, at("10:00"));
+  assert.equal(q.lines.length, 2);
+});
+
+test("made-up units and wholesale prescription medicines are refused", () => {
+  const q = pricing.quote({ items: [{ id: "para", q: 1, u: "7" }, { id: "amox", q: 1, u: "12" }] }, config, P, at("10:00"));
+  assert.equal(q.lines.length, 0);
+  assert.equal(P.find(p => p.id === "amox").units.length, 1);
+});
+
+test("orders above the online limit are flagged", () => {
+  const cfg = structuredClone(config);
+  cfg.orders.maxOnlineTotal = 5000;
+  assert.equal(pricing.quote({ items: [{ id: "para", q: 5 }] }, cfg, P, at("10:00")).overLimit, true);
+  assert.equal(pricing.quote({ items: [{ id: "para", q: 1 }] }, cfg, P, at("10:00")).overLimit, false);
+});
+
+test("alcohol marks the order as 18+", () => {
+  assert.equal(pricing.quote({ items: [{ id: "lager", q: 1, u: "24" }] }, config, P, at("10:00")).age, 18);
+  assert.equal(pricing.quote({ items: [{ id: "milo", q: 1 }] }, config, P, at("10:00")).age, 0);
+});
+
+test("every product belongs to a department and has a valid single unit", () => {
+  for (const p of P) {
+    assert.ok(p.dept, p.id);
+    assert.equal(p.units[0].id, "1", p.id);
+    assert.equal(p.units[0].price, p.price, p.id);
+    for (const u of p.units.slice(1)) assert.ok(u.price < p.price * u.n, `${p.id} ${u.label} should cost less than singles`);
+  }
 });
 
 test("express delivery is offered only while the pharmacy is open", () => {

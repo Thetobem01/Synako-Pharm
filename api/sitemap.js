@@ -1,15 +1,16 @@
 import { site } from "./_lib/core.js";
 /* /sitemap.xml — every public page, built from the catalogue so new products appear automatically */
-const PAGES = ["about", "contact", "faq", "delivery", "returns", "privacy", "terms", "licences", "cookies", "careers"];
+const PAGES = ["about", "contact", "faq", "delivery", "returns", "privacy", "terms", "licences", "cookies", "careers", "wholesale"];
 const xmlEsc = s => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&apos;" }[c]));
 export default function handler(req, res) {
   const { config, P, CATS } = site();
   const base = String(config.site.url).replace(/\/$/, "");
   const paths = [
-    ["/", "1.0", "daily"], ["/products", "0.9", "daily"], ["/products/otc", "0.8", "daily"], ["/products/prescription", "0.8", "daily"],
+    ["/", "1.0", "daily"], ["/products", "0.9", "daily"], ["/products/prescription", "0.8", "daily"],
     ...CATS.map(c => [`/products/${c.id}`, "0.7", "weekly"]),
     ...P.map(p => [`/product/${p.id}`, "0.6", "weekly"]),
-    ["/prescriptions", "0.8", "monthly"], ["/controlled-medicines", "0.5", "monthly"],
+    ...["otc", "equipment", "surgical", "personal-care", "provisions", "wines", "bulk", "tablets", "liquids", "ointments"].map(f => [`/products/${f}`, "0.8", "daily"]),
+    ["/prescriptions", "0.8", "monthly"], ["/wholesale", "0.8", "monthly"], ["/controlled-medicines", "0.5", "monthly"],
     ...PAGES.map(pg => [`/${pg}`, "0.4", "monthly"])
   ];
   const body = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n` +

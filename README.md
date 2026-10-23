@@ -11,7 +11,7 @@ and run orders from the **Pharmacist Desk** at `/pharmacist`.
 |---|---|
 | Website (all pages, mobile menu, checkout, tracking, desk) | `index.html`, `css/`, `js/app.js` |
 | **Business details, hours, delivery rules and fees** | `js/config.js` ← edit this |
-| Products and prices | `js/data.js` |
+| Products, prices, departments and wholesale options | `js/data.js` |
 | Delivery options and totals (used by site *and* server) | `js/pricing.js` |
 | Order API (Vercel serverless functions) | `api/` |
 
@@ -113,6 +113,20 @@ superintendent pharmacist confirm each product's OTC / prescription-only classif
 - **Accessibility:** WCAG 2.2 AA colour contrast, keyboard navigation, skip link, labelled forms, screen-reader headings and reduced-motion support.
 - **Region settings:** language, currency, country and time zone live in `site` in `js/config.js`; prices and dates are formatted from them.
 
+## Departments, retail and wholesale
+
+The store has seven departments (`DEPTS` in `js/data.js`): Medicines (also browsable as tablets & capsules, syrups & liquids, creams & ointments), Prescription medicines, Medical equipment, Surgical supplies, Personal care, Provisions & beverages, and Wines & spirits. Each category in `CATS` belongs to one department.
+
+**Wholesale:** every product can be bought singly or in bulk units (dozen, carton, case, pack), each with its own price. The usual options per department are in `BULK` in `js/data.js`. A product can set its own with `bulk: [["Carton of 48", 48, 8]]` (label, how many, % off the single price), or `bulk: []` for single packs only. Bulk prices are rounded to the nearest ₦50, and the server recalculates every line, so prices can't be changed in the browser.
+
+- Prescription-only medicines are sold in single packs only (up to 10 per order). Licensed premises buy them in bulk through a trade quote.
+- Online orders are capped at `orders.maxOnlineTotal` in `js/config.js` (₦10,000,000). Anything larger is sent to the **trade quote** form on `/wholesale`, and those requests appear on the Pharmacist Desk under *Messages & bookings*.
+- Single packs go up to 50 per line, and bulk units up to 100 per line.
+
+**Wines & spirits:** visitors confirm they're 18 or over before the section opens, alcohol stays out of general product lists until they do, checkout requires a date of birth showing 18+, and the Pharmacist Desk flags every order with alcohol for a photo-ID check on delivery. **Before launch, confirm with your superintendent pharmacist and lawyer that selling alcohol fits your PCN premises registration and your state's liquor licensing rules**, and keep the drinks physically separate from the dispensary if required.
+
+**Prices for the new departments are placeholders**, like the rest of the catalogue. Brand names (Milo, Peak, Guinness and others) are listed as products you stock; replace or remove any you don't carry.
+
 ## Product photos
 
 Products show a drawn pack until you add a photo. Save it as `assets/products/<product id>.webp` (square, at least 800×800, white background), then add the id to the `PHOTOS` list at the top of `js/data.js`, e.g. `para: "webp",`.
@@ -129,8 +143,7 @@ The tests run automatically on GitHub for every pull request (`.github/workflows
 
 ## Fonts
 
-Taken from the Figma file: **DM Sans** (headings, navigation, buttons, body) and **Poppins**
-(top bar and product cards), both loaded from Google Fonts.
+**Inter** for all text (headings, navigation, buttons, body and prices, with tabular figures so amounts line up), loaded from Google Fonts. To change it, edit the Google Fonts link in `index.html` and `--font` in `css/styles.css`.
 
 ## Images to export from Figma
 

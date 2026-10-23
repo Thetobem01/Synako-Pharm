@@ -23,6 +23,7 @@ export default handle(async (req, res) => {
   const rxRequest = !!b.rxRequest;
   const q = pricing.quote({ items: b.items || [], state: delivery.state, speed: d.speed, rxRequest }, config, P);
   if (!q.lines.length && !rxRequest) throw fail(400, "Your basket is empty.");
+  if (q.overLimit) throw fail(400, `Orders above ${pricing.fmtMoney(q.maxTotal, config)} are handled as trade orders. Please request a quote on our Wholesale page and we'll confirm stock and delivery.`);
   const rx = rxRequest || q.lines.some(l => l.cls === "pom");
 
   let prescriber = null, file = null;
@@ -42,7 +43,8 @@ export default handle(async (req, res) => {
   const o = {
     id: newId(), createdAt: new Date(now).toISOString(), rx, rxRequest,
     status: rx ? "pending_review" : "awaiting_payment",
-    items: q.lines.map(({ id, name, qty, price, total, cls }) => ({ id, name, qty, price, total, cls })),
+    items: q.lines.map(({ id, unit, n, unitLabel, name, qty, price, total, cls, age }) => ({ id, unit, n, unitLabel, name, qty, price, total, cls, age })),
+    packs: q.packs, ageRestricted: q.age >= 18,
     subtotal: q.subtotal, deliveryFee: q.deliveryFee, total: q.total, priced: !rxRequest,
     delivery: Object.assign(delivery, { speed: q.speed, label: q.speedLabel }),
     customer, prescriber, hasFile: !!file, history: [], payment: { attempts: 0 }
@@ -50,6 +52,8 @@ export default handle(async (req, res) => {
   log(o, "Order placed");
   if (rx) log(o, "Prescription received · waiting for pharmacist review");
   if (q.big) log(o, "Order above the express limit · next-day delivery");
+  if (q.lines.some(l => l.n > 1)) log(o, `Wholesale quantities · ${q.packs} packs in total`, { internal: true });
+  if (q.age >= 18) log(o, "Contains alcohol · rider must check photo ID (18+) on delivery", { internal: true });
   await db.set("order:" + o.id, o);
   if (file) await db.set("rx:" + o.id, file);
   await db.index("orders", o.id, now);

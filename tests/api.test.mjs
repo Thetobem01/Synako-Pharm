@@ -58,6 +58,32 @@ test("an over-the-counter order is priced on the server and can be paid", async 
   assert.equal(again.json.order.status, "paid", "verifying twice is harmless");
 });
 
+test("a wholesale order keeps its units and alcohol is flagged for an ID check", async () => {
+  const placed = await api("orders", { body: { items: [{ id: "glove-nitrile", q: 2, u: "10" }, { id: "lager", q: 1, u: "24" }], customer, delivery, consent: true }, headers: ip(12) });
+  assert.equal(placed.status, 201);
+  const o = placed.json.order;
+  assert.equal(o.items[0].unit, "10");
+  assert.equal(o.items[0].qty, 2);
+  const token = (await api("staff/login", { body: { password: "desk" }, headers: ip(13) })).json.token;
+  const full = (await api(`staff/order?id=${o.id}`, { token })).json.order;
+  assert.equal(full.ageRestricted, true);
+  assert.equal(full.packs, 44);
+  assert.ok(full.history.some(h => /photo ID/.test(h.m)));
+});
+
+test("orders too large to pay online are sent to a trade quote", async () => {
+  const r = await api("orders", { body: { items: [{ id: "scale-hosp", q: 100, u: "5" }], customer, delivery, consent: true }, headers: ip(14) });
+  assert.equal(r.status, 400);
+  assert.match(r.json.error, /trade/);
+});
+
+test("trade quote requests need a business name and a product list", async () => {
+  assert.equal((await api("requests", { body: { type: "trade", name: "Ada", phone: "08031234567" }, headers: ip(15) })).status, 400);
+  const ok = await api("requests", { body: { type: "trade", name: "Ada", phone: "08031234567", business: "Ada Pharmacy", message: "Paracetamol × 20 cartons", state: "Kano" }, headers: ip(15) });
+  assert.equal(ok.status, 201);
+  assert.match(ok.json.id, /^TRD-/);
+});
+
 test("tracking needs the right phone digits and hides private details", async () => {
   const { json } = await api("orders", { body: { items: [{ id: "para", q: 1 }], customer, delivery, consent: true }, headers: ip(2) });
   const id = json.order.id;

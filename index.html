@@ -6,7 +6,7 @@
 <base href="/">
 <title>Synako Pharmacy · Your Pathway to Health and Wellness</title>
 <meta name="claude:viewport-fit-sides" content="cover">
-<meta name="description" content="Genuine NAFDAC-registered medicines from a registered Nigerian pharmacy. Shop over-the-counter products, send a prescription, talk to a pharmacist and get home delivery.">
+<meta name="description" content="Retail and wholesale pharmacy in Nigeria: genuine NAFDAC-registered medicines, medical equipment, surgical supplies, provisions and drinks. Buy single packs or in bulk, send a prescription and get delivery nationwide.">
 <meta name="color-scheme" content="light">
 <meta name="theme-color" content="#3362AB">
 <link rel="canonical" href="https://synakopharm.vercel.app/">
@@ -27,7 +27,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=Poppins:wght@500;600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700&display=swap">
 <link rel="stylesheet" href="css/styles.css">
 <script type="application/ld+json" id="ld-org">
 {"@context":"https://schema.org","@type":"Pharmacy","name":"Synako Pharmacy","url":"https://synakopharm.vercel.app/","logo":"https://synakopharm.vercel.app/assets/logo@2x.png","slogan":"Your Pathway to Health and Wellness","areaServed":"NG","currenciesAccepted":"NGN","paymentAccepted":"Card, Bank transfer, USSD"}
@@ -49,9 +49,9 @@
     <div class="wrap header-main">
       <a class="logo" href="/" data-link aria-label="Synako Pharmacy home"><img src="assets/logo@2x.png" alt="Synako Pharmacy" width="139" height="59"></a>
       <form class="search" id="search-form" role="search" action="/products">
-        <label for="q" class="sr">Search medicines and health products</label>
+        <label for="q" class="sr">Search the store</label>
         <svg class="search-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M20 20l-4.6-4.6"/></svg>
-        <input id="q" name="q" type="search" placeholder="Search medicines, vitamins and health products" autocomplete="off" enterkeyhint="search">
+        <input id="q" name="q" type="search" placeholder="Search medicines, equipment, provisions and more" autocomplete="off" enterkeyhint="search">
         <button class="btn btn-primary" type="submit">Search</button>
       </form>
       <div class="hicons">
@@ -72,15 +72,15 @@
     <nav class="nav" aria-label="Main">
       <div class="wrap nav-inner">
         <a href="/products" data-link>All products</a>
-        <a href="/products/otc" data-link>Over-the-counter</a>
-        <a href="/products/prescription" data-link>Prescription medicines</a>
-        <a href="/products/vitamins" data-link>Vitamins</a>
-        <a href="/products/devices" data-link>Health devices</a>
-        <a href="/products/family" data-link>Mother &amp; baby</a>
-        <a href="/controlled-medicines" data-link>Controlled medicines</a>
+        <a href="/products/otc" data-link>Medicines</a>
+        <a href="/products/prescription" data-link>Prescription</a>
+        <a href="/products/equipment" data-link>Medical equipment</a>
+        <a href="/products/surgical" data-link>Surgical supplies</a>
+        <a href="/products/provisions" data-link>Provisions</a>
+        <a href="/products/wines" data-link>Wines &amp; spirits</a>
         <span class="nav-sep" aria-hidden="true"></span>
+        <a href="/wholesale" data-link class="nav-ws">Wholesale</a>
         <a href="/contact" data-link>Talk to a pharmacist</a>
-        <a href="/about" data-link>About us</a>
       </div>
     </nav>
   </header>
@@ -98,9 +98,19 @@
       <div class="drawer-group">
         <p class="drawer-label">Shop</p>
         <a href="/products" data-link>All products</a>
-        <a href="/products/otc" data-link>Over-the-counter medicines</a>
+        <a href="/products/otc" data-link>Medicines</a>
         <a href="/products/prescription" data-link>Prescription medicines</a>
+        <a href="/products/equipment" data-link>Medical equipment</a>
+        <a href="/products/surgical" data-link>Surgical supplies</a>
+        <a href="/products/personal-care" data-link>Personal care</a>
+        <a href="/products/provisions" data-link>Provisions &amp; beverages</a>
+        <a href="/products/wines" data-link>Wines &amp; spirits <span class="drawer-note">18+</span></a>
         <a href="/controlled-medicines" data-link>Controlled medicines <span class="drawer-note">in store only</span></a>
+      </div>
+      <div class="drawer-group">
+        <p class="drawer-label">Wholesale</p>
+        <a href="/products/bulk" data-link>Bulk prices</a>
+        <a href="/wholesale" data-link>Request a trade quote</a>
       </div>
       <div class="drawer-group">
         <p class="drawer-label">Services</p>
@@ -140,6 +150,7 @@
       <div class="footer-links">
         <div><h2 class="fh2">Synako</h2><ul>
           <li><a href="/about" data-link>About us</a></li>
+          <li><a href="/wholesale" data-link>Wholesale</a></li>
           <li><a href="/careers" data-link>Careers</a></li>
           <li><a href="/licences" data-link>Our licences</a></li>
           <li><a href="/pharmacist" data-link>Pharmacist Desk</a></li>
@@ -163,7 +174,7 @@
       <ul class="paylist" aria-label="Payment methods"><li>Visa</li><li>Mastercard</li><li>Verve</li><li>Bank transfer</li><li>USSD</li></ul>
     </div></div>
     <div class="wrap"><div class="legal">
-      <p>Medicines are supplied to adults aged 18 and over, in Nigeria only. Prescription medicines are dispensed only against a valid prescription checked by our pharmacist. Controlled medicines are not sold online.</p>
+      <p>Medicines are supplied to adults aged 18 and over, in Nigeria only. Prescription medicines are dispensed only against a valid prescription checked by our pharmacist. Controlled medicines are not sold online. Alcoholic drinks are sold only to adults aged 18 and over, and ID is checked on delivery. Please drink responsibly.</p>
       <p>© <span id="year">2026</span> Synako Pharmacy. All rights reserved.</p>
     </div></div>
   </footer>

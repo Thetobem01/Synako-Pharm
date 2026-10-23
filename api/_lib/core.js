@@ -124,7 +124,7 @@ export const STATUS = {
   delivered: "Delivered",
   cancelled: "Cancelled"
 };
-/* What the customer may see: no date of birth, prescriber or health notes */
+/* What the customer may see: name and order, but no phone, email, address, date of birth, prescriber or health notes */
 export function publicOrder(o) {
   return {
     id: o.id, createdAt: o.createdAt, status: o.status, statusLabel: STATUS[o.status], rx: o.rx, rxRequest: o.rxRequest,
@@ -132,7 +132,11 @@ export function publicOrder(o) {
     delivery: { speed: o.delivery.speed, label: o.delivery.label, city: o.delivery.city, state: o.delivery.state },
     note: ["info_needed", "rejected"].includes(o.status) ? o.note || "" : "",
     canPay: ["awaiting_payment", "approved_awaiting_payment"].includes(o.status) && o.priced !== false,
-    history: o.history.filter(h => !h.internal).map(h => ({ t: h.t, m: h.m }))
+    history: o.history.filter(h => !h.internal).map(h => ({ t: h.t, m: h.m })),
+    customer: { name: o.customer.name },
+    payment: o.payment && o.payment.status === "paid"
+      ? { status: "paid", channel: o.payment.channel || "", reference: o.payment.reference || "", paidAt: o.payment.paidAt || "" }
+      : { status: "unpaid" }
   };
 }
 export function log(o, m, extra) { o.history.push(Object.assign({ t: new Date().toISOString(), m }, extra || {})); }

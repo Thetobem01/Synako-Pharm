@@ -24,7 +24,8 @@ export default handle(async (req, res) => {
   if (!delivery.state || !delivery.city || !delivery.addr) throw fail(400, "Please enter your full delivery address.");
 
   const rxRequest = !!b.rxRequest;
-  const q = pricing.quote({ items: b.items || [], state: delivery.state, city: delivery.city, speed: d.speed, rxRequest }, config, P);
+  const q = pricing.quote({ items: b.items || [], state: delivery.state, city: delivery.city, speed: d.speed, rxRequest, promo: clean(b.promo, 30) }, config, P);
+  if (b.promo && !q.promo) throw fail(400, q.promoError || "That code isn't valid.");
   if (q.unavailable.length) throw fail(409, `Sorry, ${q.unavailable.join(", ")} ${q.unavailable.length === 1 ? "is" : "are"} out of stock. Please remove ${q.unavailable.length === 1 ? "it" : "them"} from your basket.`);
   if (!q.lines.length && !rxRequest) throw fail(400, "Your basket is empty.");
   if (q.overLimit) throw fail(400, `Orders above ${pricing.fmtMoney(q.maxTotal, config)} are handled as trade orders. Please request a quote on our Wholesale page and we'll confirm stock and delivery.`);
@@ -49,7 +50,7 @@ export default handle(async (req, res) => {
     status: rx ? "pending_review" : "awaiting_payment",
     items: q.lines.map(({ id, unit, n, unitLabel, name, qty, price, total, cls, age }) => ({ id, unit, n, unitLabel, name, qty, price, total, cls, age })),
     packs: q.packs, ageRestricted: q.age >= 18,
-    subtotal: q.subtotal, deliveryFee: q.deliveryFee, total: q.total, priced: !rxRequest,
+    subtotal: q.subtotal, deliveryFee: q.deliveryFee, discount: q.discount || 0, promo: q.promo, total: q.total, priced: !rxRequest,
     delivery: Object.assign(delivery, { speed: q.speed, label: q.speedLabel }),
     customer, prescriber, hasFile: !!file, history: [], payment: { attempts: 0 }
   };

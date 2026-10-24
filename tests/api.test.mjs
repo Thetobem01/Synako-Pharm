@@ -77,6 +77,12 @@ test("a wholesale order keeps its units and alcohol is flagged for an ID check",
   assert.ok(full.history.some(h => /photo ID/.test(h.m)));
 });
 
+test("a made-up promo code is refused by the server", async () => {
+  const r = await api("orders", { body: { items: [{ id: "para", q: 1 }], customer, delivery, consent: true, promo: "FREEMONEY" }, headers: ip(26) });
+  assert.equal(r.status, 400);
+  assert.match(r.json.error, /isn't valid/);
+});
+
 test("orders too large to pay online are sent to a trade quote", async () => {
   const r = await api("orders", { body: { items: [{ id: "scale-hosp", q: 100, u: "5" }], customer, delivery, consent: true }, headers: ip(14) });
   assert.equal(r.status, 400);

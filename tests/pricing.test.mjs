@@ -119,6 +119,38 @@ test("the shipped delivery areas match the pharmacy in Okitipupa, Ondo State", (
   assert.deepEqual(list(config.delivery.expressCities), ["Okitipupa"]);
 });
 
+test("promo codes: percent or amount off, minimum spend, expiry, any letter case, never below zero", () => {
+  const cfg = structuredClone(config);
+  cfg.promos = { WELCOME10: { percent: 10, minSpend: 2000, expires: "2026-12-31" }, TAKE500: { amount: 500 }, BIG: { amount: 999999 }, SHIPFREE: { freeDelivery: true } };
+  const q = (promo, qty = 2, date = at("10:00")) => pricing.quote({ items: [{ id: "para", q: qty }], state: "Ondo", city: "Okitipupa", speed: "nextday", promo }, cfg, P, date);
+  const ten = q("welcome10");
+  assert.equal(ten.discount, para.price * 2 * 0.1);
+  assert.equal(ten.total, para.price * 2 * 0.9 + ten.deliveryFee);
+  assert.equal(ten.promo.code, "WELCOME10");
+  assert.match(q("WELCOME10", 1).promoError, /basket of/, "minimum spend");
+  assert.match(q("WELCOME10", 2, new Date("2027-01-02T10:00:00+01:00")).promoError, /expired/);
+  assert.equal(q("TAKE500").discount, 500);
+  assert.equal(q("BIG").total, q("BIG").deliveryFee, "discount stops at the subtotal");
+  assert.equal(q("SHIPFREE").deliveryFee, 0);
+  assert.equal(q("NOPE").discount, 0);
+  assert.match(q("NOPE").promoError, /isn't valid/);
+});
+
+test("free delivery over a set amount: local same-day or next-day only", () => {
+  const cfg = structuredClone(config);
+  cfg.delivery.freeDeliveryOver = para.price * 2;
+  const q = (qty, state, speed) => pricing.quote({ items: [{ id: "para", q: qty }], state, city: "Okitipupa", speed }, cfg, P, at("10:00"));
+  assert.equal(q(2, "Ondo", "nextday").deliveryFee, 0);
+  assert.equal(q(1, "Ondo", "nextday").deliveryFee, cfg.delivery.fees.nextDay, "below the threshold");
+  assert.equal(q(2, "Ondo", "express").deliveryFee, cfg.delivery.fees.express, "never for 30-minute delivery");
+  assert.equal(q(2, "Lagos", "states").deliveryFee, cfg.delivery.fees.otherStates, "never for other states");
+});
+
+test("promo codes and free delivery ship switched off", () => {
+  assert.equal(Object.keys(config.promos || {}).length, 0);
+  assert.equal(config.delivery.freeDeliveryOver, 0);
+});
+
 test("an empty basket has no delivery fee", () => {
   assert.equal(pricing.quote({ items: [] }, config, P, at("10:00")).total, 0);
 });

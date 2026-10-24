@@ -50,9 +50,16 @@
         nextDay: 1500,
         otherStates: 4000
       },
+      freeDeliveryOver: 0,        // ₦ — free same-day / next-day delivery in local states for baskets this size or more; 0 = off
       expressArea: "Okitipupa",   // where 30-minute delivery applies, in words shown to customers
       expressCities: ["Okitipupa"], // towns that get 30-minute delivery (matched to the customer's City / LGA); [] = every local town
       localStates: ["Ondo"]       // states that get same-day and next-day delivery; others get 2–4 working days. [] = all
+    },
+    /* Promo codes, checked on the server. Example (remove the // to switch it on):
+       WELCOME10: { percent: 10, minSpend: 5000, expires: "2026-12-31", label: "10% off your first order" },
+       ONDOFREE:  { freeDelivery: true, minSpend: 10000, label: "Free delivery" }, */
+    promos: {
+      // WELCOME10: { percent: 10, minSpend: 5000, expires: "2026-12-31", label: "10% off your first order" },
     },
     orders: {
       paused: "",                 // to stop online orders for a while, write the reason here, e.g. "We're closed for the public holiday and back on Tuesday." Leave "" to take orders.

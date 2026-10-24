@@ -163,7 +163,7 @@ export const STATUS = {
 export function publicOrder(o) {
   return {
     id: o.id, createdAt: o.createdAt, status: o.status, statusLabel: STATUS[o.status], rx: o.rx, rxRequest: o.rxRequest,
-    items: o.items, subtotal: o.subtotal, deliveryFee: o.deliveryFee, total: o.total, priced: o.priced !== false,
+    items: o.items, subtotal: o.subtotal, deliveryFee: o.deliveryFee, discount: o.discount || 0, promo: o.promo || null, total: o.total, priced: o.priced !== false,
     delivery: { speed: o.delivery.speed, label: o.delivery.label, city: o.delivery.city, state: o.delivery.state },
     note: ["info_needed", "rejected"].includes(o.status) ? o.note || "" : "",
     canPay: ["awaiting_payment", "approved_awaiting_payment"].includes(o.status) && o.priced !== false,

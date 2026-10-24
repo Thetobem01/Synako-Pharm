@@ -195,6 +195,7 @@ async function build(o, opts) {
   const tx = 330, top = y;
   const row = (l, v, o2) => { pg.text(tx + 12, y, l, { size: o2 && o2.size || 10, bold: o2 && o2.bold, color: o2 && o2.bold ? COL.ink : COL.body }); pg.text(X.amt, y, v, { size: o2 && o2.size || 10, bold: o2 && o2.bold, align: "right" }); y += o2 && o2.gap || 18; };
   row("Subtotal", money(o.subtotal));
+  if (o.discount) row(`Discount${o.promo ? ` (${o.promo.code})` : ""}`, "-" + money(o.discount));
   row(`Delivery`, money(o.deliveryFee));
   pg.text(tx + 12, y - 6, d.label || "", { size: 8, color: COL.muted }); y += 6;
   pg.rect(tx, y - 4, R - tx, 30, { fill: COL.brandLight, r: 4 }); y += 15;

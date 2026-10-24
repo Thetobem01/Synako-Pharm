@@ -278,6 +278,12 @@ form.f { display: grid; gap: var(--sp-4); }
 .desk-tools .linkbtn, .req-foot .btn { display: inline-flex; align-items: center; gap: .35rem; }
 .req-foot { display: flex; align-items: center; gap: .75rem; margin-top: .25rem; }
 .req.done { opacity: .7; }
+.promo { display: flex; gap: .5rem; }
+.promo input { flex: 1; min-width: 0; min-height: 38px; padding: .4rem .7rem; border: 1px solid var(--line-2); border-radius: var(--r-sm); font: inherit; text-transform: uppercase; }
+.promo-on { display: flex; justify-content: space-between; align-items: center; gap: .5rem; padding: .5rem .7rem; border-radius: var(--r-sm); background: var(--ok-bg); color: var(--ok); }
+.summary .r.ok .num { color: var(--ok); }
+.promo-on > span { display: flex; align-items: flex-start; gap: .4rem; min-width: 0; }
+.promo-on > span > .ic { flex: none; margin-top: .15rem; }
 .em-fix { font-size: var(--fs-sm); color: var(--warn); }
 .em-fix:empty { display: none; }
 .restock { display: flex; gap: .5rem; flex-wrap: wrap; }

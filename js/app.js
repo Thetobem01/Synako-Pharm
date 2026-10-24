@@ -631,17 +631,27 @@ function vControlled() {
 const lineKey = l => l.id + "|" + (l.u || "1");
 const items = () => S.cart.filter(l => prod(l.id) && PR.unitOf(prod(l.id), l.u)).map(l => Object.assign({}, l, { p: prod(l.id), unit: PR.unitOf(prod(l.id), l.u), key: lineKey(l) }));
 const hasRx = () => S.rxRequest || S.cart.some(l => prod(l.id) && prod(l.id).cls === "pom");
-const quoteNow = () => PR.quote({ items: S.cart, state: S.form.state, city: S.form.city, speed: S.form.speed, rxRequest: S.rxRequest }, CFG, P);
+const quoteNow = () => PR.quote({ items: S.cart, state: S.form.state, city: S.form.city, speed: S.form.speed, rxRequest: S.rxRequest, promo: S.form.promo }, CFG, P);
+const promosOn = () => Object.keys(CFG.promos || {}).length > 0;
+function promoBox(q) {
+  if (!promosOn()) return "";
+  if (q.promo) return `<div class="promo-on small"><span>${icon("check", "ic sm")}<span><b>${esc(q.promo.code)}</b> · ${esc(q.promo.label)}</span></span><button class="linkbtn" type="button" data-promo-remove>Remove</button></div>`;
+  return `<form class="promo" id="promoform" novalidate><label for="promo" class="sr">Promo code</label><input id="promo" name="promo" placeholder="Promo code" value="${esc(S.form.promo || "")}" autocapitalize="characters" autocomplete="off"><button class="btn btn-ghost btn-sm" type="submit">Apply</button></form>
+    ${S.form.promo && q.promoError ? `<p class="small" style="color:var(--bad)" role="alert">${esc(q.promoError)}</p>` : ""}`;
+}
 function summary(cta) {
   const q = quoteNow();
   return `<aside class="panel summary" aria-labelledby="sum-title"><h2 class="h3" id="sum-title">Order summary</h2>
     ${q.lines.map(l => `<div class="r small"><span>${l.qty} × ${esc(l.name)}</span><span class="num">${NGN(l.total)}</span></div>`).join("")}
     ${S.rxRequest ? `<div class="r small"><span>Prescription items</span><span class="muted">Priced by pharmacist</span></div>` : ""}
     <div class="r"><span>Subtotal</span><span class="num">${NGN(q.subtotal)}</span></div>
-    <div class="r"><span>Delivery <span class="muted small">(${esc(q.speedLabel)})</span></span><span class="num">${NGN(q.deliveryFee)}</span></div>
+    ${q.discount ? `<div class="r ok"><span>Discount <span class="muted small">(${esc(q.promo.code)})</span></span><span class="num">−${NGN(q.discount)}</span></div>` : ""}
+    <div class="r"><span>Delivery <span class="muted small">(${esc(q.speedLabel)})</span></span><span class="num">${q.deliveryFee === 0 && (q.lines.length || S.rxRequest) ? "Free" : NGN(q.deliveryFee)}</span></div>
+    ${q.freeOver && !q.freeDelivery && q.subtotal < q.freeOver && q.speed !== "states" ? `<p class="small muted">Add ${NGN(q.freeOver - q.subtotal)} more for free delivery${esc(sameDayWhere)}.</p>` : ""}
     <div class="r total"><span>Total</span><span class="num">${NGN(q.total)}${S.rxRequest ? "+" : ""}</span></div>
     ${q.big ? `<div class="notice info small"><b>Next-day delivery</b><span>Orders above ${threshold} are delivered the next day.</span></div>` : ""}
     ${CFG.orders && has(CFG.orders.paused) ? `<div class="notice info small"><b>Online ordering is paused</b><span>${esc(CFG.orders.paused)}</span></div>` : ""}
+    ${promoBox(q)}
     ${q.unavailable.length ? `<div class="notice bad small"><b>Out of stock</b><span>${esc(q.unavailable.join(", "))} can't be ordered right now. Please remove ${q.unavailable.length === 1 ? "it" : "them"} to continue.</span></div>` : ""}
     ${q.overLimit ? `<div class="notice bad small"><b>Too large to pay online</b><span>Orders above ${NGN(q.maxTotal)} are handled as trade orders. ${link("/wholesale", "Request a trade quote", "linkbtn")} and we'll confirm stock and delivery.</span></div>` : ""}
     ${q.age >= 18 ? `<div class="notice rx small"><b>Contains alcohol</b><span>Our rider will check photo ID on delivery. We can't hand alcohol to anyone under 18.</span></div>` : ""}
@@ -800,7 +810,8 @@ function vTrack() {
         <ol class="timeline">${st.map((s, i) => { const c = i < stage ? "done" : (i === stage && !bad && !final ? "now" : "next"); return `<li class="${c}"><span class="dot ${c}" aria-hidden="true">${i < stage ? "✓" : i + 1}</span><div><b>${s}</b>${c === "now" ? `<div class="small muted">In progress</div>` : ""}<span class="sr">${c === "done" ? " (done)" : c === "now" ? " (current step)" : ""}</span></div></li>`; }).join("")}</ol>
         <details class="facts"><summary>Order details</summary>
           <div class="small" style="display:grid;gap:.35rem;margin-top:.6rem">${o.items.map(i => `<div class="r"><span>${i.qty} × ${esc(i.name)}</span><span class="num">${NGN(i.total)}</span></div>`).join("")}
-          <div class="r"><span>Delivery · ${esc(o.delivery.label)}</span><span class="num">${NGN(o.deliveryFee)}</span></div><div class="r"><b>Total</b><b class="num">${NGN(o.total)}${o.priced ? "" : "+"}</b></div></div></details>
+          ${o.discount ? `<div class="r"><span>Discount${o.promo ? ` (${esc(o.promo.code)})` : ""}</span><span class="num">−${NGN(o.discount)}</span></div>` : ""}
+          <div class="r"><span>Delivery · ${esc(o.delivery.label)}</span><span class="num">${o.deliveryFee ? NGN(o.deliveryFee) : "Free"}</span></div><div class="r"><b>Total</b><b class="num">${NGN(o.total)}${o.priced ? "" : "+"}</b></div></div></details>
         <div class="order-actions"><button class="btn ${o.canPay ? "btn-secondary" : "btn-primary"}" type="button" data-receipt>${icon("download", "ic sm")} ${PAID(o.status) ? "Download receipt (PDF)" : "Download order summary (PDF)"}</button>${o.items.some(i => prod(i.id)) ? `<button class="btn btn-secondary" type="button" data-reorder>${icon("box", "ic sm")} Order these items again</button>` : ""}</div>
         <div><h3 style="margin-bottom:.5rem">Order record</h3><div class="audit">${o.history.slice().reverse().map(l => `<div><span>${stamp(l.t)}</span><b style="font-weight:500">${esc(l.m)}</b></div>`).join("")}</div></div>
         ${final ? "" : `<p class="small muted">Questions? ${contactLine()}.</p>`}`}
@@ -1048,7 +1059,7 @@ function deskDetail() {
         <dl class="kv"><dt>Customer</dt><dd>${esc(o.customer.name)}</dd><dt>Phone</dt><dd><a href="tel:${esc(o.customer.phone)}">${esc(o.customer.phone)}</a></dd><dt>Email</dt><dd>${esc(o.customer.email)}</dd>${o.customer.dob ? `<dt>Date of birth</dt><dd>${esc(o.customer.dob)}</dd>` : ""}
           <dt>Deliver to</dt><dd>${esc([o.delivery.addr, o.delivery.landmark, o.delivery.city, o.delivery.state].filter(has).join(", "))}</dd>${has(o.delivery.note) ? `<dt>Customer note</dt><dd><b>${esc(o.delivery.note)}</b></dd>` : ""}</dl>
         <div class="small" style="display:grid;gap:.3rem">${o.items.map(i => `<div class="r"><span>${i.qty} × ${esc(i.name)} ${i.cls === "pom" ? `<span class="tag rx">POM</span>` : ""}${i.age ? `<span class="tag age">18+ ID</span>` : ""}${i.n > 1 ? `<span class="muted"> (${i.qty * i.n} packs)</span>` : ""}</span><span class="num">${NGN(i.total)}</span></div>`).join("")}
-          <div class="r"><span>Delivery</span><span class="num">${NGN(o.deliveryFee)}</span></div><div class="r"><b>Total</b><b class="num">${o.priced === false ? "to price" : NGN(o.total)}</b></div></div>
+          ${o.discount ? `<div class="r"><span>Discount${o.promo ? ` (${esc(o.promo.code)})` : ""}</span><span class="num">−${NGN(o.discount)}</span></div>` : ""}<div class="r"><span>Delivery</span><span class="num">${NGN(o.deliveryFee)}</span></div><div class="r"><b>Total</b><b class="num">${o.priced === false ? "to price" : NGN(o.total)}</b></div></div>
       </div>
       ${o.rx ? `<div style="display:grid;gap:.8rem;align-content:start">
         <h3 class="h4">Prescription</h3>${fileView}
@@ -1459,6 +1470,7 @@ document.addEventListener("click", e => {
   if ("dreceipt" in d) { if (S.staff.detail) downloadReceipt(S.staff.detail, t); return; }
   if (d.req) { markRequest(d.req, d.st); return; }
   if ("testmail" in d) { testEmail(t); return; }
+  if ("promoRemove" in d) { S.form.promo = ""; render(); return; }
   if (d.emfix) { const i = $("#em"); i.value = d.emfix; showEmailFix(); i.focus(); return; }
   if (d.stock) { setStock(d.stock, !!d.out, t); return; }
   if (d.age === "yes") { S.age18 = true; store.set("synako.age18", true); render(); return; }
@@ -1546,6 +1558,7 @@ document.addEventListener("submit", async e => {
     catch (er) { S.staff.err = er.message; render(); }
     return;
   }
+  if (f.id === "promoform") { S.form.promo = f.promo.value.trim().toUpperCase(); render(); const q = quoteNow(); toast(q.promo ? `${q.promo.code} applied: ${q.promo.label}.` : q.promoError || "Enter a code."); return; }
   if (f.id === "restockform") {
     if (!f.reportValidity()) return;
     const data = Object.fromEntries(new FormData(f).entries()); data.type = "restock";
@@ -1587,7 +1600,7 @@ async function placeOrder() {
   const payload = {
     items: S.cart.map(l => ({ id: l.id, q: l.q })), rxRequest: S.rxRequest, consent: !!F.consent,
     customer: { name: F.name, phone: F.phone, email: F.email, dob: F.dob },
-    delivery: { state: F.state, city: F.city, addr: F.addr, landmark: F.landmark, note: F.note, speed: F.speed },
+    delivery: { state: F.state, city: F.city, addr: F.addr, landmark: F.landmark, note: F.note, speed: F.speed }, promo: F.promo || "",
     prescription: rx ? { pname: F.pname, preg: F.preg, pphone: F.pphone, pclinic: F.pclinic, pdate: F.pdate, allergies: F.allergies, file: F.rxfile } : undefined
   };
   S.busy = true; S.error = ""; render();

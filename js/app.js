@@ -1002,7 +1002,10 @@ function vStaff() {
   const tabs = [["review", "To review"], ["pack", "To pack & deliver"], ["pay", "Awaiting payment"], ["done", "Completed"], ["requests", "Messages & bookings"], ["stock", "Stock"]];
   if (d.out) applyStock(d.out);
   const list = ["requests", "stock"].includes(st.tab) ? null : groups[st.tab];
-  $("#staff-stats").innerHTML = `<div><b>${groups.review.length}</b>To review</div><div><b>${groups.pack.length}</b>To pack</div><div><b>${groups.pay.length}</b>Awaiting payment</div>`;
+  const day = t => new Date(t).toLocaleDateString("en-CA", { timeZone: CFG.site.timezone }), today = day(Date.now());
+  const paidToday = d.orders.filter(o => PAID(o.status) && day(o.createdAt) === today);
+  const takings = paidToday.reduce((t, o) => t + (Number(o.total) || 0), 0);
+  $("#staff-stats").innerHTML = `<div><b>${groups.review.length}</b>To review</div><div><b>${groups.pack.length}</b>To pack</div><div><b>${groups.pay.length}</b>Awaiting payment</div><div title="Paid orders placed today"><b>${NGN(takings)}</b>Today · ${paidToday.length} paid</div>`;
   return `<div class="desk-top">
       <div class="desk-tabs" role="tablist" aria-label="Desk sections">${tabs.map(([k, l]) => `<button type="button" role="tab" data-dtab="${k}" aria-selected="${st.tab === k}">${l}${k === "requests" ? ` <span class="count">${d.requests.filter(r => r.status === "new").length}</span>` : k === "stock" ? ` <span class="count">${P.filter(p => p.out).length} out</span>` : ` <span class="count">${groups[k].length}</span>`}</button>`).join("")}</div>
       <div class="desk-tools"><button class="linkbtn" type="button" data-csv>${icon("download", "ic sm")} Download orders (CSV)</button><button class="linkbtn" type="button" data-testmail>${icon("chat", "ic sm")} Send test email</button><p class="small muted" role="status">Updates every 10 seconds${st.updated ? ` · last ${st.updated.toLocaleTimeString("en-GB")}` : ""}</p></div></div>

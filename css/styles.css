@@ -282,10 +282,11 @@ form.f { display: grid; gap: var(--sp-4); }
 .em-fix:empty { display: none; }
 .restock { display: flex; gap: .5rem; flex-wrap: wrap; }
 .restock input { flex: 1 1 220px; min-height: 44px; padding: .55rem .8rem; border: 1px solid var(--line-2); border-radius: var(--r-sm); font: inherit; }
-.stock { display: grid; gap: var(--sp-4); }
+.stock { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--sp-4); }
+.stock-head > div { flex: 1 1 280px; min-width: 0; }
 .stock-head { display: flex; gap: var(--sp-4); justify-content: space-between; align-items: flex-end; flex-wrap: wrap; }
 .stock-head p { max-width: 46em; margin-top: .25rem; }
-.stock-head input { min-width: 240px; min-height: 40px; padding: .45rem .75rem; border: 1px solid var(--line-2); border-radius: var(--r-sm); font: inherit; }
+.stock-head input { flex: 1 1 200px; min-width: 0; min-height: 40px; padding: .45rem .75rem; border: 1px solid var(--line-2); border-radius: var(--r-sm); font: inherit; }
 .stock-row { display: flex; justify-content: space-between; align-items: center; gap: 1rem; padding: .6rem 0; border-bottom: 1px solid var(--line); }
 .stock-row > span { display: grid; min-width: 0; }
 .stock-row.out b { color: var(--bad); }

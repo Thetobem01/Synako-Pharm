@@ -278,6 +278,15 @@ form.f { display: grid; gap: var(--sp-4); }
 .desk-tools .linkbtn, .req-foot .btn { display: inline-flex; align-items: center; gap: .35rem; }
 .req-foot { display: flex; align-items: center; gap: .75rem; margin-top: .25rem; }
 .req.done { opacity: .7; }
+.restock { display: flex; gap: .5rem; flex-wrap: wrap; }
+.restock input { flex: 1 1 220px; min-height: 44px; padding: .55rem .8rem; border: 1px solid var(--line-2); border-radius: var(--r-sm); font: inherit; }
+.stock { display: grid; gap: var(--sp-4); }
+.stock-head { display: flex; gap: var(--sp-4); justify-content: space-between; align-items: flex-end; flex-wrap: wrap; }
+.stock-head p { max-width: 46em; margin-top: .25rem; }
+.stock-head input { min-width: 240px; min-height: 40px; padding: .45rem .75rem; border: 1px solid var(--line-2); border-radius: var(--r-sm); font: inherit; }
+.stock-row { display: flex; justify-content: space-between; align-items: center; gap: 1rem; padding: .6rem 0; border-bottom: 1px solid var(--line); }
+.stock-row > span { display: grid; min-width: 0; }
+.stock-row.out b { color: var(--bad); }
 .desk-print { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: .5rem; margin: -.25rem 0 .25rem; }
 .order-actions { display: flex; flex-wrap: wrap; gap: .6rem; }
 .order-actions .btn, .desk-print .btn { display: inline-flex; align-items: center; gap: .4rem; }

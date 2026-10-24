@@ -31,6 +31,9 @@ function doseOf(p) {
   return "";
 }
 const isBulk = p => p.units && p.units.length > 1;
+/* Out of stock: out: true in js/data.js, plus whatever the pharmacy marks on the desk (sent with /api/health) */
+P.forEach(p => { p.outInData = !!p.out; });
+function applyStock(ids) { const set = new Set(ids || []); P.forEach(p => { p.out = p.outInData || set.has(p.id); }); }
 
 /* ---------- Search: ranks by name, then generic, brand and category; understands common brand names ---------- */
 const norm = t => String(t || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9%./+ ]+/g, " ").replace(/\s+/g, " ").trim();
@@ -557,7 +560,10 @@ function vProduct() {
       ${rx ? `<div class="notice rx"><b>Prescription required</b><span>Add it to your basket, then upload your prescription at checkout. Our pharmacist checks it before you pay, and we only supply it if the prescription is valid.</span></div>`
         : p.age ? `<div class="notice rx"><b>${p.age}+ only</b><span>We confirm your date of birth at checkout, and our rider checks photo ID on delivery. Please drink responsibly.</span></div>`
         : med ? `<div class="notice info"><b>Over-the-counter</b><span>Our pharmacist may contact you before sending it if they need to check it's right for you.</span></div>` : ""}
-      ${p.out ? `<div class="notice bad"><b>Out of stock</b><span>We're restocking this item. ${link("/contact", "Ask us", "linkbtn")} when it'll be back, or ask our pharmacist for an alternative.</span></div>` : ""}
+      ${p.out ? `<div class="notice bad"><b>Out of stock</b><span>We're restocking this item. Leave your phone number or email and we'll tell you as soon as it's back, or ${link("/contact", "ask our pharmacist", "linkbtn")} for an alternative.</span></div>
+        <form class="restock" id="restockform" novalidate><input type="hidden" name="product" value="${esc(p.id)}"><div class="hp" aria-hidden="true"><label>Leave this empty<input name="website" tabindex="-1" autocomplete="off"></label></div>
+          <label for="rsc" class="sr">Phone number or email</label><input id="rsc" name="contact" required placeholder="Phone number or email" autocomplete="email">
+          <button class="btn btn-primary" type="submit">Tell me when it's back</button></form>` : ""}
       ${p.out ? "" : unitPicker(p)}
       ${p.out ? "" : `<div class="buy">
         <div class="qty" role="group" aria-label="Quantity"><button type="button" data-qty="-1" aria-label="Decrease quantity">−</button><span class="num" id="qty-val" aria-live="polite">${S.qty}</span><button type="button" data-qty="1" aria-label="Increase quantity">+</button></div>
@@ -993,17 +999,18 @@ function vStaff() {
     pay: d.orders.filter(o => ["awaiting_payment", "approved_awaiting_payment"].includes(o.status)),
     done: d.orders.filter(o => ["delivered", "rejected", "cancelled"].includes(o.status))
   };
-  const tabs = [["review", "To review"], ["pack", "To pack & deliver"], ["pay", "Awaiting payment"], ["done", "Completed"], ["requests", "Messages & bookings"]];
-  const list = st.tab === "requests" ? null : groups[st.tab];
+  const tabs = [["review", "To review"], ["pack", "To pack & deliver"], ["pay", "Awaiting payment"], ["done", "Completed"], ["requests", "Messages & bookings"], ["stock", "Stock"]];
+  if (d.out) applyStock(d.out);
+  const list = ["requests", "stock"].includes(st.tab) ? null : groups[st.tab];
   $("#staff-stats").innerHTML = `<div><b>${groups.review.length}</b>To review</div><div><b>${groups.pack.length}</b>To pack</div><div><b>${groups.pay.length}</b>Awaiting payment</div>`;
   return `<div class="desk-top">
-      <div class="desk-tabs" role="tablist" aria-label="Desk sections">${tabs.map(([k, l]) => `<button type="button" role="tab" data-dtab="${k}" aria-selected="${st.tab === k}">${l}${k === "requests" ? ` <span class="count">${d.requests.filter(r => r.status === "new").length}</span>` : ` <span class="count">${groups[k].length}</span>`}</button>`).join("")}</div>
+      <div class="desk-tabs" role="tablist" aria-label="Desk sections">${tabs.map(([k, l]) => `<button type="button" role="tab" data-dtab="${k}" aria-selected="${st.tab === k}">${l}${k === "requests" ? ` <span class="count">${d.requests.filter(r => r.status === "new").length}</span>` : k === "stock" ? ` <span class="count">${P.filter(p => p.out).length} out</span>` : ` <span class="count">${groups[k].length}</span>`}</button>`).join("")}</div>
       <div class="desk-tools"><button class="linkbtn" type="button" data-csv>${icon("download", "ic sm")} Download orders (CSV)</button><button class="linkbtn" type="button" data-testmail>${icon("chat", "ic sm")} Send test email</button><p class="small muted" role="status">Updates every 10 seconds${st.updated ? ` · last ${st.updated.toLocaleTimeString("en-GB")}` : ""}</p></div></div>
     ${st.err ? alertBox(st.err) : ""}
     ${st.mail ? `<div class="notice ${/NOT sent/.test(st.mail) ? "bad" : "info"} small" role="status"><span>${esc(st.mail)}</span></div>` : ""}
     ${d.missing && d.missing.length ? `<details class="setup"><summary><b>${d.missing.length} site details still missing</b> · customers can't see these yet</summary><p class="small">Add them in <code>js/config.js</code>: ${d.missing.map(esc).join(", ")}.</p></details>` : ""}
     ${d.setup && d.setup.length ? `<details class="setup"><summary><b>${d.setup.length} hosting setting${d.setup.length === 1 ? "" : "s"} to add</b> · in Vercel, Settings → Environment Variables</summary><p class="small">${d.setup.map(esc).join(", ")}. See the README for what each one does.</p></details>` : ""}
-    ${st.tab === "requests" ? `<div class="requests">${d.requests.length ? d.requests.slice().sort((a, b) => (a.status === "done") - (b.status === "done")).map(r => `<article class="panel req${r.status === "done" ? " done" : ""}"><div class="top"><b>${{ appointment: "Consultation booking", message: "Message", careers: "Careers interest", trade: "Wholesale quote request" }[r.type]}</b><span class="small muted">${stamp(r.createdAt)}</span></div>
+    ${st.tab === "stock" ? stockPanel() : st.tab === "requests" ? `<div class="requests">${d.requests.length ? d.requests.slice().sort((a, b) => (a.status === "done") - (b.status === "done")).map(r => `<article class="panel req${r.status === "done" ? " done" : ""}"><div class="top"><b>${{ appointment: "Consultation booking", message: "Message", careers: "Careers interest", trade: "Wholesale quote request", restock: "Back-in-stock request" }[r.type]}</b><span class="small muted">${stamp(r.createdAt)}</span></div>
         <div class="small"><b>${esc(r.name)}</b> · ${r.phone ? `<a href="tel:${esc(r.phone)}">${esc(r.phone)}</a>` : ""} ${esc(r.email || "")}</div>
         ${r.type === "appointment" ? `<div class="small">Wants: <b>${esc(r.date)} at ${esc(PR.fmt12(r.time || "00:00"))}</b></div>` : ""}${r.topic ? `<div class="small">${esc(r.topic)}</div>` : ""}${r.role ? `<div class="small">${esc(r.role)} ${r.pcn ? `· PCN ${esc(r.pcn)}` : ""}</div>` : ""}${r.business ? `<div class="small"><b>${esc(r.business)}</b>${r.bizType ? ` · ${esc(r.bizType)}` : ""}${r.state ? ` · ${esc(r.state)}` : ""}${r.pcn && !r.role ? ` · Licence ${esc(r.pcn)}` : ""}</div>` : ""}
         ${r.message ? `<p class="small" style="white-space:pre-line">${esc(r.message)}</p>` : ""}
@@ -1301,7 +1308,10 @@ function moveSuggest(d) {
   else input.removeAttribute("aria-activedescendant");
 }
 let sgTimer;
-document.addEventListener("input", e => { if (e.target.id === "q") { clearTimeout(sgTimer); sgTimer = setTimeout(openSuggest, 60); } });
+document.addEventListener("input", e => {
+  if (e.target.id === "q") { clearTimeout(sgTimer); sgTimer = setTimeout(openSuggest, 60); }
+  if (e.target.id === "stockq") { S.staff.stockQ = e.target.value; const l = $("#stocklist"); if (l) l.innerHTML = stockRows(); }
+});
 document.addEventListener("focusin", e => { if (e.target.id === "q") openSuggest(); });
 document.addEventListener("focusout", e => { if (e.target.closest && e.target.closest("#search-form")) setTimeout(() => { if (!document.activeElement || !document.activeElement.closest("#search-form")) closeSuggest(); }, 120); });
 document.addEventListener("keydown", e => {
@@ -1348,6 +1358,31 @@ function reorder() {
   saveCart();
   toast(added ? `Added ${added} item${added === 1 ? "" : "s"} to your basket${skipped ? `. ${skipped} couldn't be added (out of stock or unavailable)` : ""}.` : "These items can't be ordered again right now.");
   if (added) go("/basket");
+}
+/* Desk: stock list with search; one click marks a product out of stock or back in stock */
+function stockRows() {
+  const q = norm(S.staff.stockQ || "");
+  const list = P.filter(p => !q || norm([p.name, p.generic, p.brand, cat(p.cat).name].join(" ")).includes(q))
+    .sort((a, b) => (b.out - a.out) || a.name.localeCompare(b.name)).slice(0, 80);
+  const waiting = id => (S.staff.list.requests || []).filter(r => r.type === "restock" && r.product === id && r.status === "new").length;
+  return list.length ? list.map(p => `<div class="stock-row${p.out ? " out" : ""}"><span><b>${esc(p.name)}</b><span class="small muted">${esc(p.pack)} · ${esc(dept(p.dept).short)}${waiting(p.id) ? ` · <b>${waiting(p.id)} waiting</b>` : ""}</span></span>
+    ${p.outInData ? `<span class="small muted">Out in js/data.js</span>` : `<button class="btn btn-sm ${p.out ? "btn-primary" : "btn-ghost"}" type="button" data-stock="${esc(p.id)}" data-out="${p.out ? "" : "1"}">${p.out ? "Mark back in stock" : "Mark out of stock"}</button>`}</div>`).join("")
+    : `<p class="muted small">No products match.</p>`;
+}
+function stockPanel() {
+  return `<section class="panel stock"><div class="stock-head"><div><h2 class="h3">Stock</h2><p class="small muted">Out-of-stock products stay on the shop but can't be ordered. When you mark one back in stock, customers who asked by email are told automatically; phone requests stay under Messages for you to call.</p></div>
+    <label for="stockq" class="sr">Search products</label><input id="stockq" type="search" placeholder="Search products" value="${esc(S.staff.stockQ || "")}" autocomplete="off"></div>
+    <div id="stocklist">${stockRows()}</div></section>`;
+}
+async function setStock(id, out, btn) {
+  btn.disabled = true;
+  try {
+    const r = DEMO ? { out: P.filter(p => p.id === id ? out : p.out && !p.outInData).map(p => p.id), told: 0 } : await call("staff/orders", { method: "POST", body: { action: "stock", id, out, by: S.staff.name }, token: S.staff.token });
+    applyStock(r.out); if (S.staff.list) S.staff.list.out = r.out;
+    toast(out ? `${prod(id).name} marked out of stock.` : `${prod(id).name} is back in stock${r.told ? `. ${r.told} customer${r.told === 1 ? "" : "s"} emailed` : ""}.`);
+    if (!out && r.told) await loadDesk(true);
+  } catch (e) { if (e.status === 401) return signOut(); toast(e.message); }
+  render();
 }
 async function testEmail(btn) {
   btn.disabled = true;
@@ -1398,6 +1433,7 @@ document.addEventListener("click", e => {
   if ("dreceipt" in d) { if (S.staff.detail) downloadReceipt(S.staff.detail, t); return; }
   if (d.req) { markRequest(d.req, d.st); return; }
   if ("testmail" in d) { testEmail(t); return; }
+  if (d.stock) { setStock(d.stock, !!d.out, t); return; }
   if (d.age === "yes") { S.age18 = true; store.set("synako.age18", true); render(); return; }
   if ("rxreq" in d) { S.rxRequest = true; S.step = 1; go("/checkout"); toast("Prescription request started."); return; }
   if ("rxreqRemove" in d) { S.rxRequest = false; render(); return; }
@@ -1483,6 +1519,14 @@ document.addEventListener("submit", async e => {
     catch (er) { S.staff.err = er.message; render(); }
     return;
   }
+  if (f.id === "restockform") {
+    if (!f.reportValidity()) return;
+    const data = Object.fromEntries(new FormData(f).entries()); data.type = "restock";
+    const btn = f.querySelector("[type=submit]"); btn.disabled = true;
+    try { await api.request(data); f.reset(); toast("Thanks. We'll let you know as soon as it's back in stock."); }
+    catch (er) { toast(er.message); }
+    btn.disabled = false; return;
+  }
   if (["contactform", "apptform", "careersform", "tradeform"].includes(f.id)) {
     if (!f.reportValidity()) return;
     if (f.id === "apptform") { const day = new Date(f.date.value + "T12:00:00").getDay(); if (!H.open[day]) { f.date.setCustomValidity("We're closed that day. Please choose Monday to Saturday."); f.reportValidity(); f.date.setCustomValidity(""); return; } }
@@ -1534,7 +1578,7 @@ async function placeOrder() {
   go("/track/" + order.id);
 }
 
-checkLive().then(() => { if (S.view === "checkout") render(); });
+checkLive().then(() => { applyStock(LIVE.out); render(); });
 renderShell();
 try { const q0 = new URLSearchParams(location.search).get("q"); if (q0) { S.q = q0.slice(0, 80); $("#q").value = S.q; } } catch (e) { /* no query */ }
 go(MEMORY ? "/" : location.pathname, { replace: true });

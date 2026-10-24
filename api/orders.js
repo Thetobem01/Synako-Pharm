@@ -1,4 +1,4 @@
-import { handle, only, send, body, fail, site, db, newId, digits, log, publicOrder, storageReady, limit, notifyCustomer, notifyStaff } from "./_lib/core.js";
+import { handle, only, send, body, fail, site, db, newId, digits, log, publicOrder, storageReady, limit, notifyCustomer, notifyStaff, catalogueNow } from "./_lib/core.js";
 
 const MAX_FILE = 900 * 1024; // bytes of base64 text; images are compressed in the browser first
 const clean = (s, n = 200) => String(s == null ? "" : s).trim().slice(0, n);
@@ -11,7 +11,8 @@ export default handle(async (req, res) => {
   if (paused) throw fail(503, `Online ordering is paused. ${paused}`);
   await limit(req, "orders", 10, 3600, "You've placed several orders in a short time. Please call the pharmacy if you need to place more.");
   const b = await body(req);
-  const { config, P, pricing } = site();
+  const { config, pricing } = site();
+  const P = await catalogueNow();
 
   const c = b.customer || {}, d = b.delivery || {};
   const customer = { name: clean(c.name, 80), phone: clean(c.phone, 20), email: clean(c.email, 120), dob: clean(c.dob, 10) };

@@ -61,6 +61,17 @@ export const db = {
   async latest(list, n) { return (await redis(["ZREVRANGE", list, "0", String(n - 1)])) || []; }
 };
 
+/* ---------- Stock set from the Pharmacist Desk (on top of out: true in js/data.js) ---------- */
+export async function outOfStock() {
+  if (!storageReady()) return new Set();
+  try { return new Set((await db.get("stock:out")) || []); } catch (e) { console.error("Stock list unavailable", e); return new Set(); }
+}
+/* The catalogue with the desk's out-of-stock marks applied, for pricing one request (never changes the shared copy) */
+export async function catalogueNow() {
+  const out = await outOfStock(), { P } = site();
+  return out.size ? P.map(p => out.has(p.id) ? Object.assign({}, p, { out: true }) : p) : P;
+}
+
 /* ---------- Rate limits (per visitor IP; the window starts at their first attempt) ---------- */
 export function clientIp(req) {
   const h = req.headers || {};

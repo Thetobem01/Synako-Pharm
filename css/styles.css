@@ -775,3 +775,10 @@ form.f { display: grid; gap: var(--sp-4); }
 .queue-tools input, .queue-tools select { width: 100%; min-width: 0; min-height: 40px; padding: .4rem .65rem; border: 1px solid var(--line-2); border-radius: var(--r-sm); background: var(--surface); font: inherit; font-size: var(--fs-sm); }
 .queue-selects { display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: var(--sp-2); }
 @media print { .queue-tools, .staff-link { display: none !important; } }
+/* Desk header on phones: four compact figures in one row */
+@media (max-width: 560px) {
+  .staff-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--sp-2); font-size: var(--fs-xs); line-height: 1.25; }
+  .staff-stats b { font-size: var(--fs-lg); }
+  .staff-stats > div:last-child b { font-size: var(--fs-md); }
+}
+.setup .linkbtn { margin-top: .4rem; font-size: var(--fs-sm); }

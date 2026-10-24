@@ -19,9 +19,17 @@ export function site() {
   return cache;
 }
 
+/* A hosting setting by name. Vercel Marketplace connections may add a prefix of the owner's choosing
+   (e.g. storage_KV_REST_API_URL, messaging_RESEND_API_KEY), so a prefixed copy is accepted too. */
+export function setting(...names) {
+  for (const n of names) if (process.env[n]) return process.env[n];
+  for (const n of names) { const k = Object.keys(process.env).find(key => key.endsWith("_" + n) && process.env[key]); if (k) return process.env[k]; }
+  return "";
+}
+
 /* ---------- Storage: Upstash Redis over REST (Vercel Marketplace "Upstash for Redis") ---------- */
-const REDIS_URL = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL || "";
-const REDIS_TOKEN = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN || "";
+const REDIS_URL = setting("KV_REST_API_URL", "UPSTASH_REDIS_REST_URL");
+const REDIS_TOKEN = setting("KV_REST_API_TOKEN", "UPSTASH_REDIS_REST_TOKEN");
 const DEV = process.env.SYNAKO_DEV === "1";
 const mem = globalThis.__synakoMem || (globalThis.__synakoMem = { kv: new Map(), z: new Map() });
 
@@ -154,7 +162,10 @@ export function publicOrder(o) {
 export function log(o, m, extra) { o.history.push(Object.assign({ t: new Date().toISOString(), m }, extra || {})); }
 
 /* ---------- Email (optional, via Resend: RESEND_API_KEY, MAIL_FROM, STAFF_EMAIL) ---------- */
-export const emailReady = () => !!(process.env.RESEND_API_KEY && process.env.MAIL_FROM);
+const RESEND_KEY = () => setting("RESEND_API_KEY");
+/* Sender: MAIL_FROM, or orders@ the domain the Resend connection verified */
+const MAIL_FROM = () => process.env.MAIL_FROM || (setting("RESEND_EMAIL_DOMAIN") ? `${site().config.business.name} <orders@${setting("RESEND_EMAIL_DOMAIN")}>` : "");
+export const emailReady = () => !!(RESEND_KEY() && MAIL_FROM());
 const htmlEsc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 /* Sends one email; never throws, so a mail problem can't break an order or payment */
 export async function sendEmail(to, subject, lines) {
@@ -162,11 +173,11 @@ export async function sendEmail(to, subject, lines) {
   const html = `<div style="font-family:Arial,sans-serif;font-size:15px;line-height:1.5;color:#1d2433">${lines.map(l => `<p>${l.html || htmlEsc(l)}</p>`).join("")}</div>`;
   const text = lines.map(l => l.text || l).join("\n\n");
   try {
-    if (DEV && process.env.RESEND_API_KEY === "test") { console.log(`[email] to ${to}: ${subject}`); return true; }
+    if (DEV && RESEND_KEY() === "test") { console.log(`[email] to ${to}: ${subject}`); return true; }
     const r = await fetch("https://api.resend.com/emails", {
       method: "POST", signal: AbortSignal.timeout(5000),
-      headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ from: process.env.MAIL_FROM, to: [to], subject, html, text, reply_to: site().config.business.email || undefined })
+      headers: { Authorization: `Bearer ${RESEND_KEY()}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ from: MAIL_FROM(), to: [to], subject, html, text, reply_to: site().config.business.email || undefined })
     });
     if (!r.ok) console.error("Email failed", r.status, await r.text());
     return r.ok;

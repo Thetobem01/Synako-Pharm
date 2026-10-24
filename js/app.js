@@ -106,6 +106,8 @@ const ICONS = {
   layers: '<path d="M12 3l9 5-9 5-9-5zM3 13l9 5 9-5M3 17.5l9 5 9-5" />',
   share: '<circle cx="18" cy="5" r="2.5"/><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="19" r="2.5"/><path d="M8.2 10.8l7.6-4.4M8.2 13.2l7.6 4.4"/>',
   print: '<path d="M6 9V3h12v6M6 18H4a1 1 0 0 1-1-1v-6a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v6a1 1 0 0 1-1 1h-2"/><rect x="6" y="14" width="12" height="7"/>',
+  phone: '<path d="M5 3h4l2 5-2.5 1.5a11 11 0 0 0 6 6L16 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 5a2 2 0 0 1 2-2"/>',
+  pin: '<path d="M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/>',
   download: '<path d="M12 3v12M7 10l5 5 5-5M4 21h16"/>'
 };
 const icon = (k, cls) => `<svg class="${cls || "ic"}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[k] || ICONS.box}</svg>`;
@@ -121,6 +123,7 @@ const S = {
   mode: "shop", view: "home", filter: "all", tab: "vitamins", q: "", sort: "popular", product: null, qty: 1, unit: "1", page: "about", age18: store.get("synako.age18", false),
   cart: store.get("synako.cart", []).filter(l => l && prod(l.id)).map(l => ({ id: l.id, q: l.q, u: l.u || "1" })), rxRequest: false, step: 1, form: {}, busy: false, error: "",
   mine: store.get("synako.orders", []), seen: store.get("synako.seen", []).filter(id => prod(id)), trackId: null, track: null, trackErr: "",
+  rider: { token: store.sget("synako.rider"), name: store.get("synako.riderName", ""), list: null, err: "" },
   staff: { token: store.sget("synako.staff"), name: store.sget("synako.staffName"), list: null, sel: null, detail: null, file: null, tab: "review", err: "", updated: null }
 };
 const saveCart = () => store.set("synako.cart", S.cart);
@@ -176,7 +179,9 @@ const demo = (() => {
     payStart: (oid, phone) => { const o = find(oid, phone); return wait({ reference: o.id + "-1", amount: Math.round(o.total * 100), email: o.customer.email, mock: true }); },
     payVerify: ref => { const o = orders.get(ref.replace(/-\d+$/, "")); o.status = "paid"; log(o, "Payment received · demo (no money taken)"); return wait({ order: pub(o) }); },
     request: () => wait({ id: id("MSG") }),
-    staffLogin: () => wait({ token: "demo" }),
+    staffLogin: (pw, role) => wait({ token: "demo", role: role === "rider" ? "rider" : "staff" }),
+    riderList: () => wait({ deliveries: [...orders.values()].filter(o => ["packed", "out_for_delivery"].includes(o.status)).map(o => ({ id: o.id, status: o.status, statusLabel: LBL[o.status], createdAt: o.createdAt, speedId: o.delivery.speed, speed: o.delivery.label, name: o.customer.name, phone: o.customer.phone, addr: o.delivery.addr, landmark: o.delivery.landmark || "", city: o.delivery.city, state: o.delivery.state, note: o.delivery.note || "", items: o.items.length, total: o.total, idCheck: false, rider: o.rider || "", hasCode: false })) }),
+    riderAct: () => Promise.reject(new Error("Riders can't update orders in the design preview.")),
     staffList: () => wait({ orders: [...orders.values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).map(o => ({ id: o.id, createdAt: o.createdAt, status: o.status, statusLabel: LBL[o.status], rx: o.rx, rxRequest: o.rxRequest, customer: o.customer.name, total: o.total, priced: o.priced, items: o.items.map(i => `${i.qty} × ${i.name}`), speed: o.delivery.label })), requests: reqs, missing: missingDetails() }),
     staffOrder: (t, oid) => { const o = orders.get(oid); return wait({ order: full(o), file: o.file || null }); },
     staffAct: (t, b) => {
@@ -198,7 +203,10 @@ const api = {
   payStart: (id, phone) => DEMO ? demo.payStart(id, phone) : call("pay-start", { method: "POST", body: { id, phone } }),
   payVerify: reference => DEMO ? demo.payVerify(reference) : call("pay-verify", { method: "POST", body: { reference } }),
   request: b => DEMO ? demo.request(b) : call("requests", { method: "POST", body: b }),
-  staffLogin: password => DEMO ? demo.staffLogin(password) : call("staff/login", { method: "POST", body: { password } }),
+  staffLogin: (password, role) => DEMO ? demo.staffLogin(password, role) : call("staff/login", { method: "POST", body: { password, role } }),
+  riderList: t => DEMO ? demo.riderList() : call("staff/orders?view=rider", { token: t }),
+  riderAct: (t, b) => DEMO ? demo.riderAct() : call("staff/orders", { method: "POST", body: b, token: t }),
+  staffPost: (t, b) => DEMO ? Promise.resolve({ reminded: 0, cancelled: 0 }) : call("staff/orders", { method: "POST", body: b, token: t }),
   staffList: t => DEMO ? demo.staffList(t) : call("staff/orders", { token: t }),
   staffOrder: (t, id) => DEMO ? demo.staffOrder(t, id) : call("staff/order?id=" + encodeURIComponent(id), { token: t }),
   staffAct: (t, b) => DEMO ? demo.staffAct(t, b) : call("staff/order", { method: "POST", body: b, token: t })
@@ -244,6 +252,7 @@ function parse(path) {
   else if (a === "track") { r.view = "track"; if (b) r.trackId = b.toUpperCase(); }
   else if (a === "basket" || a === "checkout") r.view = a;
   else if (["pharmacist", "desk", "staff", "admin"].includes(a)) { r.view = "home"; r.mode = "staff"; }
+  else if (["rider", "riders"].includes(a)) { r.view = "home"; r.mode = "rider"; }
   else if (PAGES.includes(a)) { r.view = "page"; r.page = a; }
   else r.view = "notfound";
   return r;
@@ -252,6 +261,7 @@ const FILTERS = ["otc", "bulk"].concat(DOSES.map(d => d[0]));
 const fpath = f => "/products" + (f === "all" ? "" : f === "pom" ? "/prescription" : "/" + f);
 function pathFor() {
   if (S.mode === "staff") return "/pharmacist";
+  if (S.mode === "rider") return "/rider";
   switch (S.view) {
     case "home": return "/";
     case "shop": return fpath(S.filter);
@@ -280,7 +290,8 @@ function go(path, opts) {
   render(true);
   if (S.view === "track" && S.trackId) loadTrack();
   if (S.mode === "staff" && S.staff.token) loadDesk();
-  const focusTarget = S.mode === "staff" ? $("#staff-view") : $("#view");
+  if (S.mode === "rider" && S.rider.token) loadRider();
+  const focusTarget = S.mode !== "shop" ? $("#staff-view") : $("#view");
   if (!opts.replace && focusTarget) focusTarget.focus({ preventScroll: true });
 }
 window.addEventListener("popstate", () => go(location.pathname, { noHistory: true }));
@@ -806,6 +817,7 @@ function vTrack() {
         ${o.status === "info_needed" ? `<div class="notice rx"><b>Our pharmacist needs more information</b><span>${esc(o.note || "We'll call you shortly.")}</span></div>` : ""}
         ${o.status === "pending_review" ? `<div class="notice info"><b>Your prescription is with our pharmacist</b><span>Usually within an hour during opening hours (${esc(H.label)}). This page updates when it's approved.</span></div>` : ""}
         ${o.canPay ? `<div class="paybox go">${icon("card", "ic big")}<div><b>${o.status === "approved_awaiting_payment" ? "Approved! " : ""}Pay ${NGN(o.total)} to confirm your order</b><p class="small muted">Card, bank transfer or USSD through Paystack.</p></div><button class="btn btn-primary btn-lg" type="button" data-pay="${esc(o.id)}" ${S.busy ? "disabled" : ""}>${S.busy ? "Opening payment…" : "Pay now"}</button></div>` : ""}
+        ${o.deliveryCode ? `<div class="notice info code-box"><b>Your delivery code: <span class="mono code">${esc(o.deliveryCode)}</span></b><span>Give this code to the rider when your order arrives${o.rider ? `. ${esc(o.rider)} is bringing it now` : ""}. Please don't share it before then.</span></div>` : ""}
         ${o.rxRequest && !o.priced ? `<p class="small muted">Our pharmacist will add your prescription items and their price when they approve it.</p>` : ""}
         <ol class="timeline">${st.map((s, i) => { const c = i < stage ? "done" : (i === stage && !bad && !final ? "now" : "next"); return `<li class="${c}"><span class="dot ${c}" aria-hidden="true">${i < stage ? "✓" : i + 1}</span><div><b>${s}</b>${c === "now" ? `<div class="small muted">In progress</div>` : ""}<span class="sr">${c === "done" ? " (done)" : c === "now" ? " (current step)" : ""}</span></div></li>`; }).join("")}</ol>
         <details class="facts"><summary>Order details</summary>
@@ -1014,7 +1026,7 @@ function vStaff() {
   $("#staff-stats").innerHTML = `<div><b>${groups.review.length}</b>To review</div><div><b>${groups.pack.length}</b>To pack</div><div><b>${groups.pay.length}</b>Awaiting payment</div><div title="Paid orders placed today"><b>${NGN(takings)}</b>Today · ${paidToday.length} paid</div>`;
   return `<div class="desk-top">
       <div class="desk-tabs" role="tablist" aria-label="Desk sections">${tabs.map(([k, l]) => `<button type="button" role="tab" data-dtab="${k}" aria-selected="${st.tab === k}">${l}${k === "requests" ? ` <span class="count">${d.requests.filter(r => r.status === "new").length}</span>` : k === "stock" ? ` <span class="count">${P.filter(p => p.out).length} out</span>` : ` <span class="count">${groups[k].length}</span>`}</button>`).join("")}</div>
-      <div class="desk-tools"><button class="linkbtn" type="button" data-csv>${icon("download", "ic sm")} Download orders (CSV)</button><button class="linkbtn" type="button" data-testmail>${icon("chat", "ic sm")} Send test email</button><p class="small muted" role="status">Updates every 10 seconds${st.updated ? ` · last ${st.updated.toLocaleTimeString("en-GB")}` : ""}</p></div></div>
+      <div class="desk-tools"><button class="linkbtn" type="button" data-csv>${icon("download", "ic sm")} Download orders (CSV)</button><button class="linkbtn" type="button" data-testmail>${icon("chat", "ic sm")} Send test email</button><button class="linkbtn" type="button" data-remind>${icon("card", "ic sm")} Send payment reminders now</button><a class="linkbtn" href="/rider" data-link>${icon("truck", "ic sm")} Rider page</a><p class="small muted" role="status">Updates every 10 seconds${st.updated ? ` · last ${st.updated.toLocaleTimeString("en-GB")}` : ""}</p></div></div>
     ${st.err ? alertBox(st.err) : ""}
     ${st.mail ? `<div class="notice ${/NOT sent/.test(st.mail) ? "bad" : "info"} small" role="status"><span>${esc(st.mail)}</span></div>` : ""}
     ${d.missing && d.missing.length ? (store.get("synako.hideMissing", 0) > Date.now()
@@ -1062,7 +1074,7 @@ function queueRows(list) {
         <span class="top"><b class="mono">${o.id}</b>${statusTag(o)}</span>
         <span class="small">${esc(o.rxRequest && !o.items.length ? "Prescription request" : o.items.join(", "))}</span>
         ${o.speedId ? `<span class="small"><span class="tag ${o.speedId === "express" ? "bad" : o.speedId === "sameday" ? "warn" : "gen"}">${esc((SPEEDS.find(x => x[0] === o.speedId) || [, ""])[1])}</span>${o.city ? ` ${esc(o.city)}${o.state ? ", " + esc(o.state) : ""}` : ""}</span>` : ""}
-        <span class="small muted">${esc(o.customer)} · ${stamp(o.createdAt)} · ${o.priced ? NGN(o.total) : "to price"}</span></button>`).join("");
+        <span class="small muted">${esc(o.customer)} · ${stamp(o.createdAt)} · ${o.priced ? NGN(o.total) : "to price"}${o.rider && o.status === "out_for_delivery" ? ` · with ${esc(o.rider)}` : ""}${o.reminded && /awaiting_payment/.test(o.status) ? " · reminder sent" : ""}</span></button>`).join("");
 }
 function deskGroup() { const g = deskGroups(S.staff.list); return g[S.staff.tab] || []; }
 function refreshQueue() { const l = deskGroup(), q = $("#queue"), c = $("#queue-count"); if (q) q.innerHTML = queueRows(l); if (c) c.textContent = queueCount(l); }
@@ -1073,6 +1085,87 @@ function deskGroups(d) {
     pay: d.orders.filter(o => ["awaiting_payment", "approved_awaiting_payment"].includes(o.status)),
     done: d.orders.filter(o => ["delivered", "rejected", "cancelled"].includes(o.status))
   };
+}
+/* WhatsApp a customer from the desk or the rider page (opens WhatsApp with the message ready to send) */
+function waTo(phone, text) {
+  let n = String(phone || "").replace(/\D/g, "");
+  if (n.startsWith("0") && n.length === 11) n = "234" + n.slice(1);
+  return n.length >= 10 ? `https://wa.me/${n}?text=${encodeURIComponent(text)}` : "";
+}
+function waUpdate(o) {
+  const hi = `Hello ${String(o.customer.name || "").split(" ")[0]}, this is ${B.name} about your order ${o.id}. `, url = `${SITE_URL}/track/${o.id}`;
+  return hi + ({
+    awaiting_payment: `It's waiting for payment (${NGN(o.total)}). You can pay here: ${url}`,
+    approved_awaiting_payment: `Our pharmacist has approved it. Please pay ${NGN(o.total)} here: ${url}`,
+    info_needed: `Our pharmacist needs a little more information. Could you reply here or call us?`,
+    paid: `We've received your payment and we're preparing your order. Track it here: ${url}`,
+    packed: `Your order is packed and will leave with a rider shortly.`,
+    out_for_delivery: `Your order is on its way${o.rider ? ` with ${o.rider}` : ""}. Please have your delivery code ready.`,
+    delivered: `Your order has been delivered. Thank you for choosing us!`
+  }[o.status] || `Track it here: ${url}`);
+}
+async function sendReminders(btn) {
+  btn.disabled = true;
+  try { const r = await api.staffPost(S.staff.token, { action: "reminders" }); toast(r.reminded || r.cancelled ? `${r.reminded} reminder${r.reminded === 1 ? "" : "s"} sent${r.cancelled ? ` · ${r.cancelled} unpaid order${r.cancelled === 1 ? "" : "s"} cancelled` : ""}.` : "No unpaid orders need a reminder right now."); await loadDesk(true); }
+  catch (e) { if (e.status === 401) signOut(); else toast(e.message); }
+  btn.disabled = false;
+}
+
+/* ---------- Rider page: today's deliveries on a phone ---------- */
+let riderTimer = null;
+async function loadRider(silent) {
+  const r = S.rider; if (!r.token) return;
+  try {
+    const was = r.list ? r.list.filter(d => d.status === "packed").length : null;
+    const d = await api.riderList(r.token); r.list = d.deliveries; r.err = "";
+    const now = r.list.filter(x => x.status === "packed").length;
+    if (was !== null && now > was) { toast(`${now - was} new deliver${now - was === 1 ? "y" : "ies"} ready to collect`); chime(); }
+  } catch (e) { if (e.status === 401) return riderSignOut(); r.err = e.message; }
+  if (S.mode === "rider") render();
+}
+function riderSignOut() { S.rider = { token: "", name: S.rider.name, list: null, err: "" }; store.sset("synako.rider", ""); render.fresh = true; render(); }
+async function riderTake(id, btn) {
+  btn.disabled = true;
+  try { const r = await api.riderAct(S.rider.token, { action: "rider-take", id, by: S.rider.name }); S.rider.list = r.deliveries; toast(`${id} is yours. The customer has been told you're on the way.`); render.fresh = true; render(); }
+  catch (e) { if (e.status === 401) riderSignOut(); else { toast(e.message); loadRider(true); } btn.disabled = false; }
+}
+const mapLink = d => "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent([d.addr, d.landmark, d.city, d.state, "Nigeria"].filter(has).join(", "));
+function rideCard(d, mine) {
+  const first = String(d.name || "").split(" ")[0];
+  const wa = waTo(d.phone, `Hello ${first}, this is ${S.rider.name || "your rider"} from ${B.name}. I'm ${d.status === "packed" ? "about to leave" : "on my way"} with your order ${d.id}.${d.hasCode ? " Please have your delivery code ready." : ""}`);
+  const speedName = (SPEEDS.find(x => x[0] === d.speedId) || [, ""])[1];
+  return `<article class="panel ride${d.speedId === "express" ? " urgent" : ""}">
+    <div class="top"><b class="mono">${esc(d.id)}</b><span>${speedName ? `<span class="tag ${d.speedId === "express" ? "bad" : d.speedId === "sameday" ? "warn" : "gen"}">${esc(speedName)}</span>` : ""}${d.idCheck ? ` <span class="tag age">Check ID 18+</span>` : ""}</span></div>
+    <div><b>${esc(d.name)}</b> <span class="small muted">· ${d.items} item${d.items === 1 ? "" : "s"} · paid, nothing to collect</span></div>
+    <div class="small">${esc([d.addr, d.city, d.state].filter(has).join(", "))}${has(d.landmark) ? `<br><span class="muted">Landmark: ${esc(d.landmark)}</span>` : ""}</div>
+    ${has(d.note) ? `<div class="small"><b>Customer note:</b> ${esc(d.note)}</div>` : ""}
+    <div class="ride-links"><a class="btn btn-ghost btn-sm" href="tel:${esc(d.phone)}">${icon("phone", "ic sm")} Call</a>${wa ? `<a class="btn btn-ghost btn-sm" href="${esc(wa)}" target="_blank" rel="noopener">${icon("chat", "ic sm")} WhatsApp</a>` : ""}<a class="btn btn-ghost btn-sm" href="${esc(mapLink(d))}" target="_blank" rel="noopener">${icon("pin", "ic sm")} Directions</a></div>
+    ${d.status === "packed" ? `<button class="btn btn-primary" type="button" data-rtake="${esc(d.id)}">${icon("truck", "ic sm")} Start this delivery</button>`
+      : mine ? `<form class="ride-done" data-rdone="${esc(d.id)}" novalidate><label for="rcode-${esc(d.id)}">Customer's delivery code</label><div class="row"><input id="rcode-${esc(d.id)}" class="rcode mono" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" autocomplete="off" placeholder="0000" required><button class="btn btn-success" type="submit">${icon("check", "ic sm")} Delivered</button></div>${d.hasCode ? "" : `<p class="small muted">This order was paid before delivery codes started: enter 0000.</p>`}</form>`
+      : `<p class="small muted">With ${esc(d.rider || "another rider")}.</p>`}
+  </article>`;
+}
+function vRider() {
+  const r = S.rider;
+  if (!r.token) return `<div class="wrap desk-login"><form class="f panel" id="riderform" novalidate>
+      <h1 class="h2">Rider sign-in</h1><p class="muted small">For Synako delivery riders. See the deliveries that are ready, call or WhatsApp customers, get directions and confirm each delivery with the customer's code.</p>
+      ${alertBox(r.err)}
+      <label for="rname">Your name<span class="hint">Customers are told who is bringing their order.</span><input id="rname" name="rname" required autocomplete="name" value="${esc(r.name)}"></label>
+      <label for="rpw">Rider password<span class="hint">Ask the pharmacy for it.</span><input id="rpw" name="rpw" type="password" required autocomplete="current-password"></label>
+      <button class="btn btn-primary" type="submit">Sign in</button></form></div>`;
+  if (!r.list) return `<div class="wrap"><p class="muted" style="padding:2rem 0">Loading deliveries…</p></div>`;
+  const by = (a, b) => ((URGENCY[a.speedId] ?? 9) - (URGENCY[b.speedId] ?? 9)) || (Date.parse(a.createdAt) - Date.parse(b.createdAt));
+  const mine = r.list.filter(d => d.status === "out_for_delivery" && d.rider === r.name).sort(by);
+  const ready = r.list.filter(d => d.status === "packed").sort(by);
+  const others = r.list.filter(d => d.status === "out_for_delivery" && d.rider !== r.name).sort(by);
+  const sec = (title, list, isMine, empty) => `<section class="ride-sec"><h2 class="h3">${title} <span class="count">${list.length}</span></h2>${list.length ? list.map(d => rideCard(d, isMine)).join("") : `<p class="muted small">${empty}</p>`}</section>`;
+  return `<div class="wrap rider">
+    <p class="small muted" role="status">Signed in as <b>${esc(r.name)}</b> · updates every 20 seconds</p>
+    ${r.err ? alertBox(r.err) : ""}
+    ${sec("On the road with you", mine, true, "Nothing yet. Start a delivery below.")}
+    ${sec("Ready to collect", ready, false, "No packed orders waiting. You'll hear a chime when one is ready.")}
+    ${others.length ? `<details class="ride-sec"><summary class="h4">Out with other riders (${others.length})</summary>${others.map(d => rideCard(d, false)).join("")}</details>` : ""}
+  </div>`;
 }
 function deskDetail() {
   const st = S.staff, o = st.detail;
@@ -1090,11 +1183,11 @@ function deskDetail() {
   const A = o.actions || [];
   const reviewing = A.includes("approve");
   return `<div style="display:flex;justify-content:space-between;gap:1rem;flex-wrap:wrap"><div><div class="muted small">Order</div><h2 class="mono" style="font-size:1.35rem">${esc(o.id)}</h2><div class="muted small">${stamp(o.createdAt)} · ${esc(o.delivery.label)}</div></div>${statusTag(o)}</div>
-    <div class="desk-print"><button class="btn btn-ghost btn-sm" type="button" data-dreceipt>${icon("download", "ic sm")} ${PAID(o.status) ? "Receipt (PDF)" : "Order summary (PDF)"}</button><button class="btn btn-ghost btn-sm" type="button" data-print>${icon("print", "ic sm")} Print delivery note</button></div>
+    <div class="desk-print"><button class="btn btn-ghost btn-sm" type="button" data-dreceipt>${icon("download", "ic sm")} ${PAID(o.status) ? "Receipt (PDF)" : "Order summary (PDF)"}</button><button class="btn btn-ghost btn-sm" type="button" data-print>${icon("print", "ic sm")} Print delivery note</button>${waTo(o.customer.phone, waUpdate(o)) ? `<a class="btn btn-ghost btn-sm" href="${esc(waTo(o.customer.phone, waUpdate(o)))}" target="_blank" rel="noopener">${icon("chat", "ic sm")} WhatsApp the customer</a>` : ""}</div>
     <div class="review">
       <div style="display:grid;gap:.8rem;align-content:start">
         <dl class="kv"><dt>Customer</dt><dd>${esc(o.customer.name)}</dd><dt>Phone</dt><dd><a href="tel:${esc(o.customer.phone)}">${esc(o.customer.phone)}</a></dd><dt>Email</dt><dd>${esc(o.customer.email)}</dd>${o.customer.dob ? `<dt>Date of birth</dt><dd>${esc(o.customer.dob)}</dd>` : ""}
-          <dt>Deliver to</dt><dd>${esc([o.delivery.addr, o.delivery.landmark, o.delivery.city, o.delivery.state].filter(has).join(", "))}</dd>${has(o.delivery.note) ? `<dt>Customer note</dt><dd><b>${esc(o.delivery.note)}</b></dd>` : ""}</dl>
+          <dt>Deliver to</dt><dd>${esc([o.delivery.addr, o.delivery.landmark, o.delivery.city, o.delivery.state].filter(has).join(", "))}</dd>${o.rider ? `<dt>Rider</dt><dd>${esc(o.rider)}</dd>` : ""}${has(o.delivery.note) ? `<dt>Customer note</dt><dd><b>${esc(o.delivery.note)}</b></dd>` : ""}</dl>
         <div class="small" style="display:grid;gap:.3rem">${o.items.map(i => `<div class="r"><span>${i.qty} × ${esc(i.name)} ${i.cls === "pom" ? `<span class="tag rx">POM</span>` : ""}${i.age ? `<span class="tag age">18+ ID</span>` : ""}${i.n > 1 ? `<span class="muted"> (${i.qty * i.n} packs)</span>` : ""}</span><span class="num">${NGN(i.total)}</span></div>`).join("")}
           ${o.discount ? `<div class="r"><span>Discount${o.promo ? ` (${esc(o.promo.code)})` : ""}</span><span class="num">−${NGN(o.discount)}</span></div>` : ""}<div class="r"><span>Delivery</span><span class="num">${NGN(o.deliveryFee)}</span></div><div class="r"><b>Total</b><b class="num">${o.priced === false ? "to price" : NGN(o.total)}</b></div></div>
       </div>
@@ -1112,7 +1205,9 @@ function deskDetail() {
         <label class="check"><input type="checkbox" id="c4" required><span>No item is a controlled medicine (controlled items go to in-store collection)</span></label>
         ${o.rxRequest && o.priced === false ? `<div class="row2"><label for="aitems">Items you'll supply<input id="aitems" placeholder="e.g. Amlodipine 5mg × 28"></label><label for="aprice">Price for these items (₦)<input id="aprice" type="number" min="1" step="0.01" inputmode="decimal"></label></div>` : ""}
       </fieldset>` : ""}
-      ${A.some(a => ["info", "reject", "cancel"].includes(a)) ? `<label for="anote">Note to the customer<span class="hint">Required if you ask for information or don't approve.</span><textarea id="anote" rows="2"></textarea></label>` : ""}
+      ${A.includes("dispatched") ? `<label for="arider">Rider taking it<span class="hint">Optional. The customer is told who is coming. Riders can also start deliveries themselves on the rider page.</span><input id="arider" autocomplete="off"></label>` : ""}
+      ${A.includes("delivered") && o.deliveryCode ? `<label for="acode">Customer's delivery code<span class="hint">The 4-digit code the customer gives at the door.</span><input id="acode" inputmode="numeric" maxlength="4" autocomplete="off" class="mono"></label>` : ""}
+      ${A.some(a => ["info", "reject", "cancel", "delivered"].includes(a)) ? `<label for="anote">${A.includes("delivered") ? "Note" : "Note to the customer"}<span class="hint">${A.includes("delivered") ? (o.deliveryCode ? "Only if there's no code, say why (for example, collected in store)." : "Optional.") : "Required if you ask for information or don't approve."}</span><textarea id="anote" rows="2"></textarea></label>` : ""}
       <div class="actions">${A.map(a => {
         const L2 = { approve: ["Approve and request payment", "btn-success"], info: ["Ask for more information", "btn-ghost"], reject: ["Don't approve", "btn-danger"], resume: ["Back to review", "btn-ghost"], cancel: ["Cancel order", "btn-danger"], packed: ["Mark as packed", "btn-primary"], dispatched: ["Mark out for delivery", "btn-primary"], delivered: ["Mark as delivered", "btn-success"] }[a];
         return `<button class="btn ${L2[1]}" type="button" data-act="${a}" ${S.busy ? "disabled" : ""}>${L2[0]}</button>`; }).join("")}</div>
@@ -1182,6 +1277,7 @@ function setLd(id, data) {
 function pageMeta() {
   const strip = t => String(t).replace(/<[^>]+>/g, "").replace(/&amp;/g, "&").replace(/&[^;]+;/g, "");
   if (S.mode === "staff") return { title: "Pharmacist Desk", noindex: true };
+  if (S.mode === "rider") return { title: "Rider deliveries", noindex: true };
   switch (S.view) {
     case "home": return { title: "", desc: DEFAULT_DESC };
     case "shop": {
@@ -1210,7 +1306,7 @@ function pageMeta() {
 function applyMeta() {
   const m = pageMeta(), brand = B.name || "Synako Pharmacy";
   const title = m.title ? `${m.title} | ${brand}` : `${brand} · Your Pathway to Health and Wellness`;
-  const url = SITE_URL + (S.mode === "staff" ? "/pharmacist" : pathFor());
+  const url = SITE_URL + (S.mode !== "shop" ? pathFor() : pathFor());
   document.title = title;
   metaTag("name", "description").setAttribute("content", m.desc || DEFAULT_DESC);
   metaTag("name", "robots").setAttribute("content", m.noindex ? "noindex, nofollow" : "index, follow");
@@ -1241,17 +1337,26 @@ function orgLd() {
 /* ---------- Render ---------- */
 function renderCount() { const n = S.cart.reduce((s, l) => s + l.q, 0) + (S.rxRequest ? 1 : 0); document.querySelectorAll("[data-count]").forEach(b => { b.textContent = n; b.hidden = !n; }); const bl = $("#basket-link"); if (bl) bl.setAttribute("aria-label", `Basket, ${n} item${n === 1 ? "" : "s"}`); }
 function render(scroll) {
-  const staff = S.mode === "staff";
+  const staff = S.mode !== "shop", rider = S.mode === "rider";
   $("#shell-customer").hidden = staff; $("#shell-staff").hidden = !staff;
-  clearInterval(deskTimer); clearInterval(trackTimer);
+  clearInterval(deskTimer); clearInterval(trackTimer); clearInterval(riderTimer);
   let title;
   if (staff) {
-    const a = document.activeElement, keep = a && ["deskq", "stockq"].includes(a.id) ? [a.id, a.selectionStart, a.selectionEnd] : null;
-    $("#staff-view").innerHTML = vStaff(); title = "Pharmacist Desk";
+    // The desk and rider page refresh themselves; keep whatever staff were typing (notes, codes, searches) and where the cursor was
+    const view = $("#staff-view"), a = document.activeElement;
+    const typed = render.fresh ? [] : [...view.querySelectorAll("input[id], textarea[id], select[id]")].map(el => [el.id, el.type === "checkbox" ? el.checked : el.value]);
+    const keep = a && a.id && view.contains(a) ? [a.id, a.selectionStart, a.selectionEnd] : null;
+    render.fresh = false;
+    view.innerHTML = rider ? vRider() : vStaff(); title = rider ? "Rider deliveries" : "Pharmacist Desk";
+    typed.forEach(([id, v]) => { const el = document.getElementById(id); if (el && view.contains(el)) { if (el.type === "checkbox") el.checked = v; else if (el.type !== "password" || v) el.value = v; } });
     if (keep) { const el = document.getElementById(keep[0]); if (el) { el.focus(); try { el.setSelectionRange(keep[1], keep[2]); } catch (e) { /* not a text box */ } } }
-    $("#staff-signout").hidden = !S.staff.token;
-    if (S.staff.token) deskTimer = setInterval(() => loadDesk(true), 10000);
-    const waiting = S.staff.list ? (c => c.pack + c.review)(deskCounts(S.staff.list)) : 0;
+    $(".staff-title").textContent = rider ? "Deliveries" : "Pharmacist Desk";
+    $(".staff-head .eyebrow").textContent = rider ? "Synako riders" : "Synako Dispensary";
+    if (rider) $("#staff-stats").innerHTML = "";
+    $("#staff-signout").hidden = !(rider ? S.rider.token : S.staff.token);
+    if (!rider && S.staff.token) deskTimer = setInterval(() => loadDesk(true), 10000);
+    if (rider && S.rider.token) riderTimer = setInterval(() => loadRider(true), 20000);
+    const waiting = !rider && S.staff.list ? (c => c.pack + c.review)(deskCounts(S.staff.list)) : rider && S.rider.list ? S.rider.list.filter(d => d.status === "packed").length : 0;
     if (waiting) title = `(${waiting}) ${title}`;
   } else {
     const V = { home: vHome, shop: vShop, product: vProduct, controlled: vControlled, basket: vBasket, checkout: vCheckout, rx: vRx, track: vTrack, page: vPage, notfound: vNotFound }[S.view] || vHome;
@@ -1495,7 +1600,7 @@ document.addEventListener("click", e => {
   const d = t.dataset;
   if (t.id === "menu-toggle") { drawer().hidden ? openDrawer() : closeDrawer(); return; }
   if ("closeDrawer" in d) { closeDrawer(); return; }
-  if (t.id === "staff-signout") { signOut(); return; }
+  if (t.id === "staff-signout") { if (S.mode === "rider") riderSignOut(); else signOut(); return; }
   if ("app" in d) { toast("The Synako app is coming soon. You can order on this website from any phone in the meantime."); return; }
   if (d.tab) { S.tab = d.tab; render(); const nt = $(`#tab-${d.tab}`); if (nt) nt.focus(); return; }
   if (d.add) { addToCart(d.add, d.withqty ? S.qty : 1, d.withqty ? S.unit : "1"); return; }
@@ -1521,6 +1626,8 @@ document.addEventListener("click", e => {
   if (d.step) { saveForm(); S.step = Number(d.step); S.error = ""; render(true); return; }
   if (d.pay) { startPayment(d.pay); return; }
   if (d.missing) { store.set("synako.hideMissing", d.missing === "hide" ? Date.now() + 30 * 864e5 : 0); render(); return; }
+  if (d.rtake) { riderTake(d.rtake, t); return; }
+  if ("remind" in d) { sendReminders(t); return; }
   if ("qclear" in d) { Object.assign(S.staff, { q: "", speed: "", status: "" }); render(); return; }
   if (d.dtab) { S.staff.tab = d.dtab; S.staff.status = ""; S.staff.sel = null; S.staff.detail = null; render(); loadDesk(true); return; }
   if (d.sel) { loadDeskOrder(d.sel); return; }
@@ -1572,10 +1679,12 @@ async function deskAction(action) {
   const note = ($("#anote") || {}).value || "";
   if (action === "approve") { if (!f.reportValidity()) return; }
   if (["info", "reject"].includes(action) && !note.trim()) { $("#anote").focus(); toast("Add a note so the customer knows what to do next."); return; }
-  const b = { id: o.id, action, note: note.trim(), by: st.name };
+  const code = (($("#acode") || {}).value || "").trim();
+  if (action === "delivered" && o.deliveryCode && !code && !note.trim()) { $("#acode").focus(); toast("Enter the customer's delivery code, or add a note saying why there isn't one."); return; }
+  const b = { id: o.id, action, note: note.trim(), by: st.name, code, rider: (($("#arider") || {}).value || "").trim() };
   if (action === "approve" && $("#aprice")) { b.price = $("#aprice").value; b.itemsText = $("#aitems").value; }
   S.busy = true; render();
-  try { const r = await api.staffAct(st.token, b); st.detail = r.order; toast({ approve: "Approved. The customer can now pay.", info: "Request sent to the customer.", reject: "Marked as not approved.", packed: "Marked as packed.", dispatched: "Marked out for delivery.", delivered: "Marked as delivered.", cancel: "Order cancelled.", resume: "Back in review." }[action]); await loadDesk(true); }
+  try { const r = await api.staffAct(st.token, b); st.detail = r.order; render.fresh = true; toast({ approve: "Approved. The customer can now pay.", info: "Request sent to the customer.", reject: "Marked as not approved.", packed: "Marked as packed.", dispatched: "Marked out for delivery.", delivered: "Marked as delivered.", cancel: "Order cancelled.", resume: "Back in review." }[action]); await loadDesk(true); }
   catch (e) { if (e.status === 401) signOut(); else toast(e.message); }
   S.busy = false; render();
 }
@@ -1598,8 +1707,23 @@ document.addEventListener("submit", async e => {
   if (f.id === "staffform") {
     if (!f.reportValidity()) return;
     S.staff.name = f.sname.value.trim(); store.sset("synako.staffName", S.staff.name);
-    try { const { token } = await api.staffLogin(f.spw.value); S.staff.token = token; S.staff.err = ""; store.sset("synako.staff", token); render(); loadDesk(); }
+    try { const { token } = await api.staffLogin(f.spw.value); S.staff.token = token; S.staff.err = ""; store.sset("synako.staff", token); render.fresh = true; render(); loadDesk(); }
     catch (er) { S.staff.err = er.message; render(); }
+    return;
+  }
+  if (f.id === "riderform") {
+    if (!f.reportValidity()) return;
+    S.rider.name = f.rname.value.trim(); store.set("synako.riderName", S.rider.name);
+    try { const { token } = await api.staffLogin(f.rpw.value, "rider"); S.rider.token = token; S.rider.err = ""; store.sset("synako.rider", token); render.fresh = true; render(); loadRider(); }
+    catch (er) { S.rider.err = er.message; render(); }
+    return;
+  }
+  if (f.dataset.rdone) {
+    const id = f.dataset.rdone, code = (f.querySelector("input") || {}).value || "", btn = f.querySelector("button");
+    if (!/^\d{4}$/.test(code.trim())) { toast("Enter the customer's 4-digit delivery code."); return; }
+    btn.disabled = true;
+    try { const r = await api.riderAct(S.rider.token, { action: "rider-delivered", id, code: code.trim(), by: S.rider.name }); S.rider.list = r.deliveries; toast(`${id} delivered. Well done!`); render.fresh = true; render(); }
+    catch (er) { if (er.status === 401) riderSignOut(); else toast(er.message); btn.disabled = false; }
     return;
   }
   if (f.id === "promoform") { S.form.promo = f.promo.value.trim().toUpperCase(); render(); const q = quoteNow(); toast(q.promo ? `${q.promo.code} applied: ${q.promo.label}.` : q.promoError || "Enter a code."); return; }

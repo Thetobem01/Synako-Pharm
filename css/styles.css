@@ -782,3 +782,21 @@ form.f { display: grid; gap: var(--sp-4); }
   .staff-stats > div:last-child b { font-size: var(--fs-md); }
 }
 .setup .linkbtn { margin-top: .4rem; font-size: var(--fs-sm); }
+
+/* Rider page and delivery codes */
+.rider { display: grid; gap: var(--sp-4); padding-block: var(--sp-5) var(--sp-8); max-width: 720px; }
+.ride-sec { display: grid; gap: var(--sp-3); }
+.ride-sec h2 { display: flex; align-items: center; gap: .5rem; }
+.ride-sec .count { display: inline-grid; place-items: center; min-width: 24px; height: 24px; padding: 0 6px; border-radius: 12px; background: var(--surface-2); color: var(--brand); font-size: var(--fs-xs); }
+.ride-sec summary { cursor: pointer; padding: .5rem 0; }
+.ride { display: grid; gap: .55rem; border-left: 4px solid var(--brand); }
+.ride.urgent { border-left-color: var(--bad); }
+.ride .top { display: flex; justify-content: space-between; align-items: center; gap: var(--sp-2); flex-wrap: wrap; }
+.ride-links { display: flex; flex-wrap: wrap; gap: .4rem; }
+.ride-links .btn { display: inline-flex; align-items: center; gap: .35rem; }
+.ride-done { display: grid; gap: .35rem; }
+.ride-done label { font-weight: 600; font-size: var(--fs-sm); }
+.ride-done .row { display: flex; gap: .5rem; }
+.ride-done input { flex: 0 1 8rem; min-width: 0; min-height: 44px; padding: .4rem .6rem; border: 1px solid var(--line-2); border-radius: var(--r-sm); font-size: 1.25rem; letter-spacing: .3em; text-align: center; }
+.ride-done .btn { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: .35rem; }
+.code-box .code { font-size: 1.5rem; letter-spacing: .25em; padding: 0 .25rem; }

@@ -1,4 +1,4 @@
-import { handle, only, send, body, query, fail, requireStaff, db, log, STATUS, notifyCustomer } from "../_lib/core.js";
+import { handle, only, send, body, query, fail, requireStaff, db, log, STATUS, notifyCustomer, checkDeliveryCode, limit } from "../_lib/core.js";
 
 const NEXT = { // allowed staff actions by current status
   pending_review: ["approve", "info", "reject"],
@@ -39,6 +39,12 @@ export default handle(async (req, res) => {
   const note = String(b.note || "").trim().slice(0, 500);
   const by = String(b.by || "Pharmacist").trim().slice(0, 60);
   if (["info", "reject"].includes(action) && !note) throw fail(400, "Add a note so the customer knows what to do next.");
+  if (action === "delivered" && o.deliveryCode) { // the customer's code proves delivery; without it, say why (e.g. collected in store)
+    if (b.code) {
+      await limit(req, "delivery-code", 10, 600, "Too many wrong codes. Please wait a few minutes.");
+      if (!checkDeliveryCode(o, b.code)) throw fail(400, "That delivery code isn't right. Ask the customer to check their SMS, email or order page.");
+    } else if (!note) throw fail(400, "Enter the customer's delivery code, or add a note saying why there isn't one (for example, collected in store).");
+  }
 
   if (action === "approve") {
     if (o.rxRequest) {
@@ -50,16 +56,17 @@ export default handle(async (req, res) => {
       o.priced = true;
     }
     o.status = "approved_awaiting_payment";
+    o.approvedAt = new Date().toISOString(); o.reminded = ""; // payment reminders count from approval
   } else if (action === "info") o.status = "info_needed";
   else if (action === "reject") o.status = "rejected";
   else if (action === "resume") o.status = "pending_review";
   else if (action === "cancel") o.status = "cancelled";
   else if (action === "packed") o.status = "packed";
-  else if (action === "dispatched") o.status = "out_for_delivery";
+  else if (action === "dispatched") { o.status = "out_for_delivery"; if (b.rider) o.rider = String(b.rider).trim().slice(0, 60); }
   else if (action === "delivered") o.status = "delivered";
   o.note = note || o.note || "";
   log(o, MSG[action]);
-  log(o, `${MSG[action]} by ${by}${note ? ` · “${note}”` : ""}`, { internal: true });
+  log(o, `${MSG[action]} by ${by}${o.rider && action === "dispatched" ? ` · rider ${o.rider}` : ""}${action === "delivered" && b.code ? " · delivery code checked" : ""}${note ? ` · “${note}”` : ""}`, { internal: true });
   await db.set("order:" + o.id, o);
   await notifyCustomer(o, action);
   send(res, 200, { order: Object.assign({}, o, { statusLabel: STATUS[o.status], actions: NEXT[o.status] || [] }) });

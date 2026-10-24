@@ -64,7 +64,14 @@
     orders: {
       paused: "",                 // to stop online orders for a while, write the reason here, e.g. "We're closed for the public holiday and back on Tuesday." Leave "" to take orders.
       maxOnlineTotal: 10000000,   // ₦ — larger orders are asked to request a trade quote instead of paying online
-      maxLines: 60                // most different products in one order
+      maxLines: 60,               // most different products in one order
+      remindUnpaidAfterHours: 2,  // one reminder (email, and SMS if set up) to finish paying; 0 = no reminders
+      cancelUnpaidAfterHours: 48  // unpaid orders are cancelled after this long, keeping the desk tidy; 0 = never
+    },
+    sms: {
+      // Texts to customers, sent only once TERMII_API_KEY is added in the hosting settings (each text costs a few naira).
+      // Remove any you don't want: paid (with the delivery code), approve, info, reject, dispatched, delivered, reminder
+      events: ["paid", "approve", "info", "reject", "dispatched", "delivered", "reminder"]
     },
     wholesale: {
       minTradeOrder: 100000,      // ₦ — smallest order for a trade quote; set to 0 for none

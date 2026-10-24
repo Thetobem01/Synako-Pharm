@@ -9,21 +9,21 @@ retail and wholesale pharmacy in Okitipupa, roughly how big it is, and anything 
    plain white background, send them over, and I'll compress and add them (the shop already swaps
    them in automatically). *Needs: photos. Size: small per batch.*
 
-2. **Unpaid-order reminders and clean-up.** Send one friendly email two hours after an order is left
+2. ~~**Unpaid-order reminders and clean-up.**~~ Built (see below). Send one friendly email two hours after an order is left
    unpaid ("Your order is waiting, pay here"), and cancel it automatically after 48 hours so the desk
    stays tidy. Runs once a day on Vercel's free scheduler. *Size: small to medium.*
 
-3. **SMS or WhatsApp order updates.** Many customers check SMS and WhatsApp before email. A Nigerian
+3. ~~**SMS or WhatsApp order updates.**~~ SMS built; automatic WhatsApp messages need Meta's WhatsApp Business Platform or Termii's WhatsApp channel. Many customers check SMS and WhatsApp before email. A Nigerian
    SMS provider such as Termii costs a few naira per message. Start with "Out for delivery" and
    "Approved, ready to pay". *Needs: an SMS account. Size: medium.*
 
 ## Next (bigger steps)
 
-4. **Delivery code for the rider.** The customer gets a 4-digit code and gives it to the rider at the
+4. ~~**Delivery code for the rider.**~~ Built. The customer gets a 4-digit code and gives it to the rider at the
    door. The rider enters it to mark the order delivered. This proves delivery and helps with
    ID-checked alcohol orders. *Size: medium.*
 
-5. **Rider view.** A phone-friendly page for riders with today's deliveries, addresses, the
+5. ~~**Rider view.**~~ Built. A phone-friendly page for riders with today's deliveries, addresses, the
    customer's number to call, directions, and a "Delivered" button. *Size: medium.*
 
 6. **Staff accounts.** Separate sign-ins for pharmacists, packers and riders instead of one shared
@@ -73,3 +73,6 @@ retail and wholesale pharmacy in Okitipupa, roughly how big it is, and anything 
 - **Today's takings** on the desk header.
 - **Promo codes** (for example `WELCOME10`) and **free delivery over a set amount**, both ready in
   `js/config.js` and switched off until you choose the offers.
+- **Riders:** a rider page (`/rider`) with Call, WhatsApp and Directions buttons, and a delivery code the customer gives at the door.
+- **SMS updates** through Termii (switched off until the account is added), texts to the shop's phone, and one-tap WhatsApp updates from the desk.
+- **Unpaid orders:** one reminder after 2 hours, then automatic cancellation after 48 hours.

@@ -41,7 +41,10 @@ Regulations 2026); `/controlled-medicines` explains in-store collection.
 1. **Import the repo** at vercel.com/new (framework preset "Other", no build command).
 2. **Add storage:** in the Vercel project, open *Storage* → *Marketplace* → **Upstash for Redis**
    → create a database and connect it to the project. This adds `KV_REST_API_URL` and
-   `KV_REST_API_TOKEN` automatically.
+   `KV_REST_API_TOKEN` automatically. If you gave the connection a prefix (for example `storage_`, giving
+   `storage_KV_REST_API_URL`), that's fine: the site accepts prefixed names, and the same goes for a
+   Resend connection (`messaging_RESEND_API_KEY`, `messaging_RESEND_EMAIL_DOMAIN`). With the Resend
+   connection, emails are sent from `orders@` your verified domain unless you set `MAIL_FROM`.
 3. **Add environment variables** (*Settings* → *Environment Variables*):
 
    | Name | Value |

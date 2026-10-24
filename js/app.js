@@ -31,6 +31,9 @@ function doseOf(p) {
   return "";
 }
 const isBulk = p => p.units && p.units.length > 1;
+/* Out of stock: out: true in js/data.js, plus whatever the pharmacy marks on the desk (sent with /api/health) */
+P.forEach(p => { p.outInData = !!p.out; });
+function applyStock(ids) { const set = new Set(ids || []); P.forEach(p => { p.out = p.outInData || set.has(p.id); }); }
 
 /* ---------- Search: ranks by name, then generic, brand and category; understands common brand names ---------- */
 const norm = t => String(t || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9%./+ ]+/g, " ").replace(/\s+/g, " ").trim();
@@ -64,6 +67,9 @@ const stamp = d => new Date(d).toLocaleString(CFG.site.locale, { day: "numeric",
 const addressLine = [B.address, B.city, B.state].filter(has).join(", ");
 const cutoff = PR.fmt12(D.sameDayCutoff);
 const threshold = NGN(D.nextDayThreshold);
+/* Where fast delivery applies, for the wording around the site: " in Okitipupa", " within Ondo State" */
+const expressWhere = has(D.expressArea) ? ` in ${D.expressArea}` : "";
+const sameDayWhere = (D.localStates || []).length ? ` within ${D.localStates.join(", ")} State` : "";
 
 const IMG = {
   hero: "assets/hero-pharmacist.webp",
@@ -151,7 +157,7 @@ const demo = (() => {
   const full = o => Object.assign({}, o, { statusLabel: LBL[o.status], actions: NEXT[o.status] || [] });
   const wait = v => new Promise(r => setTimeout(() => r(v), 250));
   function make(b) {
-    const q = PR.quote({ items: b.items, state: b.delivery.state, speed: b.delivery.speed, rxRequest: b.rxRequest }, CFG, P);
+    const q = PR.quote({ items: b.items, state: b.delivery.state, city: b.delivery.city, speed: b.delivery.speed, rxRequest: b.rxRequest }, CFG, P);
     const rx = b.rxRequest || q.lines.some(l => l.cls === "pom");
     const o = { id: id(), createdAt: new Date().toISOString(), rx, rxRequest: !!b.rxRequest, status: rx ? "pending_review" : "awaiting_payment", items: q.lines, subtotal: q.subtotal, deliveryFee: q.deliveryFee, total: q.total, priced: !b.rxRequest,
       delivery: Object.assign({}, b.delivery, { speed: q.speed, label: q.speedLabel }), customer: b.customer, prescriber: rx ? b.prescription : null, file: rx ? b.prescription.file : null, history: [] };
@@ -288,7 +294,9 @@ const tag = p => (p.cls === "pom" ? `<span class="tag rx">Prescription only</spa
   + (p.age ? ` <span class="tag age">${p.age}+ only</span>` : "");
 const badge = p => p.cls === "pom" ? ["rx", "Prescription"] : p.cls === "otc" ? ["otc", "Over the counter"] : p.age ? ["age", `${p.age}+`] : ["gen", dept(p.dept).short];
 const alertBox = msg => msg ? `<div class="notice bad" role="alert" tabindex="-1" id="form-error"><b>Something needs attention</b><span>${esc(msg)}</span></div>` : "";
-const phoneText = () => has(B.phone) ? `<a class="tel" href="tel:${esc(B.phone.replace(/\s/g, ""))}">${esc(B.phone)}</a>` : "";
+const telLink = n => `<a class="tel" href="tel:${esc(String(n).replace(/\s/g, ""))}">${esc(n)}</a>`;
+const phoneText = () => has(B.phone) ? telLink(B.phone) : "";
+const phonesText = () => [B.phone, B.phone2].filter(has).map(telLink).join(" · ");
 const contactLine = () => has(B.phone) ? `call ${phoneText()}` : `use the ${link("/contact", "contact page", "linkbtn")}`;
 function hoursRows() {
   const days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
@@ -370,7 +378,7 @@ function vHome() {
       <p class="lede">Genuine NAFDAC-registered medicines checked by our pharmacists, plus medical equipment, surgical supplies and provisions. Buy one pack or a whole carton, and we'll deliver it to your door.</p>
       <div class="ctas">${link("/products", "Shop all products", "btn btn-primary btn-lg")}${link("/prescriptions", "Send a prescription", "btn btn-accent btn-lg")}</div>
       <ul class="hero-points">
-        <li>${icon("check", "ic sm")} Home delivery in ${D.expressMinutes} minutes</li>
+        <li>${icon("check", "ic sm")} Home delivery in ${D.expressMinutes} minutes${esc(expressWhere)}</li>
         <li>${icon("check", "ic sm")} Same day for orders before ${cutoff}</li>
         <li>${icon("check", "ic sm")} Free advice from a pharmacist</li>
       </ul>
@@ -413,7 +421,7 @@ function vHome() {
       <div class="feature-photo"><div class="fallback">${personSVG("female")}</div>${photo(IMG.pharmacistFemale, "object-position:42% 30%", "A Synako pharmacist on the phone")}</div>
     </article>
     <article class="feature feature-warm">
-      <div class="feature-copy"><p class="eyebrow">Fast delivery</p><h2>Home delivery in ${D.expressMinutes} minutes</h2>
+      <div class="feature-copy"><p class="eyebrow">Fast delivery</p><h2>Home delivery in ${D.expressMinutes} minutes${esc(expressWhere)}</h2>
         <p>Tired of waiting in a queue? Too weak to go to the store? We bring your medicines to you. Orders above ${threshold} are delivered the next day.</p>${link("/products", "Order now", "btn btn-primary")}</div>
       <div class="feature-photo"><div class="fallback">${icon("truck", "ic huge")}</div>${photo(IMG.delivery, "", "A Synako delivery rider holding parcels")}</div>
     </article>
@@ -552,7 +560,10 @@ function vProduct() {
       ${rx ? `<div class="notice rx"><b>Prescription required</b><span>Add it to your basket, then upload your prescription at checkout. Our pharmacist checks it before you pay, and we only supply it if the prescription is valid.</span></div>`
         : p.age ? `<div class="notice rx"><b>${p.age}+ only</b><span>We confirm your date of birth at checkout, and our rider checks photo ID on delivery. Please drink responsibly.</span></div>`
         : med ? `<div class="notice info"><b>Over-the-counter</b><span>Our pharmacist may contact you before sending it if they need to check it's right for you.</span></div>` : ""}
-      ${p.out ? `<div class="notice bad"><b>Out of stock</b><span>We're restocking this item. ${link("/contact", "Ask us", "linkbtn")} when it'll be back, or ask our pharmacist for an alternative.</span></div>` : ""}
+      ${p.out ? `<div class="notice bad"><b>Out of stock</b><span>We're restocking this item. Leave your phone number or email and we'll tell you as soon as it's back, or ${link("/contact", "ask our pharmacist", "linkbtn")} for an alternative.</span></div>
+        <form class="restock" id="restockform" novalidate><input type="hidden" name="product" value="${esc(p.id)}"><div class="hp" aria-hidden="true"><label>Leave this empty<input name="website" tabindex="-1" autocomplete="off"></label></div>
+          <label for="rsc" class="sr">Phone number or email</label><input id="rsc" name="contact" required placeholder="Phone number or email" autocomplete="email">
+          <button class="btn btn-primary" type="submit">Tell me when it's back</button></form>` : ""}
       ${p.out ? "" : unitPicker(p)}
       ${p.out ? "" : `<div class="buy">
         <div class="qty" role="group" aria-label="Quantity"><button type="button" data-qty="-1" aria-label="Decrease quantity">−</button><span class="num" id="qty-val" aria-live="polite">${S.qty}</span><button type="button" data-qty="1" aria-label="Increase quantity">+</button></div>
@@ -573,7 +584,7 @@ function vProduct() {
         <details open><summary>${med ? "What it's for" : "About this product"}</summary><p>${esc(p.use)}</p></details>
         ${p.how ? `<details><summary>How to use</summary><p>${esc(p.how)}${med ? " Always read the label and patient leaflet." : ""}</p></details>` : ""}
         ${p.warn ? `<details><summary>Warnings</summary><p>${esc(p.warn)}</p></details>` : ""}
-        <details><summary>Delivery</summary><p>Home delivery in ${D.expressMinutes} minutes during opening hours, or same-day delivery for orders placed before ${cutoff}. Orders above ${threshold} are delivered the next day. Other states take 2–4 working days. We deliver within Nigeria only.</p></details>
+        <details><summary>Delivery</summary><p>Home delivery in ${D.expressMinutes} minutes${esc(expressWhere)} during opening hours, or same-day delivery${esc(sameDayWhere)} for orders placed before ${cutoff}. Orders above ${threshold} are delivered the next day. Other states take 2–4 working days. We deliver within Nigeria only.</p></details>
       </div>
       <p class="small muted">Questions about this product, or need a larger quantity? ${link("/contact", "Talk to us", "linkbtn")} or ${link("/wholesale", "request a trade quote", "linkbtn")}.</p>
     </div>
@@ -620,17 +631,27 @@ function vControlled() {
 const lineKey = l => l.id + "|" + (l.u || "1");
 const items = () => S.cart.filter(l => prod(l.id) && PR.unitOf(prod(l.id), l.u)).map(l => Object.assign({}, l, { p: prod(l.id), unit: PR.unitOf(prod(l.id), l.u), key: lineKey(l) }));
 const hasRx = () => S.rxRequest || S.cart.some(l => prod(l.id) && prod(l.id).cls === "pom");
-const quoteNow = () => PR.quote({ items: S.cart, state: S.form.state, speed: S.form.speed, rxRequest: S.rxRequest }, CFG, P);
+const quoteNow = () => PR.quote({ items: S.cart, state: S.form.state, city: S.form.city, speed: S.form.speed, rxRequest: S.rxRequest, promo: S.form.promo }, CFG, P);
+const promosOn = () => Object.keys(CFG.promos || {}).length > 0;
+function promoBox(q) {
+  if (!promosOn()) return "";
+  if (q.promo) return `<div class="promo-on small"><span>${icon("check", "ic sm")}<span><b>${esc(q.promo.code)}</b> · ${esc(q.promo.label)}</span></span><button class="linkbtn" type="button" data-promo-remove>Remove</button></div>`;
+  return `<form class="promo" id="promoform" novalidate><label for="promo" class="sr">Promo code</label><input id="promo" name="promo" placeholder="Promo code" value="${esc(S.form.promo || "")}" autocapitalize="characters" autocomplete="off"><button class="btn btn-ghost btn-sm" type="submit">Apply</button></form>
+    ${S.form.promo && q.promoError ? `<p class="small" style="color:var(--bad)" role="alert">${esc(q.promoError)}</p>` : ""}`;
+}
 function summary(cta) {
   const q = quoteNow();
   return `<aside class="panel summary" aria-labelledby="sum-title"><h2 class="h3" id="sum-title">Order summary</h2>
     ${q.lines.map(l => `<div class="r small"><span>${l.qty} × ${esc(l.name)}</span><span class="num">${NGN(l.total)}</span></div>`).join("")}
     ${S.rxRequest ? `<div class="r small"><span>Prescription items</span><span class="muted">Priced by pharmacist</span></div>` : ""}
     <div class="r"><span>Subtotal</span><span class="num">${NGN(q.subtotal)}</span></div>
-    <div class="r"><span>Delivery <span class="muted small">(${esc(q.speedLabel)})</span></span><span class="num">${NGN(q.deliveryFee)}</span></div>
+    ${q.discount ? `<div class="r ok"><span>Discount <span class="muted small">(${esc(q.promo.code)})</span></span><span class="num">−${NGN(q.discount)}</span></div>` : ""}
+    <div class="r"><span>Delivery <span class="muted small">(${esc(q.speedLabel)})</span></span><span class="num">${q.deliveryFee === 0 && (q.lines.length || S.rxRequest) ? "Free" : NGN(q.deliveryFee)}</span></div>
+    ${q.freeOver && !q.freeDelivery && q.subtotal < q.freeOver && q.speed !== "states" ? `<p class="small muted">Add ${NGN(q.freeOver - q.subtotal)} more for free delivery${esc(sameDayWhere)}.</p>` : ""}
     <div class="r total"><span>Total</span><span class="num">${NGN(q.total)}${S.rxRequest ? "+" : ""}</span></div>
     ${q.big ? `<div class="notice info small"><b>Next-day delivery</b><span>Orders above ${threshold} are delivered the next day.</span></div>` : ""}
     ${CFG.orders && has(CFG.orders.paused) ? `<div class="notice info small"><b>Online ordering is paused</b><span>${esc(CFG.orders.paused)}</span></div>` : ""}
+    ${promoBox(q)}
     ${q.unavailable.length ? `<div class="notice bad small"><b>Out of stock</b><span>${esc(q.unavailable.join(", "))} can't be ordered right now. Please remove ${q.unavailable.length === 1 ? "it" : "them"} to continue.</span></div>` : ""}
     ${q.overLimit ? `<div class="notice bad small"><b>Too large to pay online</b><span>Orders above ${NGN(q.maxTotal)} are handled as trade orders. ${link("/wholesale", "Request a trade quote", "linkbtn")} and we'll confirm stock and delivery.</span></div>` : ""}
     ${q.age >= 18 ? `<div class="notice rx small"><b>Contains alcohol</b><span>Our rider will check photo ID on delivery. We can't hand alcohol to anyone under 18.</span></div>` : ""}
@@ -671,7 +692,7 @@ function vCheckout() {
   if (S.step === 1) body = `<form class="f" id="f1" novalidate><h2>Your details</h2>
     <div class="row2"><label for="fn">Full name<input id="fn" name="name" required value="${v("name")}" autocomplete="name"></label>
     <label for="phn">Phone number<span class="hint">We'll use it to confirm delivery and to find your order.</span><input id="phn" name="phone" type="tel" inputmode="tel" required minlength="10" placeholder="0803 000 0000" value="${v("phone")}" autocomplete="tel"></label></div>
-    <div class="row2"><label for="em">Email<span class="hint">Paystack sends your receipt here.</span><input id="em" name="email" type="email" required value="${v("email")}" autocomplete="email"></label>
+    <div class="row2"><label for="em">Email<span class="hint">We send your receipt and order updates here.</span><input id="em" name="email" type="email" required value="${v("email")}" autocomplete="email" aria-describedby="em-fix"><span id="em-fix" class="em-fix" aria-live="polite"></span></label>
     <label for="dob">Date of birth<span class="hint">We supply medicines to adults 18 and over only.</span><input id="dob" name="dob" type="date" required value="${v("dob")}" autocomplete="bday"></label></div>
     <label class="check"><input type="checkbox" id="adult" name="adult" required ${F.adult ? "checked" : ""}><span>I confirm I am 18 or over and the medicines are for me or someone I care for.</span></label>
     <label class="check"><input type="checkbox" id="consent" name="consent" required ${F.consent ? "checked" : ""}><span>I agree to Synako processing my health information to supply my order, as set out in the ${link("/privacy", "privacy notice", "linkbtn")}.</span></label>
@@ -789,7 +810,8 @@ function vTrack() {
         <ol class="timeline">${st.map((s, i) => { const c = i < stage ? "done" : (i === stage && !bad && !final ? "now" : "next"); return `<li class="${c}"><span class="dot ${c}" aria-hidden="true">${i < stage ? "✓" : i + 1}</span><div><b>${s}</b>${c === "now" ? `<div class="small muted">In progress</div>` : ""}<span class="sr">${c === "done" ? " (done)" : c === "now" ? " (current step)" : ""}</span></div></li>`; }).join("")}</ol>
         <details class="facts"><summary>Order details</summary>
           <div class="small" style="display:grid;gap:.35rem;margin-top:.6rem">${o.items.map(i => `<div class="r"><span>${i.qty} × ${esc(i.name)}</span><span class="num">${NGN(i.total)}</span></div>`).join("")}
-          <div class="r"><span>Delivery · ${esc(o.delivery.label)}</span><span class="num">${NGN(o.deliveryFee)}</span></div><div class="r"><b>Total</b><b class="num">${NGN(o.total)}${o.priced ? "" : "+"}</b></div></div></details>
+          ${o.discount ? `<div class="r"><span>Discount${o.promo ? ` (${esc(o.promo.code)})` : ""}</span><span class="num">−${NGN(o.discount)}</span></div>` : ""}
+          <div class="r"><span>Delivery · ${esc(o.delivery.label)}</span><span class="num">${o.deliveryFee ? NGN(o.deliveryFee) : "Free"}</span></div><div class="r"><b>Total</b><b class="num">${NGN(o.total)}${o.priced ? "" : "+"}</b></div></div></details>
         <div class="order-actions"><button class="btn ${o.canPay ? "btn-secondary" : "btn-primary"}" type="button" data-receipt>${icon("download", "ic sm")} ${PAID(o.status) ? "Download receipt (PDF)" : "Download order summary (PDF)"}</button>${o.items.some(i => prod(i.id)) ? `<button class="btn btn-secondary" type="button" data-reorder>${icon("box", "ic sm")} Order these items again</button>` : ""}</div>
         <div><h3 style="margin-bottom:.5rem">Order record</h3><div class="audit">${o.history.slice().reverse().map(l => `<div><span>${stamp(l.t)}</span><b style="font-weight:500">${esc(l.m)}</b></div>`).join("")}</div></div>
         ${final ? "" : `<p class="small muted">Questions? ${contactLine()}.</p>`}`}
@@ -811,7 +833,7 @@ const CONTENT = {
       <div>${icon("shield", "ic big")}<h3>Safe</h3><p>Pharmacist checks on every prescription, and controlled medicines supplied in person only.</p></div>
       <div>${icon("box", "ic big")}<h3>Genuine</h3><p>NAFDAC-registered stock from approved manufacturers and distributors.</p></div>
       <div>${icon("chat", "ic big")}<h3>Personal</h3><p>Real pharmacists you can reach in under ${C.freeMinutes} minutes for free advice.</p></div>
-      <div>${icon("truck", "ic big")}<h3>Fast</h3><p>Home delivery in ${D.expressMinutes} minutes, or same day for orders before ${cutoff}.</p></div>
+      <div>${icon("truck", "ic big")}<h3>Fast</h3><p>Home delivery in ${D.expressMinutes} minutes${esc(expressWhere)}, or same day${esc(sameDayWhere)} for orders before ${cutoff}.</p></div>
     </div>` }),
   contact: () => ({ title: "Talk to a pharmacist", lead: `Quick questions are free, and you'll reach a pharmacist in under ${C.freeMinutes} minutes during opening hours.`, body: `
     <div class="two flat">
@@ -833,14 +855,14 @@ const CONTENT = {
       </div>
       <aside class="panel" style="display:grid;gap:.9rem;align-content:start">
         <h2 class="h3">Synako Pharmacy</h2>
-        <dl class="kv">${addressLine ? `<dt>Address</dt><dd>${esc(addressLine)}</dd>` : ""}${has(B.phone) ? `<dt>Phone</dt><dd>${phoneText()}</dd>` : ""}${has(B.whatsapp) ? `<dt>WhatsApp</dt><dd>${esc(B.whatsapp)}</dd>` : ""}${has(B.email) ? `<dt>Email</dt><dd>${esc(B.email)}</dd>` : ""}</dl>
+        <dl class="kv">${addressLine ? `<dt>Address</dt><dd>${esc(addressLine)}</dd>` : ""}${has(B.phone) ? `<dt>Phone</dt><dd>${phonesText()}</dd>` : ""}${has(B.whatsapp) ? `<dt>WhatsApp</dt><dd>${esc(B.whatsapp)}</dd>` : ""}${has(B.email) ? `<dt>Email</dt><dd>${esc(B.email)}</dd>` : ""}</dl>
         <h2 class="h3">Opening hours</h2>
         <dl class="kv">${hoursRows()}</dl>
         <p class="small muted">You can order online at any time. Orders placed while we're closed are handled when we open.</p>
       </aside>
     </div>` }),
   faq: () => ({ title: "Frequently asked questions", lead: "Quick answers about ordering, prescriptions and delivery.", body: `<div class="faq">${FAQ.map(([q, a], i) => `<details ${i === 0 ? "open" : ""}><summary>${esc(q)}</summary><p>${esc(a)}</p></details>`).join("")}
-    <details><summary>How fast is delivery?</summary><p>Home delivery in ${D.expressMinutes} minutes during opening hours (${esc(H.label)}), or same-day delivery for orders placed before ${cutoff}. Orders above ${threshold} are delivered the next day.</p></details>
+    <details><summary>How fast is delivery?</summary><p>Home delivery in ${D.expressMinutes} minutes${esc(expressWhere)} during opening hours (${esc(H.label)}), or same-day delivery${esc(sameDayWhere)} for orders placed before ${cutoff}. Orders above ${threshold} are delivered the next day.</p></details>
     <details><summary>Is pharmacist advice free?</summary><p>Yes, for quick questions: you'll reach a pharmacist in under ${C.freeMinutes} minutes. Longer consultations are by appointment and a fee applies.</p></details>
     <details><summary>How do I pay?</summary><p>Securely through Paystack, by card (Verve, Mastercard, Visa), bank transfer or USSD. For prescription orders you pay after our pharmacist approves the prescription.</p></details></div>
     <p style="margin-top:1.5rem">Can't find your answer? ${link("/contact", "Talk to a pharmacist", "linkbtn")}.</p>` }),
@@ -875,7 +897,7 @@ const CONTENT = {
     <h2>Who can order</h2><p>You must be 18 or over and have a delivery address in Nigeria.</p>
     <h2>Prescriptions and professional checks</h2><p>Prescription-only medicines are supplied only against a valid prescription checked by our pharmacist. Our pharmacists may decline to supply any medicine, or limit quantities, if they believe it isn't safe or appropriate. Controlled medicines are not sold online.</p>
     <h2>Prices and payment</h2><p>Prices are in Naira. Payment is taken through Paystack. For orders with prescription items, payment is taken only after approval.</p>
-    <h2>Delivery</h2><p>Home delivery in ${D.expressMinutes} minutes applies during opening hours. Orders above ${threshold} are delivered the next day. See the Delivery page for options and fees.</p>
+    <h2>Delivery</h2><p>Home delivery in ${D.expressMinutes} minutes${esc(expressWhere)} applies during opening hours. Orders above ${threshold} are delivered the next day. See the Delivery page for options and fees.</p>
     <h2>Consultations</h2><p>Quick pharmacist advice of up to ${C.freeMinutes} minutes is free. Longer consultations are by appointment and charged separately.</p>
     <h2>Cancellations and returns</h2><p>You can cancel before your order is packed. See Returns and refunds.</p></div>` }),
   licences: () => ({ title: "Our licences", lead: "Check that you're buying from a registered pharmacy.", body: `
@@ -988,16 +1010,21 @@ function vStaff() {
     pay: d.orders.filter(o => ["awaiting_payment", "approved_awaiting_payment"].includes(o.status)),
     done: d.orders.filter(o => ["delivered", "rejected", "cancelled"].includes(o.status))
   };
-  const tabs = [["review", "To review"], ["pack", "To pack & deliver"], ["pay", "Awaiting payment"], ["done", "Completed"], ["requests", "Messages & bookings"]];
-  const list = st.tab === "requests" ? null : groups[st.tab];
-  $("#staff-stats").innerHTML = `<div><b>${groups.review.length}</b>To review</div><div><b>${groups.pack.length}</b>To pack</div><div><b>${groups.pay.length}</b>Awaiting payment</div>`;
+  const tabs = [["review", "To review"], ["pack", "To pack & deliver"], ["pay", "Awaiting payment"], ["done", "Completed"], ["requests", "Messages & bookings"], ["stock", "Stock"]];
+  if (d.out) applyStock(d.out);
+  const list = ["requests", "stock"].includes(st.tab) ? null : groups[st.tab];
+  const day = t => new Date(t).toLocaleDateString("en-CA", { timeZone: CFG.site.timezone }), today = day(Date.now());
+  const paidToday = d.orders.filter(o => PAID(o.status) && day(o.createdAt) === today);
+  const takings = paidToday.reduce((t, o) => t + (Number(o.total) || 0), 0);
+  $("#staff-stats").innerHTML = `<div><b>${groups.review.length}</b>To review</div><div><b>${groups.pack.length}</b>To pack</div><div><b>${groups.pay.length}</b>Awaiting payment</div><div title="Paid orders placed today"><b>${NGN(takings)}</b>Today · ${paidToday.length} paid</div>`;
   return `<div class="desk-top">
-      <div class="desk-tabs" role="tablist" aria-label="Desk sections">${tabs.map(([k, l]) => `<button type="button" role="tab" data-dtab="${k}" aria-selected="${st.tab === k}">${l}${k === "requests" ? ` <span class="count">${d.requests.filter(r => r.status === "new").length}</span>` : ` <span class="count">${groups[k].length}</span>`}</button>`).join("")}</div>
-      <div class="desk-tools"><button class="linkbtn" type="button" data-csv>${icon("download", "ic sm")} Download orders (CSV)</button><p class="small muted" role="status">Updates every 10 seconds${st.updated ? ` · last ${st.updated.toLocaleTimeString("en-GB")}` : ""}</p></div></div>
+      <div class="desk-tabs" role="tablist" aria-label="Desk sections">${tabs.map(([k, l]) => `<button type="button" role="tab" data-dtab="${k}" aria-selected="${st.tab === k}">${l}${k === "requests" ? ` <span class="count">${d.requests.filter(r => r.status === "new").length}</span>` : k === "stock" ? ` <span class="count">${P.filter(p => p.out).length} out</span>` : ` <span class="count">${groups[k].length}</span>`}</button>`).join("")}</div>
+      <div class="desk-tools"><button class="linkbtn" type="button" data-csv>${icon("download", "ic sm")} Download orders (CSV)</button><button class="linkbtn" type="button" data-testmail>${icon("chat", "ic sm")} Send test email</button><p class="small muted" role="status">Updates every 10 seconds${st.updated ? ` · last ${st.updated.toLocaleTimeString("en-GB")}` : ""}</p></div></div>
     ${st.err ? alertBox(st.err) : ""}
+    ${st.mail ? `<div class="notice ${/NOT sent/.test(st.mail) ? "bad" : "info"} small" role="status"><span>${esc(st.mail)}</span></div>` : ""}
     ${d.missing && d.missing.length ? `<details class="setup"><summary><b>${d.missing.length} site details still missing</b> · customers can't see these yet</summary><p class="small">Add them in <code>js/config.js</code>: ${d.missing.map(esc).join(", ")}.</p></details>` : ""}
     ${d.setup && d.setup.length ? `<details class="setup"><summary><b>${d.setup.length} hosting setting${d.setup.length === 1 ? "" : "s"} to add</b> · in Vercel, Settings → Environment Variables</summary><p class="small">${d.setup.map(esc).join(", ")}. See the README for what each one does.</p></details>` : ""}
-    ${st.tab === "requests" ? `<div class="requests">${d.requests.length ? d.requests.slice().sort((a, b) => (a.status === "done") - (b.status === "done")).map(r => `<article class="panel req${r.status === "done" ? " done" : ""}"><div class="top"><b>${{ appointment: "Consultation booking", message: "Message", careers: "Careers interest", trade: "Wholesale quote request" }[r.type]}</b><span class="small muted">${stamp(r.createdAt)}</span></div>
+    ${st.tab === "stock" ? stockPanel() : st.tab === "requests" ? `<div class="requests">${d.requests.length ? d.requests.slice().sort((a, b) => (a.status === "done") - (b.status === "done")).map(r => `<article class="panel req${r.status === "done" ? " done" : ""}"><div class="top"><b>${{ appointment: "Consultation booking", message: "Message", careers: "Careers interest", trade: "Wholesale quote request", restock: "Back-in-stock request" }[r.type]}</b><span class="small muted">${stamp(r.createdAt)}</span></div>
         <div class="small"><b>${esc(r.name)}</b> · ${r.phone ? `<a href="tel:${esc(r.phone)}">${esc(r.phone)}</a>` : ""} ${esc(r.email || "")}</div>
         ${r.type === "appointment" ? `<div class="small">Wants: <b>${esc(r.date)} at ${esc(PR.fmt12(r.time || "00:00"))}</b></div>` : ""}${r.topic ? `<div class="small">${esc(r.topic)}</div>` : ""}${r.role ? `<div class="small">${esc(r.role)} ${r.pcn ? `· PCN ${esc(r.pcn)}` : ""}</div>` : ""}${r.business ? `<div class="small"><b>${esc(r.business)}</b>${r.bizType ? ` · ${esc(r.bizType)}` : ""}${r.state ? ` · ${esc(r.state)}` : ""}${r.pcn && !r.role ? ` · Licence ${esc(r.pcn)}` : ""}</div>` : ""}
         ${r.message ? `<p class="small" style="white-space:pre-line">${esc(r.message)}</p>` : ""}
@@ -1032,7 +1059,7 @@ function deskDetail() {
         <dl class="kv"><dt>Customer</dt><dd>${esc(o.customer.name)}</dd><dt>Phone</dt><dd><a href="tel:${esc(o.customer.phone)}">${esc(o.customer.phone)}</a></dd><dt>Email</dt><dd>${esc(o.customer.email)}</dd>${o.customer.dob ? `<dt>Date of birth</dt><dd>${esc(o.customer.dob)}</dd>` : ""}
           <dt>Deliver to</dt><dd>${esc([o.delivery.addr, o.delivery.landmark, o.delivery.city, o.delivery.state].filter(has).join(", "))}</dd>${has(o.delivery.note) ? `<dt>Customer note</dt><dd><b>${esc(o.delivery.note)}</b></dd>` : ""}</dl>
         <div class="small" style="display:grid;gap:.3rem">${o.items.map(i => `<div class="r"><span>${i.qty} × ${esc(i.name)} ${i.cls === "pom" ? `<span class="tag rx">POM</span>` : ""}${i.age ? `<span class="tag age">18+ ID</span>` : ""}${i.n > 1 ? `<span class="muted"> (${i.qty * i.n} packs)</span>` : ""}</span><span class="num">${NGN(i.total)}</span></div>`).join("")}
-          <div class="r"><span>Delivery</span><span class="num">${NGN(o.deliveryFee)}</span></div><div class="r"><b>Total</b><b class="num">${o.priced === false ? "to price" : NGN(o.total)}</b></div></div>
+          ${o.discount ? `<div class="r"><span>Discount${o.promo ? ` (${esc(o.promo.code)})` : ""}</span><span class="num">−${NGN(o.discount)}</span></div>` : ""}<div class="r"><span>Delivery</span><span class="num">${NGN(o.deliveryFee)}</span></div><div class="r"><b>Total</b><b class="num">${o.priced === false ? "to price" : NGN(o.total)}</b></div></div>
       </div>
       ${o.rx ? `<div style="display:grid;gap:.8rem;align-content:start">
         <h3 class="h4">Prescription</h3>${fileView}
@@ -1066,7 +1093,7 @@ function renderShell() {
   $("#topbar-mid").innerHTML = addressLine ? `Visit our pharmacy at ${esc(addressLine)} ${link("/contact", "Contact Us")}` : `Genuine medicines, checked by our pharmacists ${link("/contact", "Contact Us")}`;
   $("#topbar-right").innerHTML = (has(B.phone) ? `<span class="callus">Call Us: ${phoneText()}</span>` : "") +
     `<span class="social">${has(B.facebook) ? `<a href="${esc(B.facebook)}" target="_blank" rel="noopener" aria-label="Synako on Facebook"><svg viewBox="0 0 24 24"><path d="M22 12a10 10 0 1 0-11.6 9.9v-7H7.9V12h2.5V9.8c0-2.5 1.5-3.9 3.8-3.9 1.1 0 2.2.2 2.2.2v2.5h-1.3c-1.2 0-1.6.8-1.6 1.6V12h2.8l-.4 2.9h-2.3v7A10 10 0 0 0 22 12z"/></svg></a>` : ""}${has(B.instagram) ? `<a href="${esc(B.instagram)}" target="_blank" rel="noopener" aria-label="Synako on Instagram"><svg viewBox="0 0 24 24"><path d="M12 7.3a4.7 4.7 0 1 0 0 9.4 4.7 4.7 0 0 0 0-9.4zm0 7.7a3 3 0 1 1 0-6 3 3 0 0 1 0 6zm6-7.9a1.1 1.1 0 1 1-2.2 0 1.1 1.1 0 0 1 2.2 0zM21.9 8c0-1.7-.4-3.2-1.6-4.4S17.7 2.1 16 2c-1.7-.1-6.4-.1-8.1 0-1.7.1-3.2.5-4.4 1.6S2 6.3 2 8c-.1 1.7-.1 6.4 0 8.1.1 1.7.5 3.2 1.6 4.4s2.7 1.6 4.4 1.6c1.7.1 6.4.1 8.1 0 1.7-.1 3.2-.5 4.4-1.6s1.6-2.7 1.6-4.4c.1-1.7.1-6.4-.2-8.1z"/></svg></a>` : ""}</span>`;
-  const rows = [["Premises", L.pcnPremises], ["E-pharmacy licence", L.pcnEPharmacy], ["Superintendent", [L.superintendentName, L.superintendentPcnReg && "PCN " + L.superintendentPcnReg].filter(has).join(", ")], ["Address", addressLine], ["Phone", B.phone]].filter(([, v]) => has(v));
+  const rows = [["Premises", L.pcnPremises], ["E-pharmacy licence", L.pcnEPharmacy], ["Superintendent", [L.superintendentName, L.superintendentPcnReg && "PCN " + L.superintendentPcnReg].filter(has).join(", ")], ["Address", addressLine], ["Phone", [B.phone, B.phone2].filter(has).join(" · ")]].filter(([, v]) => has(v));
   $("#reg").innerHTML = `${has(L.ropseImage) ? `<a href="${esc(L.ropseLink || "/licences")}" ${has(L.ropseLink) ? 'target="_blank" rel="noopener"' : "data-link"}><img class="ropse-img" src="${esc(L.ropseImage)}" alt="PCN Registered Online Pharmacy Sites Emblem" width="72" height="72"></a>` : ""}
     <div><p class="reg-title">Registered with the Pharmacy Council of Nigeria</p>${rows.length ? `<dl>${rows.map(([k, v]) => `<dt>${k}</dt><dd>${esc(v)}</dd>`).join("")}</dl>` : ""}<p class="small">Open ${esc(H.label)}</p></div>`;
   $("#drawer-foot").innerHTML = `${has(B.phone) ? `<span>Pharmacist line: ${phoneText()}</span>` : ""}<span>Open ${esc(H.label)}</span>`;
@@ -1252,6 +1279,28 @@ async function prepFile(file) {
   return { name: file.name.replace(/\.\w+$/, "") + ".jpg", data };
 }
 
+/* ---------- Email typo check: "ada@gmial.com" → suggest "ada@gmail.com" ---------- */
+const MAIL_DOMAINS = ["gmail.com", "yahoo.com", "hotmail.com", "outlook.com", "icloud.com", "ymail.com", "live.com", "aol.com", "yahoo.co.uk", "hotmail.co.uk", "googlemail.com"];
+function editDistance(a, b) {
+  const d = Array.from({ length: a.length + 1 }, (_, i) => [i, ...Array(b.length).fill(0)]);
+  for (let j = 1; j <= b.length; j++) d[0][j] = j;
+  for (let i = 1; i <= a.length; i++) for (let j = 1; j <= b.length; j++)
+    d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1), i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1] ? d[i - 2][j - 2] + 1 : Infinity);
+  return d[a.length][b.length];
+}
+function emailFix(email) {
+  const m = /^([^@\s]+)@([^@\s]+)$/.exec(String(email || "").trim().toLowerCase()); if (!m) return "";
+  const dom = m[2]; if (MAIL_DOMAINS.includes(dom)) return "";
+  let best = "", score = 3;
+  MAIL_DOMAINS.forEach(d => { const s = editDistance(dom, d); if (s < score) { score = s; best = d; } });
+  return best ? `${m[1]}@${best}` : "";
+}
+function showEmailFix() {
+  const input = $("#em"), box = $("#em-fix"); if (!input || !box) return;
+  const fix = emailFix(input.value);
+  box.innerHTML = fix ? `Did you mean <button type="button" class="linkbtn" data-emfix="${esc(fix)}">${esc(fix)}</button>?` : "";
+}
+
 /* ---------- Search suggestions (header search box) ---------- */
 const POPULAR_SEARCHES = ["Paracetamol", "Vitamin C", "Malaria test", "Face masks", "Gloves", "Stethoscope", "Bathroom scale", "Milo", "Cornflakes"];
 const SG = { items: [], active: -1 };
@@ -1295,7 +1344,11 @@ function moveSuggest(d) {
   else input.removeAttribute("aria-activedescendant");
 }
 let sgTimer;
-document.addEventListener("input", e => { if (e.target.id === "q") { clearTimeout(sgTimer); sgTimer = setTimeout(openSuggest, 60); } });
+document.addEventListener("input", e => {
+  if (e.target.id === "q") { clearTimeout(sgTimer); sgTimer = setTimeout(openSuggest, 60); }
+  if (e.target.id === "em") showEmailFix();
+  if (e.target.id === "stockq") { S.staff.stockQ = e.target.value; const l = $("#stocklist"); if (l) l.innerHTML = stockRows(); }
+});
 document.addEventListener("focusin", e => { if (e.target.id === "q") openSuggest(); });
 document.addEventListener("focusout", e => { if (e.target.closest && e.target.closest("#search-form")) setTimeout(() => { if (!document.activeElement || !document.activeElement.closest("#search-form")) closeSuggest(); }, 120); });
 document.addEventListener("keydown", e => {
@@ -1343,6 +1396,39 @@ function reorder() {
   toast(added ? `Added ${added} item${added === 1 ? "" : "s"} to your basket${skipped ? `. ${skipped} couldn't be added (out of stock or unavailable)` : ""}.` : "These items can't be ordered again right now.");
   if (added) go("/basket");
 }
+/* Desk: stock list with search; one click marks a product out of stock or back in stock */
+function stockRows() {
+  const q = norm(S.staff.stockQ || "");
+  const list = P.filter(p => !q || norm([p.name, p.generic, p.brand, cat(p.cat).name].join(" ")).includes(q))
+    .sort((a, b) => (b.out - a.out) || a.name.localeCompare(b.name)).slice(0, 80);
+  const waiting = id => (S.staff.list.requests || []).filter(r => r.type === "restock" && r.product === id && r.status === "new").length;
+  return list.length ? list.map(p => `<div class="stock-row${p.out ? " out" : ""}"><span><b>${esc(p.name)}</b><span class="small muted">${esc(p.pack)} · ${esc(dept(p.dept).short)}${waiting(p.id) ? ` · <b>${waiting(p.id)} waiting</b>` : ""}</span></span>
+    ${p.outInData ? `<span class="small muted">Out in js/data.js</span>` : `<button class="btn btn-sm ${p.out ? "btn-primary" : "btn-ghost"}" type="button" data-stock="${esc(p.id)}" data-out="${p.out ? "" : "1"}">${p.out ? "Mark back in stock" : "Mark out of stock"}</button>`}</div>`).join("")
+    : `<p class="muted small">No products match.</p>`;
+}
+function stockPanel() {
+  return `<section class="panel stock"><div class="stock-head"><div><h2 class="h3">Stock</h2><p class="small muted">Out-of-stock products stay on the shop but can't be ordered. When you mark one back in stock, customers who asked by email are told automatically; phone requests stay under Messages for you to call.</p></div>
+    <label for="stockq" class="sr">Search products</label><input id="stockq" type="search" placeholder="Search products" value="${esc(S.staff.stockQ || "")}" autocomplete="off"></div>
+    <div id="stocklist">${stockRows()}</div></section>`;
+}
+async function setStock(id, out, btn) {
+  btn.disabled = true;
+  try {
+    const r = DEMO ? { out: P.filter(p => p.id === id ? out : p.out && !p.outInData).map(p => p.id), told: 0 } : await call("staff/orders", { method: "POST", body: { action: "stock", id, out, by: S.staff.name }, token: S.staff.token });
+    applyStock(r.out); if (S.staff.list) S.staff.list.out = r.out;
+    toast(out ? `${prod(id).name} marked out of stock.` : `${prod(id).name} is back in stock${r.told ? `. ${r.told} customer${r.told === 1 ? "" : "s"} emailed` : ""}.`);
+    if (!out && r.told) await loadDesk(true);
+  } catch (e) { if (e.status === 401) return signOut(); toast(e.message); }
+  render();
+}
+async function testEmail(btn) {
+  btn.disabled = true;
+  try {
+    const r = DEMO ? { ok: true, to: "you@…", from: "demo" } : await call("staff/orders", { method: "POST", body: { action: "test-email" }, token: S.staff.token });
+    S.staff.mail = r.ok ? `Test email sent to ${r.to} from ${r.from}. If it doesn't arrive within a few minutes, check spam, then Resend → Emails.` : `Test email NOT sent: ${r.why}. Sender: ${r.from || "not set"}.`;
+  } catch (e) { if (e.status === 401) return signOut(); S.staff.mail = e.message; }
+  btn.disabled = false; render();
+}
 async function markRequest(id, status) {
   try {
     if (DEMO) { const r = S.staff.list.requests.find(x => x.id === id); if (r) { r.status = status; r.handledBy = status === "done" ? S.staff.name : ""; } }
@@ -1383,6 +1469,10 @@ document.addEventListener("click", e => {
   if ("receipt" in d) { if (S.track) downloadReceipt(S.track, t); return; }
   if ("dreceipt" in d) { if (S.staff.detail) downloadReceipt(S.staff.detail, t); return; }
   if (d.req) { markRequest(d.req, d.st); return; }
+  if ("testmail" in d) { testEmail(t); return; }
+  if ("promoRemove" in d) { S.form.promo = ""; render(); return; }
+  if (d.emfix) { const i = $("#em"); i.value = d.emfix; showEmailFix(); i.focus(); return; }
+  if (d.stock) { setStock(d.stock, !!d.out, t); return; }
   if (d.age === "yes") { S.age18 = true; store.set("synako.age18", true); render(); return; }
   if ("rxreq" in d) { S.rxRequest = true; S.step = 1; go("/checkout"); toast("Prescription request started."); return; }
   if ("rxreqRemove" in d) { S.rxRequest = false; render(); return; }
@@ -1414,6 +1504,8 @@ document.addEventListener("change", async e => {
   if (t.id === "sort") { S.sort = t.value; render(); return; }
   if (t.name === "unit" && S.view === "product") { S.unit = t.value; S.qty = 1; render(); const el = document.querySelector(`input[name=unit][value="${t.value}"]`); if (el) el.focus(); return; }
   if (t.id === "st" || t.name === "speed") { saveForm(); render(); const el = $(t.id === "st" ? "#st" : `#sp-${S.form.speed}`); if (el) el.focus(); return; }
+  if (t.id === "city" && S.view === "checkout") { // 30-minute delivery depends on the town: refresh the options, keeping the cursor where it went
+    setTimeout(() => { const next = document.activeElement && document.activeElement.id; saveForm(); render(); const el = next && document.getElementById(next); if (el) el.focus(); }, 0); return; }
   if (t.id === "rxfile" && t.files[0]) {
     const status = $("#rxstatus"); status.innerHTML = `<span class="tag otc">Preparing ${esc(t.files[0].name)}…</span>`;
     try { S.form.rxfile = await prepFile(t.files[0]); status.innerHTML = `<span class="tag ok">Attached: ${esc(S.form.rxfile.name)}</span>`; t.required = false; t.setCustomValidity(""); }
@@ -1466,6 +1558,15 @@ document.addEventListener("submit", async e => {
     catch (er) { S.staff.err = er.message; render(); }
     return;
   }
+  if (f.id === "promoform") { S.form.promo = f.promo.value.trim().toUpperCase(); render(); const q = quoteNow(); toast(q.promo ? `${q.promo.code} applied: ${q.promo.label}.` : q.promoError || "Enter a code."); return; }
+  if (f.id === "restockform") {
+    if (!f.reportValidity()) return;
+    const data = Object.fromEntries(new FormData(f).entries()); data.type = "restock";
+    const btn = f.querySelector("[type=submit]"); btn.disabled = true;
+    try { await api.request(data); f.reset(); toast("Thanks. We'll let you know as soon as it's back in stock."); }
+    catch (er) { toast(er.message); }
+    btn.disabled = false; return;
+  }
   if (["contactform", "apptform", "careersform", "tradeform"].includes(f.id)) {
     if (!f.reportValidity()) return;
     if (f.id === "apptform") { const day = new Date(f.date.value + "T12:00:00").getDay(); if (!H.open[day]) { f.date.setCustomValidity("We're closed that day. Please choose Monday to Saturday."); f.reportValidity(); f.date.setCustomValidity(""); return; } }
@@ -1499,7 +1600,7 @@ async function placeOrder() {
   const payload = {
     items: S.cart.map(l => ({ id: l.id, q: l.q })), rxRequest: S.rxRequest, consent: !!F.consent,
     customer: { name: F.name, phone: F.phone, email: F.email, dob: F.dob },
-    delivery: { state: F.state, city: F.city, addr: F.addr, landmark: F.landmark, note: F.note, speed: F.speed },
+    delivery: { state: F.state, city: F.city, addr: F.addr, landmark: F.landmark, note: F.note, speed: F.speed }, promo: F.promo || "",
     prescription: rx ? { pname: F.pname, preg: F.preg, pphone: F.pphone, pclinic: F.pclinic, pdate: F.pdate, allergies: F.allergies, file: F.rxfile } : undefined
   };
   S.busy = true; S.error = ""; render();
@@ -1517,7 +1618,7 @@ async function placeOrder() {
   go("/track/" + order.id);
 }
 
-checkLive().then(() => { if (S.view === "checkout") render(); });
+checkLive().then(() => { applyStock(LIVE.out); render(); });
 renderShell();
 try { const q0 = new URLSearchParams(location.search).get("q"); if (q0) { S.q = q0.slice(0, 80); $("#q").value = S.q; } } catch (e) { /* no query */ }
 go(MEMORY ? "/" : location.pathname, { replace: true });

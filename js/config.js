@@ -14,19 +14,20 @@
     },
     business: {
       name: "Synako Pharmacy",
-      companyName: "",            // registered company name, e.g. "Synako Pharmacy Ltd"
+      companyName: "Synako Pharmaceutical LTD", // registered company name
       rcNumber: "",               // CAC RC number
-      address: "",                // street address of the pharmacy
-      city: "",                   // e.g. "Ikeja"
-      state: "",                  // e.g. "Lagos"
-      phone: "",                  // pharmacist line, e.g. "0803 000 0000"
+      address: "41 Broad Street", // street address of the pharmacy
+      city: "Okitipupa",
+      state: "Ondo State",
+      phone: "0805 555 9290",     // pharmacist line (shown in the top bar and on receipts)
+      phone2: "+44 7928 085848",  // second line, shown on the contact page and in the footer; "" to hide
       whatsapp: "",               // WhatsApp number
-      email: "",                  // e.g. "hello@synakopharmacy.com"
+      email: "thetobem@gmail.com", // shown to customers and used as the reply-to address on order emails
       instagram: "",              // full URL
       facebook: ""                // full URL
     },
     licences: {
-      pcnPremises: "",            // PCN premises certificate number
+      pcnPremises: "GB-7845-CY2324", // PCN premises certificate number (update when the certificate is renewed)
       pcnEPharmacy: "",           // PCN e-pharmacy licence number
       superintendentName: "",     // e.g. "Pharm. A. B. Surname"
       superintendentPcnReg: "",   // superintendent's PCN registration number
@@ -49,8 +50,16 @@
         nextDay: 1500,
         otherStates: 4000
       },
-      expressArea: "",            // where 30-minute delivery applies, e.g. "Ikeja and surrounding areas"
-      localStates: []             // states that get express / same-day, e.g. ["Lagos"]; empty = all
+      freeDeliveryOver: 0,        // ₦ — free same-day / next-day delivery in local states for baskets this size or more; 0 = off
+      expressArea: "Okitipupa",   // where 30-minute delivery applies, in words shown to customers
+      expressCities: ["Okitipupa"], // towns that get 30-minute delivery (matched to the customer's City / LGA); [] = every local town
+      localStates: ["Ondo"]       // states that get same-day and next-day delivery; others get 2–4 working days. [] = all
+    },
+    /* Promo codes, checked on the server. Example (remove the // to switch it on):
+       WELCOME10: { percent: 10, minSpend: 5000, expires: "2026-12-31", label: "10% off your first order" },
+       ONDOFREE:  { freeDelivery: true, minSpend: 10000, label: "Free delivery" }, */
+    promos: {
+      // WELCOME10: { percent: 10, minSpend: 5000, expires: "2026-12-31", label: "10% off your first order" },
     },
     orders: {
       paused: "",                 // to stop online orders for a while, write the reason here, e.g. "We're closed for the public holiday and back on Tuesday." Leave "" to take orders.

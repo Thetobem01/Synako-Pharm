@@ -39,6 +39,12 @@ test("health reports which features are on", async () => {
   assert.equal(json.email, true);
 });
 
+test("the deep health check confirms the order database answers", async () => {
+  const { status, json } = await api("health?deep=1");
+  assert.equal(status, 200);
+  assert.equal(json.storage.ok, true);
+});
+
 test("an over-the-counter order is priced on the server and can be paid", async () => {
   const placed = await api("orders", { body: { items: [{ id: "para", q: 2, price: 1 }], customer, delivery, consent: true }, headers: ip(1) });
   assert.equal(placed.status, 201);
@@ -69,6 +75,12 @@ test("a wholesale order keeps its units and alcohol is flagged for an ID check",
   assert.equal(full.ageRestricted, true);
   assert.equal(full.packs, 44);
   assert.ok(full.history.some(h => /photo ID/.test(h.m)));
+});
+
+test("a made-up promo code is refused by the server", async () => {
+  const r = await api("orders", { body: { items: [{ id: "para", q: 1 }], customer, delivery, consent: true, promo: "FREEMONEY" }, headers: ip(26) });
+  assert.equal(r.status, 400);
+  assert.match(r.json.error, /isn't valid/);
 });
 
 test("orders too large to pay online are sent to a trade quote", async () => {
@@ -182,6 +194,48 @@ test("the order note reaches the pharmacist", async () => {
   const token = (await api("staff/login", { body: { password: "desk" }, headers: ip(19) })).json.token;
   const full = (await api(`staff/order?id=${placed.json.order.id}`, { token })).json.order;
   assert.equal(full.delivery.note, "Size L please");
+});
+
+test("staff can send a test email, only to the shop's own inbox", async () => {
+  assert.equal((await api("staff/orders", { body: { action: "test-email" } })).status, 401);
+  const token = (await api("staff/login", { body: { password: "desk" }, headers: ip(20) })).json.token;
+  const r = await api("staff/orders", { token, body: { action: "test-email", to: "stranger@example.com" } });
+  assert.equal(r.status, 200);
+  assert.equal(r.json.ok, true);
+  assert.equal(r.json.to, "d…@example.com", "always the STAFF_EMAIL inbox, masked");
+});
+
+test("each order records whether its emails were sent", async () => {
+  const placed = await api("orders", { body: { items: [{ id: "para", q: 1 }], customer, delivery, consent: true }, headers: ip(21) });
+  const token = (await api("staff/login", { body: { password: "desk" }, headers: ip(22) })).json.token;
+  const h = (await api(`staff/order?id=${placed.json.order.id}`, { token })).json.order.history.map(x => x.m);
+  assert.ok(h.some(m => /Email to customer "Order received.*": sent/.test(m)), "customer email recorded");
+  assert.ok(h.some(m => /Email to staff "New order.*": sent/.test(m)), "staff alert recorded");
+  const pub = (await api(`order?id=${placed.json.order.id}&phone=4567`)).json.order.history.map(x => x.m);
+  assert.ok(!pub.some(m => /Email to/.test(m)), "customers don't see these lines");
+});
+
+test("stock marked on the desk stops orders, and waiting customers are told when it's back", async () => {
+  const token = (await api("staff/login", { body: { password: "desk" }, headers: ip(23) })).json.token;
+  assert.equal((await api("staff/orders", { body: { action: "stock", id: "vitc", out: true } })).status, 401);
+  const ask = await api("requests", { body: { type: "restock", product: "vitc", contact: "bola@example.com" }, headers: ip(24) });
+  assert.equal(ask.status, 201);
+  assert.equal((await api("requests", { body: { type: "restock", product: "vitc", contact: "nope" }, headers: ip(24) })).status, 400);
+  assert.equal((await api("requests", { body: { type: "restock", product: "not-a-product", contact: "08031234567" }, headers: ip(24) })).status, 400);
+
+  const off = await api("staff/orders", { token, body: { action: "stock", id: "vitc", out: true } });
+  assert.deepEqual(off.json.out, ["vitc"]);
+  assert.deepEqual((await api("health")).json.out, ["vitc"], "the shop learns it's out");
+  const refused = await api("orders", { body: { items: [{ id: "vitc", q: 1 }], customer, delivery, consent: true }, headers: ip(25) });
+  assert.equal(refused.status, 409);
+  assert.match(refused.json.error, /out of stock/);
+
+  const on = await api("staff/orders", { token, body: { action: "stock", id: "vitc", out: false, by: "Pharm. Test" } });
+  assert.deepEqual(on.json.out, []);
+  assert.equal(on.json.told, 1, "the customer who asked by email is told");
+  const req = (await api("staff/orders", { token })).json.requests.find(r => r.id === ask.json.id);
+  assert.equal(req.status, "done");
+  assert.equal((await api("orders", { body: { items: [{ id: "vitc", q: 1 }], customer, delivery, consent: true }, headers: ip(25) })).status, 201);
 });
 
 test("webhook calls without Paystack's signature are refused", async () => {

@@ -1,4 +1,4 @@
-import { handle, only, send, body, fail, site, db, newId, digits, log, publicOrder, storageReady, limit, notifyCustomer, notifyStaff } from "./_lib/core.js";
+import { handle, only, send, body, fail, site, db, newId, digits, log, publicOrder, storageReady, limit, notifyCustomer, notifyStaff, catalogueNow } from "./_lib/core.js";
 
 const MAX_FILE = 900 * 1024; // bytes of base64 text; images are compressed in the browser first
 const clean = (s, n = 200) => String(s == null ? "" : s).trim().slice(0, n);
@@ -11,7 +11,8 @@ export default handle(async (req, res) => {
   if (paused) throw fail(503, `Online ordering is paused. ${paused}`);
   await limit(req, "orders", 10, 3600, "You've placed several orders in a short time. Please call the pharmacy if you need to place more.");
   const b = await body(req);
-  const { config, P, pricing } = site();
+  const { config, pricing } = site();
+  const P = await catalogueNow();
 
   const c = b.customer || {}, d = b.delivery || {};
   const customer = { name: clean(c.name, 80), phone: clean(c.phone, 20), email: clean(c.email, 120), dob: clean(c.dob, 10) };
@@ -23,7 +24,8 @@ export default handle(async (req, res) => {
   if (!delivery.state || !delivery.city || !delivery.addr) throw fail(400, "Please enter your full delivery address.");
 
   const rxRequest = !!b.rxRequest;
-  const q = pricing.quote({ items: b.items || [], state: delivery.state, speed: d.speed, rxRequest }, config, P);
+  const q = pricing.quote({ items: b.items || [], state: delivery.state, city: delivery.city, speed: d.speed, rxRequest, promo: clean(b.promo, 30) }, config, P);
+  if (b.promo && !q.promo) throw fail(400, q.promoError || "That code isn't valid.");
   if (q.unavailable.length) throw fail(409, `Sorry, ${q.unavailable.join(", ")} ${q.unavailable.length === 1 ? "is" : "are"} out of stock. Please remove ${q.unavailable.length === 1 ? "it" : "them"} from your basket.`);
   if (!q.lines.length && !rxRequest) throw fail(400, "Your basket is empty.");
   if (q.overLimit) throw fail(400, `Orders above ${pricing.fmtMoney(q.maxTotal, config)} are handled as trade orders. Please request a quote on our Wholesale page and we'll confirm stock and delivery.`);
@@ -48,7 +50,7 @@ export default handle(async (req, res) => {
     status: rx ? "pending_review" : "awaiting_payment",
     items: q.lines.map(({ id, unit, n, unitLabel, name, qty, price, total, cls, age }) => ({ id, unit, n, unitLabel, name, qty, price, total, cls, age })),
     packs: q.packs, ageRestricted: q.age >= 18,
-    subtotal: q.subtotal, deliveryFee: q.deliveryFee, total: q.total, priced: !rxRequest,
+    subtotal: q.subtotal, deliveryFee: q.deliveryFee, discount: q.discount || 0, promo: q.promo, total: q.total, priced: !rxRequest,
     delivery: Object.assign(delivery, { speed: q.speed, label: q.speedLabel }),
     customer, prescriber, hasFile: !!file, history: [], payment: { attempts: 0 }
   };
@@ -60,6 +62,6 @@ export default handle(async (req, res) => {
   await db.set("order:" + o.id, o);
   if (file) await db.set("rx:" + o.id, file);
   await db.index("orders", o.id, now);
-  await Promise.all([notifyCustomer(o, "placed"), notifyStaff(o, "placed")]);
+  await notifyCustomer(o, "placed"); await notifyStaff(o, "placed"); // one after the other: both write their result onto the order
   send(res, 201, { order: publicOrder(o) });
 });

@@ -42,14 +42,17 @@
     const subtotal = money(lines.reduce((s, l) => s + l.total, 0));
     const c = clock(cfg, date), today = cfg.hours.open[c.day];
     const local = !d.localStates || !d.localStates.length || !input.state || d.localStates.includes(input.state);
+    /* 30-minute delivery: only in the listed towns (before a town is entered, it's shown as possible) */
+    const town = s => String(s || "").toLowerCase().replace(/[^a-z]/g, "");
+    const inTown = !d.expressCities || !d.expressCities.length || !input.city || d.expressCities.some(c => town(input.city).includes(town(c)));
     const big = subtotal > d.nextDayThreshold;
     const openNow = isOpen(cfg, date);
     const beforeCutoff = !!today && c.minutes < hm(d.sameDayCutoff);
 
     const opts = [
       { speed: "express", label: `Home delivery in ${d.expressMinutes} minutes`, fee: d.fees.express,
-        available: local && !big && openNow,
-        reason: big ? `Orders above ${fmtMoney(d.nextDayThreshold, cfg)} are delivered the next day.` : !local ? "Not available in your state." : !openNow ? "Available during opening hours." : "" },
+        available: local && inTown && !big && openNow,
+        reason: big ? `Orders above ${fmtMoney(d.nextDayThreshold, cfg)} are delivered the next day.` : !local ? "Not available in your state." : !inTown ? `Only in ${d.expressArea || d.expressCities.join(", ")}.` : !openNow ? "Available during opening hours." : "" },
       { speed: "sameday", label: `Same-day delivery (order before ${fmt12(d.sameDayCutoff)})`, fee: d.fees.sameDay,
         available: local && !big && beforeCutoff,
         reason: big ? "Large orders are delivered the next day." : !local ? "Not available in your state." : !beforeCutoff ? `Order before ${fmt12(d.sameDayCutoff)} for same-day delivery.` : "" },
@@ -59,10 +62,29 @@
 
     const cheapest = opts.filter(o => o.available).sort((x, y) => x.fee - y.fee)[0];
     const chosen = opts.find(o => o.speed === input.speed && o.available) || cheapest || opts[opts.length - 1];
-    const deliveryFee = (lines.length || input.rxRequest) ? chosen.fee : 0;
+    /* Free delivery over a set amount (local states only, never for 30-minute delivery) */
+    const freeOver = Number(d.freeDeliveryOver) || 0;
+    const freeDelivery = freeOver > 0 && local && chosen.speed !== "express" && subtotal >= freeOver;
+    const promo = applyPromo(input.promo, subtotal, cfg, date);
+    const deliveryFee = (lines.length || input.rxRequest) && !freeDelivery && !(promo.ok && promo.freeDelivery) ? chosen.fee : 0;
     const maxTotal = (cfg.orders && cfg.orders.maxOnlineTotal) || Infinity;
-    return { lines, unavailable, subtotal, big, openNow, overLimit: subtotal > maxTotal, maxTotal, packs: lines.reduce((t, l) => t + l.qty * l.n, 0), age: Math.max(0, ...lines.map(l => l.age)), options: opts, speed: chosen.speed, speedLabel: chosen.label, deliveryFee, total: money(subtotal + deliveryFee) };
+    return { lines, unavailable, subtotal, big, openNow, overLimit: subtotal > maxTotal, maxTotal, packs: lines.reduce((t, l) => t + l.qty * l.n, 0), age: Math.max(0, ...lines.map(l => l.age)), options: opts, speed: chosen.speed, speedLabel: chosen.label,
+      freeDelivery, freeOver, discount: promo.discount, promo: promo.ok ? { code: promo.code, label: promo.label } : null, promoError: promo.error || "",
+      deliveryFee, total: money(Math.max(0, subtotal - promo.discount) + deliveryFee) };
   }
+  /* Promo codes from cfg.promos: { CODE: { percent | amount, minSpend, expires: "YYYY-MM-DD", freeDelivery, label } }.
+     Codes are matched without regard to case; the discount never exceeds the subtotal. */
+  function applyPromo(code, subtotal, cfg, date) {
+    const none = { ok: false, discount: 0 };
+    const key = String(code || "").trim().toUpperCase(); if (!key) return none;
+    const all = cfg.promos || {}, p = all[Object.keys(all).find(k => k.toUpperCase() === key)];
+    if (!p) return Object.assign(none, { error: "That code isn't valid." });
+    if (p.expires && (date || new Date()) > new Date(p.expires + "T23:59:59+01:00")) return Object.assign(none, { error: "That code has expired." });
+    if (p.minSpend && subtotal < p.minSpend) return Object.assign(none, { error: `That code needs a basket of ${fmtMoney(p.minSpend, cfg)} or more.` });
+    const discount = money(Math.min(subtotal, p.percent ? subtotal * p.percent / 100 : Number(p.amount) || 0));
+    return { ok: true, code: key, discount, freeDelivery: !!p.freeDelivery, label: p.label || (p.percent ? `${p.percent}% off` : p.amount ? `${fmtMoney(p.amount, cfg)} off` : "Free delivery") };
+  }
+
   /* Currency in the shop's locale, e.g. ₦1,200 or ₦999,999.99 (decimals only when needed) */
   function fmtMoney(n, cfg) {
     const site = (cfg && cfg.site) || {}, v = Number(n);

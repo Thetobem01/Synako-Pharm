@@ -88,7 +88,11 @@ The Pharmacist Desk lists any hosting settings that are still missing.
 
 ## Running the shop day to day
 
-- **Out of stock:** add `out: true` to the product in `js/data.js` and redeploy. It stays visible but can't be ordered, and baskets holding it are asked to remove it. Remove `out: true` when it's back.
+- **Out of stock:** on the Pharmacist Desk, open **Stock**, search for the product and press **Mark out of stock**. It stays visible but can't be ordered (the server refuses it too), and customers can leave a phone number or email to hear when it's back. **Mark back in stock** emails everyone who left an email; phone requests stay under *Messages & bookings* to call. (Adding `out: true` to a product in `js/data.js` also works, for products you don't expect back soon.)
+- **Email check:** on the desk, **Send test email** sends a test to `STAFF_EMAIL` and shows Resend's answer straight away. Each order's record on the desk also shows whether its emails were sent, and why not if they weren't.
+- **Promo codes:** add them under `promos` in `js/config.js`, e.g. `WELCOME10: { percent: 10, minSpend: 5000, expires: "2026-12-31", label: "10% off your first order" }` (or `amount: 500` for ₦500 off, or `freeDelivery: true`). A code box appears in the basket once at least one code exists. The server checks every code, so customers can't invent their own; the discount shows on the order, the desk and the receipt.
+- **Free delivery over a set amount:** set `delivery.freeDeliveryOver` in `js/config.js` (e.g. `20000`). It applies to same-day and next-day delivery in your local states, not to 30-minute delivery or other states, and the basket tells customers how much more to add. `0` switches it off.
+- **Today's takings:** the desk header shows today's paid orders and their total.
 - **Pause online orders** (public holiday, stock count, no riders): write the reason in `orders.paused` in `js/config.js` and redeploy. Customers can still browse, and checkout shows your message and your phone number. Set it back to `""` to reopen.
 - **Search:** the search box suggests products, departments and popular searches as customers type, and understands common brand names (Panadol, Flagyl, Buscopan, Vicks and more). Add local names to `SYNONYMS` in `js/data.js`.
 - **Pharmacist Desk** (`/pharmacist`): review prescriptions, move orders through packed, out for delivery and delivered, **print a delivery note** for the rider, **download orders as CSV** for your accounts, and **mark messages, bookings and trade quotes as handled**.
@@ -102,7 +106,7 @@ The Pharmacist Desk lists any hosting settings that are still missing.
 
 ## Keep an eye on it
 
-- **Uptime:** add `https://YOUR-DOMAIN/api/health` to a free monitor such as UptimeRobot or Better Stack, so you get an alert if the site goes down.
+- **Uptime:** add `https://YOUR-DOMAIN/api/health?deep=1` to a free monitor such as UptimeRobot or Better Stack. It answers 200 when the site and the order database are working, and 503 if the database stops answering, so you get an alert either way.
 - **Errors:** Vercel → your project → *Logs* shows every API error. Paystack's dashboard shows every payment and webhook delivery.
 - **Visitors (optional):** Vercel → *Analytics* → *Enable* gives privacy-friendly visitor counts without cookies. It also needs its script added to `index.html` (Vercel shows the line to copy); the security policy already allows it because it's served from your own domain.
 - **Backups:** Upstash keeps daily backups on paid plans. On the free plan, download orders as CSV from the desk regularly.

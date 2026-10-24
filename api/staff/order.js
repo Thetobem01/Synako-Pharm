@@ -46,7 +46,7 @@ export default handle(async (req, res) => {
       if (!(extra > 0)) throw fail(400, "Enter the price for the prescription items.");
       o.items.push({ id: "rx-request", name: String(b.itemsText || "Prescription items").slice(0, 200), qty: 1, price: extra, total: extra, cls: "pom" });
       o.subtotal = Math.round((o.subtotal + extra) * 100) / 100;
-      o.total = Math.round((o.subtotal + o.deliveryFee) * 100) / 100;
+      o.total = Math.round((Math.max(0, o.subtotal - (o.discount || 0)) + o.deliveryFee) * 100) / 100;
       o.priced = true;
     }
     o.status = "approved_awaiting_payment";

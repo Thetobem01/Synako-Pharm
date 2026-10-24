@@ -278,6 +278,8 @@ form.f { display: grid; gap: var(--sp-4); }
 .desk-tools .linkbtn, .req-foot .btn { display: inline-flex; align-items: center; gap: .35rem; }
 .req-foot { display: flex; align-items: center; gap: .75rem; margin-top: .25rem; }
 .req.done { opacity: .7; }
+.em-fix { font-size: var(--fs-sm); color: var(--warn); }
+.em-fix:empty { display: none; }
 .restock { display: flex; gap: .5rem; flex-wrap: wrap; }
 .restock input { flex: 1 1 220px; min-height: 44px; padding: .55rem .8rem; border: 1px solid var(--line-2); border-radius: var(--r-sm); font: inherit; }
 .stock { display: grid; gap: var(--sp-4); }

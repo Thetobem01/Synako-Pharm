@@ -682,7 +682,7 @@ function vCheckout() {
   if (S.step === 1) body = `<form class="f" id="f1" novalidate><h2>Your details</h2>
     <div class="row2"><label for="fn">Full name<input id="fn" name="name" required value="${v("name")}" autocomplete="name"></label>
     <label for="phn">Phone number<span class="hint">We'll use it to confirm delivery and to find your order.</span><input id="phn" name="phone" type="tel" inputmode="tel" required minlength="10" placeholder="0803 000 0000" value="${v("phone")}" autocomplete="tel"></label></div>
-    <div class="row2"><label for="em">Email<span class="hint">Paystack sends your receipt here.</span><input id="em" name="email" type="email" required value="${v("email")}" autocomplete="email"></label>
+    <div class="row2"><label for="em">Email<span class="hint">We send your receipt and order updates here.</span><input id="em" name="email" type="email" required value="${v("email")}" autocomplete="email" aria-describedby="em-fix"><span id="em-fix" class="em-fix" aria-live="polite"></span></label>
     <label for="dob">Date of birth<span class="hint">We supply medicines to adults 18 and over only.</span><input id="dob" name="dob" type="date" required value="${v("dob")}" autocomplete="bday"></label></div>
     <label class="check"><input type="checkbox" id="adult" name="adult" required ${F.adult ? "checked" : ""}><span>I confirm I am 18 or over and the medicines are for me or someone I care for.</span></label>
     <label class="check"><input type="checkbox" id="consent" name="consent" required ${F.consent ? "checked" : ""}><span>I agree to Synako processing my health information to supply my order, as set out in the ${link("/privacy", "privacy notice", "linkbtn")}.</span></label>
@@ -1265,6 +1265,28 @@ async function prepFile(file) {
   return { name: file.name.replace(/\.\w+$/, "") + ".jpg", data };
 }
 
+/* ---------- Email typo check: "ada@gmial.com" → suggest "ada@gmail.com" ---------- */
+const MAIL_DOMAINS = ["gmail.com", "yahoo.com", "hotmail.com", "outlook.com", "icloud.com", "ymail.com", "live.com", "aol.com", "yahoo.co.uk", "hotmail.co.uk", "googlemail.com"];
+function editDistance(a, b) {
+  const d = Array.from({ length: a.length + 1 }, (_, i) => [i, ...Array(b.length).fill(0)]);
+  for (let j = 1; j <= b.length; j++) d[0][j] = j;
+  for (let i = 1; i <= a.length; i++) for (let j = 1; j <= b.length; j++)
+    d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1), i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1] ? d[i - 2][j - 2] + 1 : Infinity);
+  return d[a.length][b.length];
+}
+function emailFix(email) {
+  const m = /^([^@\s]+)@([^@\s]+)$/.exec(String(email || "").trim().toLowerCase()); if (!m) return "";
+  const dom = m[2]; if (MAIL_DOMAINS.includes(dom)) return "";
+  let best = "", score = 3;
+  MAIL_DOMAINS.forEach(d => { const s = editDistance(dom, d); if (s < score) { score = s; best = d; } });
+  return best ? `${m[1]}@${best}` : "";
+}
+function showEmailFix() {
+  const input = $("#em"), box = $("#em-fix"); if (!input || !box) return;
+  const fix = emailFix(input.value);
+  box.innerHTML = fix ? `Did you mean <button type="button" class="linkbtn" data-emfix="${esc(fix)}">${esc(fix)}</button>?` : "";
+}
+
 /* ---------- Search suggestions (header search box) ---------- */
 const POPULAR_SEARCHES = ["Paracetamol", "Vitamin C", "Malaria test", "Face masks", "Gloves", "Stethoscope", "Bathroom scale", "Milo", "Cornflakes"];
 const SG = { items: [], active: -1 };
@@ -1310,6 +1332,7 @@ function moveSuggest(d) {
 let sgTimer;
 document.addEventListener("input", e => {
   if (e.target.id === "q") { clearTimeout(sgTimer); sgTimer = setTimeout(openSuggest, 60); }
+  if (e.target.id === "em") showEmailFix();
   if (e.target.id === "stockq") { S.staff.stockQ = e.target.value; const l = $("#stocklist"); if (l) l.innerHTML = stockRows(); }
 });
 document.addEventListener("focusin", e => { if (e.target.id === "q") openSuggest(); });
@@ -1433,6 +1456,7 @@ document.addEventListener("click", e => {
   if ("dreceipt" in d) { if (S.staff.detail) downloadReceipt(S.staff.detail, t); return; }
   if (d.req) { markRequest(d.req, d.st); return; }
   if ("testmail" in d) { testEmail(t); return; }
+  if (d.emfix) { const i = $("#em"); i.value = d.emfix; showEmailFix(); i.focus(); return; }
   if (d.stock) { setStock(d.stock, !!d.out, t); return; }
   if (d.age === "yes") { S.age18 = true; store.set("synako.age18", true); render(); return; }
   if ("rxreq" in d) { S.rxRequest = true; S.step = 1; go("/checkout"); toast("Prescription request started."); return; }

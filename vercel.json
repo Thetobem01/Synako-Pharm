@@ -79,7 +79,7 @@
   ],
   "functions": {
     "api/**/*.js": {
-      "includeFiles": "js/**",
+      "includeFiles": "{js/**,assets/receipt-logo.jpg}",
       "maxDuration": 15
     }
   }

@@ -91,7 +91,8 @@ test("tracking needs the right phone digits and hides private details", async ()
   assert.equal((await api(`order?id=${id}&phone=`)).status, 404);
   const ok = await api(`order?id=${id.toLowerCase()}&phone=4567`);
   assert.equal(ok.status, 200);
-  assert.equal(ok.json.order.customer, undefined);
+  assert.deepEqual(ok.json.order.customer, { name: customer.name }, "only the name, for the receipt");
+  assert.equal(ok.json.order.payment.status, "unpaid");
   assert.equal(ok.json.order.delivery.addr, undefined);
   assert.equal((await api("pay-start", { body: { id, phone: "" } })).status, 404);
 });

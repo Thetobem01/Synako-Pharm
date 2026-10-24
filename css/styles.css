@@ -278,7 +278,9 @@ form.f { display: grid; gap: var(--sp-4); }
 .desk-tools .linkbtn, .req-foot .btn { display: inline-flex; align-items: center; gap: .35rem; }
 .req-foot { display: flex; align-items: center; gap: .75rem; margin-top: .25rem; }
 .req.done { opacity: .7; }
-.desk-print { display: flex; justify-content: flex-end; margin: -.25rem 0 .25rem; }
+.desk-print { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: .5rem; margin: -.25rem 0 .25rem; }
+.order-actions { display: flex; flex-wrap: wrap; gap: .6rem; }
+.order-actions .btn, .desk-print .btn { display: inline-flex; align-items: center; gap: .4rem; }
 .hicons { display: flex; align-items: center; gap: var(--sp-1); }
 .hlink { position: relative; display: inline-flex; align-items: center; gap: .45rem; min-height: 44px; padding: .4rem .75rem; border-radius: var(--r-pill); color: var(--ink); text-decoration: none; font-weight: 600; font-size: var(--fs-sm); }
 .hlink:hover { background: var(--surface-2); color: var(--brand); }

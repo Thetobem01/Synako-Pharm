@@ -170,6 +170,7 @@ const RESEND_KEY = () => setting("RESEND_API_KEY");
 /* Sender: MAIL_FROM, or orders@ the domain the Resend connection verified */
 const MAIL_FROM = () => process.env.MAIL_FROM || (setting("RESEND_EMAIL_DOMAIN") ? `${site().config.business.name} <orders@${setting("RESEND_EMAIL_DOMAIN")}>` : "");
 export const emailReady = () => !!(RESEND_KEY() && MAIL_FROM());
+export const mailFrom = () => MAIL_FROM();
 const htmlEsc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 /* PDF receipt, made with the same js/receipt.js the website uses */
 let receiptLib;
@@ -186,21 +187,34 @@ export async function receiptPdf(o) {
   return { filename: receiptLib.filename(o), content: Buffer.from(await blob.arrayBuffer()).toString("base64") };
 }
 
-/* Sends one email; never throws, so a mail problem can't break an order or payment */
+/* Sends one email; never throws, so a mail problem can't break an order or payment.
+   Returns { ok, why } so the reason for a failure can be shown to staff. */
 export async function sendEmail(to, subject, lines, attachments) {
-  if (!emailReady() || !to) return false;
+  if (!emailReady()) return { ok: false, why: "Email isn't set up (RESEND_API_KEY / MAIL_FROM)" };
+  if (!to) return { ok: false, why: "No address" };
   const html = `<div style="font-family:Arial,sans-serif;font-size:15px;line-height:1.5;color:#1d2433">${lines.map(l => `<p>${l.html || htmlEsc(l)}</p>`).join("")}</div>`;
   const text = lines.map(l => l.text || l).join("\n\n");
   try {
-    if (DEV && RESEND_KEY() === "test") { console.log(`[email] to ${to}: ${subject}${attachments ? ` + ${attachments.map(a => a.filename).join(", ")}` : ""}`); return true; }
+    if (DEV && RESEND_KEY() === "test") { console.log(`[email] to ${to}: ${subject}${attachments ? ` + ${attachments.map(a => a.filename).join(", ")}` : ""}`); return { ok: true }; }
     const r = await fetch("https://api.resend.com/emails", {
       method: "POST", signal: AbortSignal.timeout(5000),
       headers: { Authorization: `Bearer ${RESEND_KEY()}`, "Content-Type": "application/json" },
       body: JSON.stringify({ from: MAIL_FROM(), to: [to], subject, html, text, reply_to: site().config.business.email || undefined, attachments })
     });
-    if (!r.ok) console.error("Email failed", r.status, await r.text());
-    return r.ok;
-  } catch (e) { console.error("Email failed", e); return false; }
+    if (r.ok) return { ok: true };
+    const detail = await r.text(); console.error("Email failed", r.status, detail);
+    let why = `Resend said ${r.status}`; try { why += ": " + (JSON.parse(detail).message || detail).slice(0, 200); } catch (e) { why += ": " + detail.slice(0, 200); }
+    return { ok: false, why };
+  } catch (e) { console.error("Email failed", e); return { ok: false, why: e.name === "TimeoutError" ? "Resend didn't answer in time" : String(e.message || e).slice(0, 200) }; }
+}
+/* Writes the email result onto the order's staff-only record, so the desk shows whether customers were reached */
+async function recordEmail(o, who, subject, res) {
+  try {
+    const fresh = (await db.get("order:" + o.id)) || o;
+    log(fresh, `Email to ${who} "${subject}": ${res.ok ? "sent" : "NOT sent · " + res.why}`, { internal: true });
+    await db.set("order:" + o.id, fresh);
+    o.history = fresh.history;
+  } catch (e) { console.error("Couldn't record email result", e); }
 }
 const link = (href, label) => ({ html: `<a href="${htmlEsc(href)}">${htmlEsc(label)}</a>`, text: `${label}: ${href}` });
 /* The shop's public address: SITE_URL in the hosting settings wins, then site.url in js/config.js */
@@ -229,8 +243,10 @@ export async function notifyCustomer(o, event) {
   const name = String(o.customer.name || "").split(" ")[0];
   let attachments;
   if (event === "paid") { try { attachments = [await receiptPdf(o)]; } catch (e) { console.error("Receipt failed", e); } } // the email still goes without it
-  await sendEmail(o.customer.email, `${SUBJECT[event]} · ${o.id}`, [`Hello ${name},`, ...make(o), link(`${baseUrl()}/track/${o.id}`, event === "paid" ? "View your order and download your receipt" : "Track your order"),
+  const subject = `${SUBJECT[event]} · ${o.id}`;
+  const res = await sendEmail(o.customer.email, subject, [`Hello ${name},`, ...make(o), link(`${baseUrl()}/track/${o.id}`, event === "paid" ? "View your order and download your receipt" : "Track your order"),
     `${site().config.business.name}. Your pathway to health and wellness.`], attachments);
+  if (emailReady()) await recordEmail(o, "customer", subject, res);
 }
 /* Staff alerts carry no health details: just the order number and a link to the desk */
 export async function notifyStaff(o, event) {
@@ -238,7 +254,9 @@ export async function notifyStaff(o, event) {
   if (!to) return;
   const what = event === "paid" ? `Payment received for ${o.id} (${naira(o.total)}). Ready to pack.`
     : o.rx ? `New prescription order ${o.id} is waiting for pharmacist review.` : `New order ${o.id} placed (${naira(o.total)}), awaiting payment.`;
-  await sendEmail(to, `${event === "paid" ? "Paid" : o.rx ? "To review" : "New order"} · ${o.id}`, [what, link(`${baseUrl()}/pharmacist`, "Open the Pharmacist Desk")]);
+  const subject = `${event === "paid" ? "Paid" : o.rx ? "To review" : "New order"} · ${o.id}`;
+  const res = await sendEmail(to, subject, [what, link(`${baseUrl()}/pharmacist`, "Open the Pharmacist Desk")]);
+  await recordEmail(o, "staff", subject, res);
 }
 
 /* ---------- Paystack ---------- */
@@ -267,6 +285,6 @@ export async function settle(orderId, tx) {
   log(o, `Payment received · ${tx.channel || "Paystack"}`);
   log(o, "Order recorded for the National Electronic Pharmacy Platform (integration pending)", { internal: true });
   await db.set("order:" + o.id, o);
-  await Promise.all([notifyCustomer(o, "paid"), notifyStaff(o, "paid")]);
+  await notifyCustomer(o, "paid"); await notifyStaff(o, "paid");
   return o;
 }

@@ -60,6 +60,6 @@ export default handle(async (req, res) => {
   await db.set("order:" + o.id, o);
   if (file) await db.set("rx:" + o.id, file);
   await db.index("orders", o.id, now);
-  await Promise.all([notifyCustomer(o, "placed"), notifyStaff(o, "placed")]);
+  await notifyCustomer(o, "placed"); await notifyStaff(o, "placed"); // one after the other: both write their result onto the order
   send(res, 201, { order: publicOrder(o) });
 });

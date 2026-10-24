@@ -998,8 +998,9 @@ function vStaff() {
   $("#staff-stats").innerHTML = `<div><b>${groups.review.length}</b>To review</div><div><b>${groups.pack.length}</b>To pack</div><div><b>${groups.pay.length}</b>Awaiting payment</div>`;
   return `<div class="desk-top">
       <div class="desk-tabs" role="tablist" aria-label="Desk sections">${tabs.map(([k, l]) => `<button type="button" role="tab" data-dtab="${k}" aria-selected="${st.tab === k}">${l}${k === "requests" ? ` <span class="count">${d.requests.filter(r => r.status === "new").length}</span>` : ` <span class="count">${groups[k].length}</span>`}</button>`).join("")}</div>
-      <div class="desk-tools"><button class="linkbtn" type="button" data-csv>${icon("download", "ic sm")} Download orders (CSV)</button><p class="small muted" role="status">Updates every 10 seconds${st.updated ? ` · last ${st.updated.toLocaleTimeString("en-GB")}` : ""}</p></div></div>
+      <div class="desk-tools"><button class="linkbtn" type="button" data-csv>${icon("download", "ic sm")} Download orders (CSV)</button><button class="linkbtn" type="button" data-testmail>${icon("chat", "ic sm")} Send test email</button><p class="small muted" role="status">Updates every 10 seconds${st.updated ? ` · last ${st.updated.toLocaleTimeString("en-GB")}` : ""}</p></div></div>
     ${st.err ? alertBox(st.err) : ""}
+    ${st.mail ? `<div class="notice ${/NOT sent/.test(st.mail) ? "bad" : "info"} small" role="status"><span>${esc(st.mail)}</span></div>` : ""}
     ${d.missing && d.missing.length ? `<details class="setup"><summary><b>${d.missing.length} site details still missing</b> · customers can't see these yet</summary><p class="small">Add them in <code>js/config.js</code>: ${d.missing.map(esc).join(", ")}.</p></details>` : ""}
     ${d.setup && d.setup.length ? `<details class="setup"><summary><b>${d.setup.length} hosting setting${d.setup.length === 1 ? "" : "s"} to add</b> · in Vercel, Settings → Environment Variables</summary><p class="small">${d.setup.map(esc).join(", ")}. See the README for what each one does.</p></details>` : ""}
     ${st.tab === "requests" ? `<div class="requests">${d.requests.length ? d.requests.slice().sort((a, b) => (a.status === "done") - (b.status === "done")).map(r => `<article class="panel req${r.status === "done" ? " done" : ""}"><div class="top"><b>${{ appointment: "Consultation booking", message: "Message", careers: "Careers interest", trade: "Wholesale quote request" }[r.type]}</b><span class="small muted">${stamp(r.createdAt)}</span></div>
@@ -1348,6 +1349,14 @@ function reorder() {
   toast(added ? `Added ${added} item${added === 1 ? "" : "s"} to your basket${skipped ? `. ${skipped} couldn't be added (out of stock or unavailable)` : ""}.` : "These items can't be ordered again right now.");
   if (added) go("/basket");
 }
+async function testEmail(btn) {
+  btn.disabled = true;
+  try {
+    const r = DEMO ? { ok: true, to: "you@…", from: "demo" } : await call("staff/orders", { method: "POST", body: { action: "test-email" }, token: S.staff.token });
+    S.staff.mail = r.ok ? `Test email sent to ${r.to} from ${r.from}. If it doesn't arrive within a few minutes, check spam, then Resend → Emails.` : `Test email NOT sent: ${r.why}. Sender: ${r.from || "not set"}.`;
+  } catch (e) { if (e.status === 401) return signOut(); S.staff.mail = e.message; }
+  btn.disabled = false; render();
+}
 async function markRequest(id, status) {
   try {
     if (DEMO) { const r = S.staff.list.requests.find(x => x.id === id); if (r) { r.status = status; r.handledBy = status === "done" ? S.staff.name : ""; } }
@@ -1388,6 +1397,7 @@ document.addEventListener("click", e => {
   if ("receipt" in d) { if (S.track) downloadReceipt(S.track, t); return; }
   if ("dreceipt" in d) { if (S.staff.detail) downloadReceipt(S.staff.detail, t); return; }
   if (d.req) { markRequest(d.req, d.st); return; }
+  if ("testmail" in d) { testEmail(t); return; }
   if (d.age === "yes") { S.age18 = true; store.set("synako.age18", true); render(); return; }
   if ("rxreq" in d) { S.rxRequest = true; S.step = 1; go("/checkout"); toast("Prescription request started."); return; }
   if ("rxreqRemove" in d) { S.rxRequest = false; render(); return; }

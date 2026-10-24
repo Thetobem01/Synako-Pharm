@@ -184,6 +184,25 @@ test("the order note reaches the pharmacist", async () => {
   assert.equal(full.delivery.note, "Size L please");
 });
 
+test("staff can send a test email, only to the shop's own inbox", async () => {
+  assert.equal((await api("staff/orders", { body: { action: "test-email" } })).status, 401);
+  const token = (await api("staff/login", { body: { password: "desk" }, headers: ip(20) })).json.token;
+  const r = await api("staff/orders", { token, body: { action: "test-email", to: "stranger@example.com" } });
+  assert.equal(r.status, 200);
+  assert.equal(r.json.ok, true);
+  assert.equal(r.json.to, "d…@example.com", "always the STAFF_EMAIL inbox, masked");
+});
+
+test("each order records whether its emails were sent", async () => {
+  const placed = await api("orders", { body: { items: [{ id: "para", q: 1 }], customer, delivery, consent: true }, headers: ip(21) });
+  const token = (await api("staff/login", { body: { password: "desk" }, headers: ip(22) })).json.token;
+  const h = (await api(`staff/order?id=${placed.json.order.id}`, { token })).json.order.history.map(x => x.m);
+  assert.ok(h.some(m => /Email to customer "Order received.*": sent/.test(m)), "customer email recorded");
+  assert.ok(h.some(m => /Email to staff "New order.*": sent/.test(m)), "staff alert recorded");
+  const pub = (await api(`order?id=${placed.json.order.id}&phone=4567`)).json.order.history.map(x => x.m);
+  assert.ok(!pub.some(m => /Email to/.test(m)), "customers don't see these lines");
+});
+
 test("webhook calls without Paystack's signature are refused", async () => {
   const r = await api("paystack-webhook", { body: { event: "charge.success", data: { reference: "x" } }, headers: { "x-paystack-signature": "bad" } });
   assert.equal(r.status, 401);

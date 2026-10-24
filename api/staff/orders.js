@@ -1,4 +1,4 @@
-import { handle, only, send, body, fail, requireStaff, db, site, STATUS, emailReady, paystackReady } from "../_lib/core.js";
+import { handle, only, send, body, fail, requireStaff, db, site, STATUS, emailReady, paystackReady, sendEmail, mailFrom, limit } from "../_lib/core.js";
 /* Pharmacist Desk. GET: recent orders and requests, plus site details still missing.
    POST: mark a message, booking or quote request as handled (or back to new).
    (One file for both keeps the API within Vercel Hobby's 12-function limit.) */
@@ -7,6 +7,13 @@ export default handle(async (req, res) => {
   requireStaff(req);
   if (req.method === "POST") {
     const b = await body(req);
+    if (b.action === "test-email") { // only ever to the shop's own alert inbox
+      await limit(req, "test-email", 5, 600, "Please wait a few minutes before sending another test.");
+      const to = process.env.STAFF_EMAIL || site().config.business.email;
+      if (!to) throw fail(400, "Add STAFF_EMAIL in the hosting settings first.");
+      const r = await sendEmail(to, "Test email from your Synako shop", ["This is a test from the Pharmacist Desk. If you can read it, order emails are working.", `Sent from ${mailFrom()}.`]);
+      return send(res, 200, { ok: r.ok, why: r.why || "", to: to.replace(/^(.).*(@.*)$/, "$1…$2"), from: mailFrom() });
+    }
     const r = b.id ? await db.get("req:" + String(b.id)) : null;
     if (!r) throw fail(404, "Request not found.");
     r.status = b.status === "new" ? "new" : "done";

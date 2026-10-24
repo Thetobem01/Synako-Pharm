@@ -88,7 +88,9 @@ The Pharmacist Desk lists any hosting settings that are still missing.
 
 ## Running the shop day to day
 
-- **Out of stock:** add `out: true` to the product in `js/data.js` and redeploy. It stays visible but can't be ordered, and baskets holding it are asked to remove it. Remove `out: true` when it's back.
+- **Out of stock:** on the Pharmacist Desk, open **Stock**, search for the product and press **Mark out of stock**. It stays visible but can't be ordered (the server refuses it too), and customers can leave a phone number or email to hear when it's back. **Mark back in stock** emails everyone who left an email; phone requests stay under *Messages & bookings* to call. (Adding `out: true` to a product in `js/data.js` also works, for products you don't expect back soon.)
+- **Email check:** on the desk, **Send test email** sends a test to `STAFF_EMAIL` and shows Resend's answer straight away. Each order's record on the desk also shows whether its emails were sent, and why not if they weren't.
+- **Today's takings:** the desk header shows today's paid orders and their total.
 - **Pause online orders** (public holiday, stock count, no riders): write the reason in `orders.paused` in `js/config.js` and redeploy. Customers can still browse, and checkout shows your message and your phone number. Set it back to `""` to reopen.
 - **Search:** the search box suggests products, departments and popular searches as customers type, and understands common brand names (Panadol, Flagyl, Buscopan, Vicks and more). Add local names to `SYNONYMS` in `js/data.js`.
 - **Pharmacist Desk** (`/pharmacist`): review prescriptions, move orders through packed, out for delivery and delivered, **print a delivery note** for the rider, **download orders as CSV** for your accounts, and **mark messages, bookings and trade quotes as handled**.

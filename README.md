@@ -102,7 +102,7 @@ The Pharmacist Desk lists any hosting settings that are still missing.
 
 ## Keep an eye on it
 
-- **Uptime:** add `https://YOUR-DOMAIN/api/health` to a free monitor such as UptimeRobot or Better Stack, so you get an alert if the site goes down.
+- **Uptime:** add `https://YOUR-DOMAIN/api/health?deep=1` to a free monitor such as UptimeRobot or Better Stack. It answers 200 when the site and the order database are working, and 503 if the database stops answering, so you get an alert either way.
 - **Errors:** Vercel → your project → *Logs* shows every API error. Paystack's dashboard shows every payment and webhook delivery.
 - **Visitors (optional):** Vercel → *Analytics* → *Enable* gives privacy-friendly visitor counts without cookies. It also needs its script added to `index.html` (Vercel shows the line to copy); the security policy already allows it because it's served from your own domain.
 - **Backups:** Upstash keeps daily backups on paid plans. On the free plan, download orders as CSV from the desk regularly.

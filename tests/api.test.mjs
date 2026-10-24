@@ -39,6 +39,12 @@ test("health reports which features are on", async () => {
   assert.equal(json.email, true);
 });
 
+test("the deep health check confirms the order database answers", async () => {
+  const { status, json } = await api("health?deep=1");
+  assert.equal(status, 200);
+  assert.equal(json.storage.ok, true);
+});
+
 test("an over-the-counter order is priced on the server and can be paid", async () => {
   const placed = await api("orders", { body: { items: [{ id: "para", q: 2, price: 1 }], customer, delivery, consent: true }, headers: ip(1) });
   assert.equal(placed.status, 201);

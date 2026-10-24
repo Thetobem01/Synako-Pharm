@@ -16,12 +16,13 @@
       name: "Synako Pharmacy",
       companyName: "Synako Pharmaceutical LTD", // registered company name
       rcNumber: "",               // CAC RC number
-      address: "",                // street address of the pharmacy
-      city: "",                   // e.g. "Ikeja"
-      state: "",                  // e.g. "Lagos"
-      phone: "",                  // pharmacist line, e.g. "0803 000 0000"
+      address: "41 Broad Street", // street address of the pharmacy
+      city: "Okitipupa",
+      state: "Ondo State",
+      phone: "0805 555 9290",     // pharmacist line (shown in the top bar and on receipts)
+      phone2: "+44 7928 085848",  // second line, shown on the contact page and in the footer; "" to hide
       whatsapp: "",               // WhatsApp number
-      email: "",                  // e.g. "hello@synakopharmacy.com"
+      email: "thetobem@gmail.com", // shown to customers and used as the reply-to address on order emails
       instagram: "",              // full URL
       facebook: ""                // full URL
     },

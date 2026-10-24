@@ -288,7 +288,9 @@ const tag = p => (p.cls === "pom" ? `<span class="tag rx">Prescription only</spa
   + (p.age ? ` <span class="tag age">${p.age}+ only</span>` : "");
 const badge = p => p.cls === "pom" ? ["rx", "Prescription"] : p.cls === "otc" ? ["otc", "Over the counter"] : p.age ? ["age", `${p.age}+`] : ["gen", dept(p.dept).short];
 const alertBox = msg => msg ? `<div class="notice bad" role="alert" tabindex="-1" id="form-error"><b>Something needs attention</b><span>${esc(msg)}</span></div>` : "";
-const phoneText = () => has(B.phone) ? `<a class="tel" href="tel:${esc(B.phone.replace(/\s/g, ""))}">${esc(B.phone)}</a>` : "";
+const telLink = n => `<a class="tel" href="tel:${esc(String(n).replace(/\s/g, ""))}">${esc(n)}</a>`;
+const phoneText = () => has(B.phone) ? telLink(B.phone) : "";
+const phonesText = () => [B.phone, B.phone2].filter(has).map(telLink).join(" · ");
 const contactLine = () => has(B.phone) ? `call ${phoneText()}` : `use the ${link("/contact", "contact page", "linkbtn")}`;
 function hoursRows() {
   const days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
@@ -833,7 +835,7 @@ const CONTENT = {
       </div>
       <aside class="panel" style="display:grid;gap:.9rem;align-content:start">
         <h2 class="h3">Synako Pharmacy</h2>
-        <dl class="kv">${addressLine ? `<dt>Address</dt><dd>${esc(addressLine)}</dd>` : ""}${has(B.phone) ? `<dt>Phone</dt><dd>${phoneText()}</dd>` : ""}${has(B.whatsapp) ? `<dt>WhatsApp</dt><dd>${esc(B.whatsapp)}</dd>` : ""}${has(B.email) ? `<dt>Email</dt><dd>${esc(B.email)}</dd>` : ""}</dl>
+        <dl class="kv">${addressLine ? `<dt>Address</dt><dd>${esc(addressLine)}</dd>` : ""}${has(B.phone) ? `<dt>Phone</dt><dd>${phonesText()}</dd>` : ""}${has(B.whatsapp) ? `<dt>WhatsApp</dt><dd>${esc(B.whatsapp)}</dd>` : ""}${has(B.email) ? `<dt>Email</dt><dd>${esc(B.email)}</dd>` : ""}</dl>
         <h2 class="h3">Opening hours</h2>
         <dl class="kv">${hoursRows()}</dl>
         <p class="small muted">You can order online at any time. Orders placed while we're closed are handled when we open.</p>
@@ -1066,7 +1068,7 @@ function renderShell() {
   $("#topbar-mid").innerHTML = addressLine ? `Visit our pharmacy at ${esc(addressLine)} ${link("/contact", "Contact Us")}` : `Genuine medicines, checked by our pharmacists ${link("/contact", "Contact Us")}`;
   $("#topbar-right").innerHTML = (has(B.phone) ? `<span class="callus">Call Us: ${phoneText()}</span>` : "") +
     `<span class="social">${has(B.facebook) ? `<a href="${esc(B.facebook)}" target="_blank" rel="noopener" aria-label="Synako on Facebook"><svg viewBox="0 0 24 24"><path d="M22 12a10 10 0 1 0-11.6 9.9v-7H7.9V12h2.5V9.8c0-2.5 1.5-3.9 3.8-3.9 1.1 0 2.2.2 2.2.2v2.5h-1.3c-1.2 0-1.6.8-1.6 1.6V12h2.8l-.4 2.9h-2.3v7A10 10 0 0 0 22 12z"/></svg></a>` : ""}${has(B.instagram) ? `<a href="${esc(B.instagram)}" target="_blank" rel="noopener" aria-label="Synako on Instagram"><svg viewBox="0 0 24 24"><path d="M12 7.3a4.7 4.7 0 1 0 0 9.4 4.7 4.7 0 0 0 0-9.4zm0 7.7a3 3 0 1 1 0-6 3 3 0 0 1 0 6zm6-7.9a1.1 1.1 0 1 1-2.2 0 1.1 1.1 0 0 1 2.2 0zM21.9 8c0-1.7-.4-3.2-1.6-4.4S17.7 2.1 16 2c-1.7-.1-6.4-.1-8.1 0-1.7.1-3.2.5-4.4 1.6S2 6.3 2 8c-.1 1.7-.1 6.4 0 8.1.1 1.7.5 3.2 1.6 4.4s2.7 1.6 4.4 1.6c1.7.1 6.4.1 8.1 0 1.7-.1 3.2-.5 4.4-1.6s1.6-2.7 1.6-4.4c.1-1.7.1-6.4-.2-8.1z"/></svg></a>` : ""}</span>`;
-  const rows = [["Premises", L.pcnPremises], ["E-pharmacy licence", L.pcnEPharmacy], ["Superintendent", [L.superintendentName, L.superintendentPcnReg && "PCN " + L.superintendentPcnReg].filter(has).join(", ")], ["Address", addressLine], ["Phone", B.phone]].filter(([, v]) => has(v));
+  const rows = [["Premises", L.pcnPremises], ["E-pharmacy licence", L.pcnEPharmacy], ["Superintendent", [L.superintendentName, L.superintendentPcnReg && "PCN " + L.superintendentPcnReg].filter(has).join(", ")], ["Address", addressLine], ["Phone", [B.phone, B.phone2].filter(has).join(" · ")]].filter(([, v]) => has(v));
   $("#reg").innerHTML = `${has(L.ropseImage) ? `<a href="${esc(L.ropseLink || "/licences")}" ${has(L.ropseLink) ? 'target="_blank" rel="noopener"' : "data-link"}><img class="ropse-img" src="${esc(L.ropseImage)}" alt="PCN Registered Online Pharmacy Sites Emblem" width="72" height="72"></a>` : ""}
     <div><p class="reg-title">Registered with the Pharmacy Council of Nigeria</p>${rows.length ? `<dl>${rows.map(([k, v]) => `<dt>${k}</dt><dd>${esc(v)}</dd>`).join("")}</dl>` : ""}<p class="small">Open ${esc(H.label)}</p></div>`;
   $("#drawer-foot").innerHTML = `${has(B.phone) ? `<span>Pharmacist line: ${phoneText()}</span>` : ""}<span>Open ${esc(H.label)}</span>`;

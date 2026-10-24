@@ -42,14 +42,17 @@
     const subtotal = money(lines.reduce((s, l) => s + l.total, 0));
     const c = clock(cfg, date), today = cfg.hours.open[c.day];
     const local = !d.localStates || !d.localStates.length || !input.state || d.localStates.includes(input.state);
+    /* 30-minute delivery: only in the listed towns (before a town is entered, it's shown as possible) */
+    const town = s => String(s || "").toLowerCase().replace(/[^a-z]/g, "");
+    const inTown = !d.expressCities || !d.expressCities.length || !input.city || d.expressCities.some(c => town(input.city).includes(town(c)));
     const big = subtotal > d.nextDayThreshold;
     const openNow = isOpen(cfg, date);
     const beforeCutoff = !!today && c.minutes < hm(d.sameDayCutoff);
 
     const opts = [
       { speed: "express", label: `Home delivery in ${d.expressMinutes} minutes`, fee: d.fees.express,
-        available: local && !big && openNow,
-        reason: big ? `Orders above ${fmtMoney(d.nextDayThreshold, cfg)} are delivered the next day.` : !local ? "Not available in your state." : !openNow ? "Available during opening hours." : "" },
+        available: local && inTown && !big && openNow,
+        reason: big ? `Orders above ${fmtMoney(d.nextDayThreshold, cfg)} are delivered the next day.` : !local ? "Not available in your state." : !inTown ? `Only in ${d.expressArea || d.expressCities.join(", ")}.` : !openNow ? "Available during opening hours." : "" },
       { speed: "sameday", label: `Same-day delivery (order before ${fmt12(d.sameDayCutoff)})`, fee: d.fees.sameDay,
         available: local && !big && beforeCutoff,
         reason: big ? "Large orders are delivered the next day." : !local ? "Not available in your state." : !beforeCutoff ? `Order before ${fmt12(d.sameDayCutoff)} for same-day delivery.` : "" },

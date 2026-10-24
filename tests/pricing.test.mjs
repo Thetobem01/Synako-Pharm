@@ -101,6 +101,24 @@ test("other states get the interstate option only", () => {
   assert.equal(q.deliveryFee, cfg.delivery.fees.otherStates);
 });
 
+test("30-minute delivery only in the listed towns; same-day only in local states", () => {
+  const cfg = structuredClone(config);
+  cfg.delivery.localStates = ["Ondo"]; cfg.delivery.expressCities = ["Okitipupa"]; cfg.delivery.expressArea = "Okitipupa";
+  const q = (state, city) => pricing.quote({ items: [{ id: "para", q: 1 }], state, city, speed: "express" }, cfg, P, at("10:00"));
+  assert.equal(q("Ondo", "Okitipupa").speed, "express");
+  assert.equal(q("Ondo", "okitipupa town").speed, "express", "town match ignores case and extra words");
+  const akure = q("Ondo", "Akure");
+  assert.notEqual(akure.speed, "express");
+  assert.match(akure.options.find(o => o.speed === "express").reason, /Only in Okitipupa/);
+  assert.ok(akure.options.find(o => o.speed === "sameday").available, "same day still offered within Ondo");
+  assert.deepEqual(list(q("Lagos", "Ikeja").options.map(o => o.speed)), ["states"], "other states: 2–4 working days only");
+});
+
+test("the shipped delivery areas match the pharmacy in Okitipupa, Ondo State", () => {
+  assert.deepEqual(list(config.delivery.localStates), ["Ondo"]);
+  assert.deepEqual(list(config.delivery.expressCities), ["Okitipupa"]);
+});
+
 test("an empty basket has no delivery fee", () => {
   assert.equal(pricing.quote({ items: [] }, config, P, at("10:00")).total, 0);
 });

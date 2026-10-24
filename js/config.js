@@ -27,7 +27,7 @@
       facebook: ""                // full URL
     },
     licences: {
-      pcnPremises: "",            // PCN premises certificate number
+      pcnPremises: "GB-7845-CY2324", // PCN premises certificate number (update when the certificate is renewed)
       pcnEPharmacy: "",           // PCN e-pharmacy licence number
       superintendentName: "",     // e.g. "Pharm. A. B. Surname"
       superintendentPcnReg: "",   // superintendent's PCN registration number
@@ -50,8 +50,9 @@
         nextDay: 1500,
         otherStates: 4000
       },
-      expressArea: "",            // where 30-minute delivery applies, e.g. "Ikeja and surrounding areas"
-      localStates: []             // states that get express / same-day, e.g. ["Lagos"]; empty = all
+      expressArea: "Okitipupa",   // where 30-minute delivery applies, in words shown to customers
+      expressCities: ["Okitipupa"], // towns that get 30-minute delivery (matched to the customer's City / LGA); [] = every local town
+      localStates: ["Ondo"]       // states that get same-day and next-day delivery; others get 2–4 working days. [] = all
     },
     orders: {
       paused: "",                 // to stop online orders for a while, write the reason here, e.g. "We're closed for the public holiday and back on Tuesday." Leave "" to take orders.

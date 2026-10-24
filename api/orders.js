@@ -23,7 +23,7 @@ export default handle(async (req, res) => {
   if (!delivery.state || !delivery.city || !delivery.addr) throw fail(400, "Please enter your full delivery address.");
 
   const rxRequest = !!b.rxRequest;
-  const q = pricing.quote({ items: b.items || [], state: delivery.state, speed: d.speed, rxRequest }, config, P);
+  const q = pricing.quote({ items: b.items || [], state: delivery.state, city: delivery.city, speed: d.speed, rxRequest }, config, P);
   if (q.unavailable.length) throw fail(409, `Sorry, ${q.unavailable.join(", ")} ${q.unavailable.length === 1 ? "is" : "are"} out of stock. Please remove ${q.unavailable.length === 1 ? "it" : "them"} from your basket.`);
   if (!q.lines.length && !rxRequest) throw fail(400, "Your basket is empty.");
   if (q.overLimit) throw fail(400, `Orders above ${pricing.fmtMoney(q.maxTotal, config)} are handled as trade orders. Please request a quote on our Wholesale page and we'll confirm stock and delivery.`);

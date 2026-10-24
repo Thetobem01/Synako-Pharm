@@ -64,6 +64,9 @@ const stamp = d => new Date(d).toLocaleString(CFG.site.locale, { day: "numeric",
 const addressLine = [B.address, B.city, B.state].filter(has).join(", ");
 const cutoff = PR.fmt12(D.sameDayCutoff);
 const threshold = NGN(D.nextDayThreshold);
+/* Where fast delivery applies, for the wording around the site: " in Okitipupa", " within Ondo State" */
+const expressWhere = has(D.expressArea) ? ` in ${D.expressArea}` : "";
+const sameDayWhere = (D.localStates || []).length ? ` within ${D.localStates.join(", ")} State` : "";
 
 const IMG = {
   hero: "assets/hero-pharmacist.webp",
@@ -151,7 +154,7 @@ const demo = (() => {
   const full = o => Object.assign({}, o, { statusLabel: LBL[o.status], actions: NEXT[o.status] || [] });
   const wait = v => new Promise(r => setTimeout(() => r(v), 250));
   function make(b) {
-    const q = PR.quote({ items: b.items, state: b.delivery.state, speed: b.delivery.speed, rxRequest: b.rxRequest }, CFG, P);
+    const q = PR.quote({ items: b.items, state: b.delivery.state, city: b.delivery.city, speed: b.delivery.speed, rxRequest: b.rxRequest }, CFG, P);
     const rx = b.rxRequest || q.lines.some(l => l.cls === "pom");
     const o = { id: id(), createdAt: new Date().toISOString(), rx, rxRequest: !!b.rxRequest, status: rx ? "pending_review" : "awaiting_payment", items: q.lines, subtotal: q.subtotal, deliveryFee: q.deliveryFee, total: q.total, priced: !b.rxRequest,
       delivery: Object.assign({}, b.delivery, { speed: q.speed, label: q.speedLabel }), customer: b.customer, prescriber: rx ? b.prescription : null, file: rx ? b.prescription.file : null, history: [] };
@@ -372,7 +375,7 @@ function vHome() {
       <p class="lede">Genuine NAFDAC-registered medicines checked by our pharmacists, plus medical equipment, surgical supplies and provisions. Buy one pack or a whole carton, and we'll deliver it to your door.</p>
       <div class="ctas">${link("/products", "Shop all products", "btn btn-primary btn-lg")}${link("/prescriptions", "Send a prescription", "btn btn-accent btn-lg")}</div>
       <ul class="hero-points">
-        <li>${icon("check", "ic sm")} Home delivery in ${D.expressMinutes} minutes</li>
+        <li>${icon("check", "ic sm")} Home delivery in ${D.expressMinutes} minutes${esc(expressWhere)}</li>
         <li>${icon("check", "ic sm")} Same day for orders before ${cutoff}</li>
         <li>${icon("check", "ic sm")} Free advice from a pharmacist</li>
       </ul>
@@ -415,7 +418,7 @@ function vHome() {
       <div class="feature-photo"><div class="fallback">${personSVG("female")}</div>${photo(IMG.pharmacistFemale, "object-position:42% 30%", "A Synako pharmacist on the phone")}</div>
     </article>
     <article class="feature feature-warm">
-      <div class="feature-copy"><p class="eyebrow">Fast delivery</p><h2>Home delivery in ${D.expressMinutes} minutes</h2>
+      <div class="feature-copy"><p class="eyebrow">Fast delivery</p><h2>Home delivery in ${D.expressMinutes} minutes${esc(expressWhere)}</h2>
         <p>Tired of waiting in a queue? Too weak to go to the store? We bring your medicines to you. Orders above ${threshold} are delivered the next day.</p>${link("/products", "Order now", "btn btn-primary")}</div>
       <div class="feature-photo"><div class="fallback">${icon("truck", "ic huge")}</div>${photo(IMG.delivery, "", "A Synako delivery rider holding parcels")}</div>
     </article>
@@ -575,7 +578,7 @@ function vProduct() {
         <details open><summary>${med ? "What it's for" : "About this product"}</summary><p>${esc(p.use)}</p></details>
         ${p.how ? `<details><summary>How to use</summary><p>${esc(p.how)}${med ? " Always read the label and patient leaflet." : ""}</p></details>` : ""}
         ${p.warn ? `<details><summary>Warnings</summary><p>${esc(p.warn)}</p></details>` : ""}
-        <details><summary>Delivery</summary><p>Home delivery in ${D.expressMinutes} minutes during opening hours, or same-day delivery for orders placed before ${cutoff}. Orders above ${threshold} are delivered the next day. Other states take 2–4 working days. We deliver within Nigeria only.</p></details>
+        <details><summary>Delivery</summary><p>Home delivery in ${D.expressMinutes} minutes${esc(expressWhere)} during opening hours, or same-day delivery${esc(sameDayWhere)} for orders placed before ${cutoff}. Orders above ${threshold} are delivered the next day. Other states take 2–4 working days. We deliver within Nigeria only.</p></details>
       </div>
       <p class="small muted">Questions about this product, or need a larger quantity? ${link("/contact", "Talk to us", "linkbtn")} or ${link("/wholesale", "request a trade quote", "linkbtn")}.</p>
     </div>
@@ -622,7 +625,7 @@ function vControlled() {
 const lineKey = l => l.id + "|" + (l.u || "1");
 const items = () => S.cart.filter(l => prod(l.id) && PR.unitOf(prod(l.id), l.u)).map(l => Object.assign({}, l, { p: prod(l.id), unit: PR.unitOf(prod(l.id), l.u), key: lineKey(l) }));
 const hasRx = () => S.rxRequest || S.cart.some(l => prod(l.id) && prod(l.id).cls === "pom");
-const quoteNow = () => PR.quote({ items: S.cart, state: S.form.state, speed: S.form.speed, rxRequest: S.rxRequest }, CFG, P);
+const quoteNow = () => PR.quote({ items: S.cart, state: S.form.state, city: S.form.city, speed: S.form.speed, rxRequest: S.rxRequest }, CFG, P);
 function summary(cta) {
   const q = quoteNow();
   return `<aside class="panel summary" aria-labelledby="sum-title"><h2 class="h3" id="sum-title">Order summary</h2>
@@ -813,7 +816,7 @@ const CONTENT = {
       <div>${icon("shield", "ic big")}<h3>Safe</h3><p>Pharmacist checks on every prescription, and controlled medicines supplied in person only.</p></div>
       <div>${icon("box", "ic big")}<h3>Genuine</h3><p>NAFDAC-registered stock from approved manufacturers and distributors.</p></div>
       <div>${icon("chat", "ic big")}<h3>Personal</h3><p>Real pharmacists you can reach in under ${C.freeMinutes} minutes for free advice.</p></div>
-      <div>${icon("truck", "ic big")}<h3>Fast</h3><p>Home delivery in ${D.expressMinutes} minutes, or same day for orders before ${cutoff}.</p></div>
+      <div>${icon("truck", "ic big")}<h3>Fast</h3><p>Home delivery in ${D.expressMinutes} minutes${esc(expressWhere)}, or same day${esc(sameDayWhere)} for orders before ${cutoff}.</p></div>
     </div>` }),
   contact: () => ({ title: "Talk to a pharmacist", lead: `Quick questions are free, and you'll reach a pharmacist in under ${C.freeMinutes} minutes during opening hours.`, body: `
     <div class="two flat">
@@ -842,7 +845,7 @@ const CONTENT = {
       </aside>
     </div>` }),
   faq: () => ({ title: "Frequently asked questions", lead: "Quick answers about ordering, prescriptions and delivery.", body: `<div class="faq">${FAQ.map(([q, a], i) => `<details ${i === 0 ? "open" : ""}><summary>${esc(q)}</summary><p>${esc(a)}</p></details>`).join("")}
-    <details><summary>How fast is delivery?</summary><p>Home delivery in ${D.expressMinutes} minutes during opening hours (${esc(H.label)}), or same-day delivery for orders placed before ${cutoff}. Orders above ${threshold} are delivered the next day.</p></details>
+    <details><summary>How fast is delivery?</summary><p>Home delivery in ${D.expressMinutes} minutes${esc(expressWhere)} during opening hours (${esc(H.label)}), or same-day delivery${esc(sameDayWhere)} for orders placed before ${cutoff}. Orders above ${threshold} are delivered the next day.</p></details>
     <details><summary>Is pharmacist advice free?</summary><p>Yes, for quick questions: you'll reach a pharmacist in under ${C.freeMinutes} minutes. Longer consultations are by appointment and a fee applies.</p></details>
     <details><summary>How do I pay?</summary><p>Securely through Paystack, by card (Verve, Mastercard, Visa), bank transfer or USSD. For prescription orders you pay after our pharmacist approves the prescription.</p></details></div>
     <p style="margin-top:1.5rem">Can't find your answer? ${link("/contact", "Talk to a pharmacist", "linkbtn")}.</p>` }),
@@ -877,7 +880,7 @@ const CONTENT = {
     <h2>Who can order</h2><p>You must be 18 or over and have a delivery address in Nigeria.</p>
     <h2>Prescriptions and professional checks</h2><p>Prescription-only medicines are supplied only against a valid prescription checked by our pharmacist. Our pharmacists may decline to supply any medicine, or limit quantities, if they believe it isn't safe or appropriate. Controlled medicines are not sold online.</p>
     <h2>Prices and payment</h2><p>Prices are in Naira. Payment is taken through Paystack. For orders with prescription items, payment is taken only after approval.</p>
-    <h2>Delivery</h2><p>Home delivery in ${D.expressMinutes} minutes applies during opening hours. Orders above ${threshold} are delivered the next day. See the Delivery page for options and fees.</p>
+    <h2>Delivery</h2><p>Home delivery in ${D.expressMinutes} minutes${esc(expressWhere)} applies during opening hours. Orders above ${threshold} are delivered the next day. See the Delivery page for options and fees.</p>
     <h2>Consultations</h2><p>Quick pharmacist advice of up to ${C.freeMinutes} minutes is free. Longer consultations are by appointment and charged separately.</p>
     <h2>Cancellations and returns</h2><p>You can cancel before your order is packed. See Returns and refunds.</p></div>` }),
   licences: () => ({ title: "Our licences", lead: "Check that you're buying from a registered pharmacy.", body: `
@@ -1416,6 +1419,8 @@ document.addEventListener("change", async e => {
   if (t.id === "sort") { S.sort = t.value; render(); return; }
   if (t.name === "unit" && S.view === "product") { S.unit = t.value; S.qty = 1; render(); const el = document.querySelector(`input[name=unit][value="${t.value}"]`); if (el) el.focus(); return; }
   if (t.id === "st" || t.name === "speed") { saveForm(); render(); const el = $(t.id === "st" ? "#st" : `#sp-${S.form.speed}`); if (el) el.focus(); return; }
+  if (t.id === "city" && S.view === "checkout") { // 30-minute delivery depends on the town: refresh the options, keeping the cursor where it went
+    setTimeout(() => { const next = document.activeElement && document.activeElement.id; saveForm(); render(); const el = next && document.getElementById(next); if (el) el.focus(); }, 0); return; }
   if (t.id === "rxfile" && t.files[0]) {
     const status = $("#rxstatus"); status.innerHTML = `<span class="tag otc">Preparing ${esc(t.files[0].name)}…</span>`;
     try { S.form.rxfile = await prepFile(t.files[0]); status.innerHTML = `<span class="tag ok">Attached: ${esc(S.form.rxfile.name)}</span>`; t.required = false; t.setCustomValidity(""); }

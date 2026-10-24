@@ -12,7 +12,7 @@
     },
     {
       "source": "/((?!api/|assets/|css/|js/|manifest.webmanifest|sitemap.xml|robots.txt|favicon).*)",
-      "destination": "/index.html"
+      "destination": "/"
     }
   ],
   "headers": [

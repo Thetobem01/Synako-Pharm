@@ -30,3 +30,14 @@ test("hosting settings are found with or without a Marketplace prefix", async ()
     keys.forEach(k => { if (saved[k] === undefined) delete process.env[k]; else process.env[k] = saved[k]; });
   }
 });
+
+test("every page address is served by the app (deep links, refreshes, email links)", () => {
+  const v = JSON.parse(fs.readFileSync("vercel.json", "utf8"));
+  const spa = v.rewrites.find(r => r.source.includes("(?!api/"));
+  assert.ok(spa, "vercel.json needs a rewrite that sends page addresses to the app");
+  // With cleanUrls on, /index.html is not a valid destination and Vercel answers 404 for /track/…, /product/… etc.
+  if (v.cleanUrls) assert.notEqual(spa.destination, "/index.html", "with cleanUrls, rewrite page addresses to \"/\", not \"/index.html\"");
+  const re = new RegExp("^" + spa.source + "$");
+  for (const p of ["/track/SYN-ABC123", "/product/para", "/products/otc", "/pharmacist", "/wholesale"]) assert.ok(re.test(p), `${p} must reach the app`);
+  for (const p of ["/api/health", "/assets/logo.png", "/js/app.js", "/css/styles.css"]) assert.ok(!re.test(p), `${p} must not be rewritten`);
+});

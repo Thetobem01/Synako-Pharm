@@ -148,7 +148,7 @@ export const STATUS = {
   delivered: "Delivered",
   cancelled: "Cancelled"
 };
-/* What the customer may see: no date of birth, prescriber or health notes */
+/* What the customer may see: their name, order and payment, but no phone, email, address, date of birth, prescriber or health notes */
 export function publicOrder(o) {
   return {
     id: o.id, createdAt: o.createdAt, status: o.status, statusLabel: STATUS[o.status], rx: o.rx, rxRequest: o.rxRequest,
@@ -156,7 +156,11 @@ export function publicOrder(o) {
     delivery: { speed: o.delivery.speed, label: o.delivery.label, city: o.delivery.city, state: o.delivery.state },
     note: ["info_needed", "rejected"].includes(o.status) ? o.note || "" : "",
     canPay: ["awaiting_payment", "approved_awaiting_payment"].includes(o.status) && o.priced !== false,
-    history: o.history.filter(h => !h.internal).map(h => ({ t: h.t, m: h.m }))
+    history: o.history.filter(h => !h.internal).map(h => ({ t: h.t, m: h.m })),
+    customer: { name: o.customer.name },
+    payment: o.payment && o.payment.status === "paid"
+      ? { status: "paid", channel: o.payment.channel || "", reference: o.payment.reference || "", paidAt: o.payment.paidAt || "" }
+      : { status: "unpaid" }
   };
 }
 export function log(o, m, extra) { o.history.push(Object.assign({ t: new Date().toISOString(), m }, extra || {})); }
@@ -167,17 +171,32 @@ const RESEND_KEY = () => setting("RESEND_API_KEY");
 const MAIL_FROM = () => process.env.MAIL_FROM || (setting("RESEND_EMAIL_DOMAIN") ? `${site().config.business.name} <orders@${setting("RESEND_EMAIL_DOMAIN")}>` : "");
 export const emailReady = () => !!(RESEND_KEY() && MAIL_FROM());
 const htmlEsc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+/* PDF receipt, made with the same js/receipt.js the website uses */
+let receiptLib;
+export async function receiptPdf(o) {
+  if (!receiptLib) {
+    vm.runInThisContext(fs.readFileSync(path.join(process.cwd(), "js/receipt.js"), "utf8"), { filename: "js/receipt.js" });
+    receiptLib = globalThis.SYNAKO_RECEIPT;
+  }
+  const config = structuredClone(site().config);
+  config.site.url = baseUrl();
+  let logo = null;
+  try { logo = receiptLib.logoFromJpeg(new Uint8Array(fs.readFileSync(path.join(process.cwd(), "assets/receipt-logo.jpg")))); } catch (e) { /* text heading instead */ }
+  const blob = await receiptLib.build(o, { cfg: config, logo });
+  return { filename: receiptLib.filename(o), content: Buffer.from(await blob.arrayBuffer()).toString("base64") };
+}
+
 /* Sends one email; never throws, so a mail problem can't break an order or payment */
-export async function sendEmail(to, subject, lines) {
+export async function sendEmail(to, subject, lines, attachments) {
   if (!emailReady() || !to) return false;
   const html = `<div style="font-family:Arial,sans-serif;font-size:15px;line-height:1.5;color:#1d2433">${lines.map(l => `<p>${l.html || htmlEsc(l)}</p>`).join("")}</div>`;
   const text = lines.map(l => l.text || l).join("\n\n");
   try {
-    if (DEV && RESEND_KEY() === "test") { console.log(`[email] to ${to}: ${subject}`); return true; }
+    if (DEV && RESEND_KEY() === "test") { console.log(`[email] to ${to}: ${subject}${attachments ? ` + ${attachments.map(a => a.filename).join(", ")}` : ""}`); return true; }
     const r = await fetch("https://api.resend.com/emails", {
       method: "POST", signal: AbortSignal.timeout(5000),
       headers: { Authorization: `Bearer ${RESEND_KEY()}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ from: MAIL_FROM(), to: [to], subject, html, text, reply_to: site().config.business.email || undefined })
+      body: JSON.stringify({ from: MAIL_FROM(), to: [to], subject, html, text, reply_to: site().config.business.email || undefined, attachments })
     });
     if (!r.ok) console.error("Email failed", r.status, await r.text());
     return r.ok;
@@ -196,7 +215,7 @@ const naira = n => site().pricing.fmtMoney(n, site().config);
 const CUSTOMER_MAIL = {
   placed: o => o.rx ? [`Thank you. We've received your order ${o.id} and your prescription. A pharmacist will review it during opening hours, and we'll email you when it's approved and ready to pay.`]
     : [`Thank you. We've received your order ${o.id} (${naira(o.total)}).`, "If you didn't finish paying, you can pay from the tracking page below."],
-  paid: o => [`We've received your payment of ${naira(o.total)} for order ${o.id}. We're preparing it now.`],
+  paid: o => [`We've received your payment of ${naira(o.total)} for order ${o.id}. We're preparing it now.`, "Your receipt is attached as a PDF. You can download it again at any time from your order page."],
   approve: o => [`Good news: our pharmacist has approved your prescription for order ${o.id}. The total is ${naira(o.total)}.`, "Open the tracking page below and press Pay now to complete your order."],
   info: o => [`Our pharmacist needs a little more information about order ${o.id}:`, `“${o.note}”`, "Please call or message us, quoting your order number."],
   reject: o => [`Our pharmacist couldn't approve the prescription for order ${o.id}:`, `“${o.note}”`, "You haven't been charged. Please contact us if you have any questions."],
@@ -208,8 +227,10 @@ export async function notifyCustomer(o, event) {
   const make = CUSTOMER_MAIL[event];
   if (!make) return;
   const name = String(o.customer.name || "").split(" ")[0];
-  await sendEmail(o.customer.email, `${SUBJECT[event]} · ${o.id}`, [`Hello ${name},`, ...make(o), link(`${baseUrl()}/track/${o.id}`, "Track your order"),
-    `${site().config.business.name}. Your pathway to health and wellness.`]);
+  let attachments;
+  if (event === "paid") { try { attachments = [await receiptPdf(o)]; } catch (e) { console.error("Receipt failed", e); } } // the email still goes without it
+  await sendEmail(o.customer.email, `${SUBJECT[event]} · ${o.id}`, [`Hello ${name},`, ...make(o), link(`${baseUrl()}/track/${o.id}`, event === "paid" ? "View your order and download your receipt" : "Track your order"),
+    `${site().config.business.name}. Your pathway to health and wellness.`], attachments);
 }
 /* Staff alerts carry no health details: just the order number and a link to the desk */
 export async function notifyStaff(o, event) {

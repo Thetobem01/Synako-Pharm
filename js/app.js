@@ -790,7 +790,7 @@ function vTrack() {
         <details class="facts"><summary>Order details</summary>
           <div class="small" style="display:grid;gap:.35rem;margin-top:.6rem">${o.items.map(i => `<div class="r"><span>${i.qty} × ${esc(i.name)}</span><span class="num">${NGN(i.total)}</span></div>`).join("")}
           <div class="r"><span>Delivery · ${esc(o.delivery.label)}</span><span class="num">${NGN(o.deliveryFee)}</span></div><div class="r"><b>Total</b><b class="num">${NGN(o.total)}${o.priced ? "" : "+"}</b></div></div></details>
-        ${o.items.some(i => prod(i.id)) ? `<div><button class="btn btn-secondary" type="button" data-reorder>${icon("box", "ic sm")} Order these items again</button></div>` : ""}
+        <div class="order-actions"><button class="btn ${o.canPay ? "btn-secondary" : "btn-primary"}" type="button" data-receipt>${icon("download", "ic sm")} ${PAID(o.status) ? "Download receipt (PDF)" : "Download order summary (PDF)"}</button>${o.items.some(i => prod(i.id)) ? `<button class="btn btn-secondary" type="button" data-reorder>${icon("box", "ic sm")} Order these items again</button>` : ""}</div>
         <div><h3 style="margin-bottom:.5rem">Order record</h3><div class="audit">${o.history.slice().reverse().map(l => `<div><span>${stamp(l.t)}</span><b style="font-weight:500">${esc(l.m)}</b></div>`).join("")}</div></div>
         ${final ? "" : `<p class="small muted">Questions? ${contactLine()}.</p>`}`}
     </section>
@@ -936,13 +936,32 @@ async function loadDesk(silent) {
   const st = S.staff; if (!st.token) return;
   try {
     const d = await api.staffList(st.token);
-    const before = st.list ? st.list.orders.filter(o => o.status === "pending_review").length : null;
+    const was = st.list ? deskCounts(st.list) : null;
     st.list = d; st.err = ""; st.updated = new Date();
-    const now = d.orders.filter(o => o.status === "pending_review").length;
-    if (before != null && now > before) toast(`New prescription to review (${now} waiting).`);
+    const now = deskCounts(d);
+    if (was) {
+      const news = [now.pack > was.pack && `${now.pack - was.pack} new paid order${now.pack - was.pack === 1 ? "" : "s"} to pack`,
+        now.review > was.review && `${now.review - was.review} new prescription${now.review - was.review === 1 ? "" : "s"} to review`,
+        now.requests > was.requests && `${now.requests - was.requests} new message${now.requests - was.requests === 1 ? "" : "s"}`].filter(Boolean);
+      if (news.length) { toast(news.join(" · ")); chime(); }
+    }
     if (st.sel && !silent) await loadDeskOrder(st.sel, true);
   } catch (e) { if (e.status === 401) signOut(); else st.err = e.message; }
   if (S.mode === "staff") render();
+}
+const deskCounts = d => ({ pack: d.orders.filter(o => o.status === "paid").length, review: d.orders.filter(o => o.status === "pending_review").length, requests: (d.requests || []).filter(r => r.status === "new").length });
+/* A short two-note chime, so a desk left open at the counter is noticed (no sound file needed) */
+function chime() {
+  try {
+    const A = window.AudioContext || window.webkitAudioContext; if (!A) return;
+    const ctx = chime.ctx || (chime.ctx = new A());
+    [[880, 0], [1320, 0.18]].forEach(([f, at]) => {
+      const o = ctx.createOscillator(), g = ctx.createGain(), t = ctx.currentTime + at;
+      o.frequency.value = f; o.connect(g); g.connect(ctx.destination);
+      g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.25, t + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.35);
+      o.start(t); o.stop(t + 0.4);
+    });
+  } catch (e) { /* sound not available */ }
 }
 async function loadDeskOrder(id, quiet) {
   const st = S.staff; st.sel = id;
@@ -1007,7 +1026,7 @@ function deskDetail() {
   const A = o.actions || [];
   const reviewing = A.includes("approve");
   return `<div style="display:flex;justify-content:space-between;gap:1rem;flex-wrap:wrap"><div><div class="muted small">Order</div><h2 class="mono" style="font-size:1.35rem">${esc(o.id)}</h2><div class="muted small">${stamp(o.createdAt)} · ${esc(o.delivery.label)}</div></div>${statusTag(o)}</div>
-    <div class="desk-print"><button class="btn btn-ghost btn-sm" type="button" data-print>${icon("print", "ic sm")} Print delivery note</button></div>
+    <div class="desk-print"><button class="btn btn-ghost btn-sm" type="button" data-dreceipt>${icon("download", "ic sm")} ${PAID(o.status) ? "Receipt (PDF)" : "Order summary (PDF)"}</button><button class="btn btn-ghost btn-sm" type="button" data-print>${icon("print", "ic sm")} Print delivery note</button></div>
     <div class="review">
       <div style="display:grid;gap:.8rem;align-content:start">
         <dl class="kv"><dt>Customer</dt><dd>${esc(o.customer.name)}</dd><dt>Phone</dt><dd><a href="tel:${esc(o.customer.phone)}">${esc(o.customer.phone)}</a></dd><dt>Email</dt><dd>${esc(o.customer.email)}</dd>${o.customer.dob ? `<dt>Date of birth</dt><dd>${esc(o.customer.dob)}</dd>` : ""}
@@ -1166,7 +1185,7 @@ function render(scroll) {
     $("#staff-view").innerHTML = vStaff(); title = "Pharmacist Desk";
     $("#staff-signout").hidden = !S.staff.token;
     if (S.staff.token) deskTimer = setInterval(() => loadDesk(true), 10000);
-    const waiting = S.staff.list ? S.staff.list.orders.filter(o => o.status === "pending_review").length : 0;
+    const waiting = S.staff.list ? (c => c.pack + c.review)(deskCounts(S.staff.list)) : 0;
     if (waiting) title = `(${waiting}) ${title}`;
   } else {
     const V = { home: vHome, shop: vShop, product: vProduct, controlled: vControlled, basket: vBasket, checkout: vCheckout, rx: vRx, track: vTrack, page: vPage, notfound: vNotFound }[S.view] || vHome;
@@ -1288,6 +1307,14 @@ document.addEventListener("keydown", e => {
   else if (e.key === "Enter" && SG.active >= 0) { const o = document.querySelectorAll("#suggest [role=option]")[SG.active]; if (o) { e.preventDefault(); o.click(); } }
 });
 
+const PAID = st => ["paid", "packed", "out_for_delivery", "delivered"].includes(st);
+async function downloadReceipt(o, btn) {
+  if (!window.SYNAKO_RECEIPT) { toast("Receipts aren't available right now. Please try again later."); return; }
+  btn.disabled = true;
+  try { const name = await window.SYNAKO_RECEIPT.download(o); toast(`Saved ${name}`); }
+  catch (e) { toast("We couldn't make the PDF. Please try again."); }
+  btn.disabled = false;
+}
 function downloadCsv() {
   const d = S.staff.list; if (!d || !d.orders.length) { toast("No orders to download yet."); return; }
   const cell = v => { const t = String(v == null ? "" : v); return /[",\n]/.test(t) || /^[=+\-@]/.test(t) ? `"${t.replace(/^([=+\-@])/, "'$1").replace(/"/g, '""')}"` : t; };
@@ -1353,6 +1380,8 @@ document.addEventListener("click", e => {
   if ("reorder" in d) { reorder(); return; }
   if ("csv" in d) { downloadCsv(); return; }
   if ("print" in d) { window.print(); return; }
+  if ("receipt" in d) { if (S.track) downloadReceipt(S.track, t); return; }
+  if ("dreceipt" in d) { if (S.staff.detail) downloadReceipt(S.staff.detail, t); return; }
   if (d.req) { markRequest(d.req, d.st); return; }
   if (d.age === "yes") { S.age18 = true; store.set("synako.age18", true); render(); return; }
   if ("rxreq" in d) { S.rxRequest = true; S.step = 1; go("/checkout"); toast("Prescription request started."); return; }

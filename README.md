@@ -95,6 +95,11 @@ The Pharmacist Desk lists any hosting settings that are still missing.
 - **Customers** can see recently viewed products, reorder a past order with one tap from its tracking page, share a product, and add a note at checkout (sizes, delivery instructions). If you set `business.whatsapp`, product pages and the basket also offer *Ask on WhatsApp* / *Send us this basket*.
 - **Opening hours** in the top bar show live "Open now until 6pm" or "Closed. Opens 7:30am today", from `hours` in `js/config.js`.
 
+## Receipts and new-order alerts
+
+- **Receipts:** when a payment goes through, the customer's "Payment received" email has the **PDF receipt attached**, plus a link to their order page, where **Download receipt** makes a fresh copy at any time (before payment it's an order summary). Staff can download the same PDF from the Pharmacist Desk. The PDF comes from `js/receipt.js` and shows your business and licence details from `js/config.js`, so fill those in before launch.
+- **How the pharmacy hears about orders:** every new order, payment and message emails `STAFF_EMAIL`, and the Pharmacist Desk refreshes every 10 seconds. When something new arrives it **chimes**, shows what came in ("1 new paid order to pack") and counts waiting orders in the browser tab. Keep `/pharmacist` open on the counter computer during opening hours.
+
 ## Keep an eye on it
 
 - **Uptime:** add `https://YOUR-DOMAIN/api/health` to a free monitor such as UptimeRobot or Better Stack, so you get an alert if the site goes down.

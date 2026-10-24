@@ -41,3 +41,19 @@ test("every page address is served by the app (deep links, refreshes, email link
   for (const p of ["/track/SYN-ABC123", "/product/para", "/products/otc", "/pharmacist", "/wholesale"]) assert.ok(re.test(p), `${p} must reach the app`);
   for (const p of ["/api/health", "/assets/logo.png", "/js/app.js", "/css/styles.css"]) assert.ok(!re.test(p), `${p} must not be rewritten`);
 });
+
+test("the server builds a PDF receipt for the payment email", async () => {
+  const { receiptPdf } = await import("../api/_lib/core.js");
+  const order = { id: "SYN-TEST01", createdAt: "2026-10-24T09:00:00Z", status: "paid", rx: false, priced: true,
+    items: [{ id: "para", name: "Paracetamol 500mg tablets · Carton of 50", qty: 2, price: 52800, total: 105600, cls: "otc", n: 50, unitLabel: "Carton (50 × 96 tablets)" }],
+    subtotal: 105600, deliveryFee: 1500, total: 107100,
+    customer: { name: "Ada Test", email: "ada@example.com" }, delivery: { label: "Next-day delivery", addr: "1 Test Street", city: "Ikeja", state: "Lagos" },
+    payment: { status: "paid", channel: "card", reference: "SYN-TEST01-1", paidAt: "2026-10-24T09:05:00Z" } };
+  const r = await receiptPdf(order);
+  assert.equal(r.filename, "Synako-receipt-SYN-TEST01.pdf");
+  const pdf = Buffer.from(r.content, "base64").toString("latin1");
+  assert.ok(pdf.startsWith("%PDF-1.4"), "a PDF file");
+  assert.ok(pdf.includes("/Subtype /Image"), "the logo is embedded");
+  const hex = t => Buffer.from(t, "latin1").toString("hex");
+  for (const t of ["Receipt", "SYN-TEST01", "SYN-TEST01-1", "Ada Test", "PAID"]) assert.ok(pdf.includes(hex(t)), `shows ${t}`);
+});

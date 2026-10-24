@@ -9,47 +9,39 @@ retail and wholesale pharmacy in Okitipupa, roughly how big it is, and anything 
    plain white background, send them over, and I'll compress and add them (the shop already swaps
    them in automatically). *Needs: photos. Size: small per batch.*
 
-2. **Launch promo codes.** For example `WELCOME10` for 10% off a first order, or `ONDO500` for ₦500
-   off delivery. Codes, amounts, minimum spend and expiry would live in `js/config.js`, and the
-   server would apply them, so customers can't make up their own. *Needs: the offers you want.
-   Size: small.*
-
-3. **Free delivery over a set amount.** For example free next-day delivery in Ondo State for orders
-   over ₦20,000. A simple, popular reason to add one more item. *Needs: the amount. Size: small.*
-
-4. **Unpaid-order reminders and clean-up.** Send one friendly email two hours after an order is left
+2. **Unpaid-order reminders and clean-up.** Send one friendly email two hours after an order is left
    unpaid ("Your order is waiting, pay here"), and cancel it automatically after 48 hours so the desk
    stays tidy. Runs once a day on Vercel's free scheduler. *Size: small to medium.*
 
-5. **SMS or WhatsApp order updates.** Many customers check SMS and WhatsApp before email. A Nigerian
+3. **SMS or WhatsApp order updates.** Many customers check SMS and WhatsApp before email. A Nigerian
    SMS provider such as Termii costs a few naira per message. Start with "Out for delivery" and
    "Approved, ready to pay". *Needs: an SMS account. Size: medium.*
 
 ## Next (bigger steps)
 
-6. **Delivery code for the rider.** The customer gets a 4-digit code and gives it to the rider at the
+4. **Delivery code for the rider.** The customer gets a 4-digit code and gives it to the rider at the
    door. The rider enters it to mark the order delivered. This proves delivery and helps with
    ID-checked alcohol orders. *Size: medium.*
 
-7. **Rider view.** A phone-friendly page for riders with today's deliveries, addresses, the
+5. **Rider view.** A phone-friendly page for riders with today's deliveries, addresses, the
    customer's number to call, directions, and a "Delivered" button. *Size: medium.*
 
-8. **Staff accounts.** Separate sign-ins for pharmacists, packers and riders instead of one shared
+6. **Staff accounts.** Separate sign-ins for pharmacists, packers and riders instead of one shared
    password, so the record shows who approved, packed and delivered each order, and a departing
    staff member can be removed. *Size: medium.*
 
-9. **Prescription refill reminders.** For long-term medicines (blood pressure, diabetes, thyroid),
+7. **Prescription refill reminders.** For long-term medicines (blood pressure, diabetes, thyroid),
    offer an opt-in reminder before the pack runs out, with a one-tap reorder that still goes through
    the pharmacist. Good care, and good for repeat business. *Size: medium.*
 
-10. **Customer accounts by phone number.** Sign in with a one-time code to see every past order on
+8. **Customer accounts by phone number.** Sign in with a one-time code to see every past order on
     any device, with saved addresses. Orders are currently remembered per device. *Size: medium to
     large.*
 
-11. **Trade accounts for wholesale buyers.** Approved pharmacies, clinics and shops sign in to see
+9. **Trade accounts for wholesale buyers.** Approved pharmacies, clinics and shops sign in to see
     trade prices, reorder past invoices and, if you choose, pay on agreed terms. *Size: large.*
 
-12. **Stock quantities.** Instead of in/out only, keep a count per product, with a low-stock warning
+10. **Stock quantities.** Instead of in/out only, keep a count per product, with a low-stock warning
     on the desk and automatic "out of stock" at zero. *Size: medium.*
 
 ## Later
@@ -79,3 +71,5 @@ retail and wholesale pharmacy in Okitipupa, roughly how big it is, and anything 
   ask to be told when an item is back, and are emailed automatically.
 - **Email typo fix at checkout:** "Did you mean ada@gmail.com?"
 - **Today's takings** on the desk header.
+- **Promo codes** (for example `WELCOME10`) and **free delivery over a set amount**, both ready in
+  `js/config.js` and switched off until you choose the offers.

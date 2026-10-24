@@ -765,3 +765,13 @@ form.f { display: grid; gap: var(--sp-4); }
   a { color: #000; text-decoration: none; }
 }
 @media (max-width: 560px) { .br-lg { display: none; } }
+
+/* Staff entry point and desk order tools */
+.staff-link { display: inline-flex; align-items: center; gap: .4rem; min-height: 40px; padding: .4rem .9rem; border: 1px solid var(--line-2); border-radius: var(--r-pill); color: var(--ink-2); font-size: var(--fs-sm); font-weight: 600; text-decoration: none; }
+.staff-link:hover { border-color: var(--brand); color: var(--brand); }
+.staff-link svg { width: 16px; height: 16px; }
+.queue-wrap { display: grid; gap: var(--sp-3); min-width: 0; }
+.queue-tools { display: grid; gap: var(--sp-2); }
+.queue-tools input, .queue-tools select { width: 100%; min-width: 0; min-height: 40px; padding: .4rem .65rem; border: 1px solid var(--line-2); border-radius: var(--r-sm); background: var(--surface); font: inherit; font-size: var(--fs-sm); }
+.queue-selects { display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: var(--sp-2); }
+@media print { .queue-tools, .staff-link { display: none !important; } }

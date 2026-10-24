@@ -243,7 +243,7 @@ function parse(path) {
   else if (a === "controlled-medicines") r.view = "controlled";
   else if (a === "track") { r.view = "track"; if (b) r.trackId = b.toUpperCase(); }
   else if (a === "basket" || a === "checkout") r.view = a;
-  else if (a === "pharmacist") { r.view = "home"; r.mode = "staff"; }
+  else if (["pharmacist", "desk", "staff", "admin"].includes(a)) { r.view = "home"; r.mode = "staff"; }
   else if (PAGES.includes(a)) { r.view = "page"; r.page = a; }
   else r.view = "notfound";
   return r;
@@ -1004,12 +1004,7 @@ function vStaff() {
       ${DEMO ? `<p class="small muted">Design preview: any password works.</p>` : ""}</form></div>`;
   const d = st.list;
   if (!d) return `<div class="wrap"><p class="muted" style="padding:2rem 0">Loading the desk…</p></div>`;
-  const groups = {
-    review: d.orders.filter(o => ["pending_review", "info_needed"].includes(o.status)),
-    pack: d.orders.filter(o => ["paid", "packed", "out_for_delivery"].includes(o.status)),
-    pay: d.orders.filter(o => ["awaiting_payment", "approved_awaiting_payment"].includes(o.status)),
-    done: d.orders.filter(o => ["delivered", "rejected", "cancelled"].includes(o.status))
-  };
+  const groups = deskGroups(d);
   const tabs = [["review", "To review"], ["pack", "To pack & deliver"], ["pay", "Awaiting payment"], ["done", "Completed"], ["requests", "Messages & bookings"], ["stock", "Stock"]];
   if (d.out) applyStock(d.out);
   const list = ["requests", "stock"].includes(st.tab) ? null : groups[st.tab];
@@ -1030,12 +1025,52 @@ function vStaff() {
         ${r.message ? `<p class="small" style="white-space:pre-line">${esc(r.message)}</p>` : ""}
         <div class="req-foot">${r.status === "done" ? `<span class="tag ok">Handled${r.handledBy ? ` by ${esc(r.handledBy)}` : ""}</span><button class="linkbtn" type="button" data-req="${esc(r.id)}" data-st="new">Mark as new</button>` : `<button class="btn btn-secondary btn-sm" type="button" data-req="${esc(r.id)}" data-st="done">${icon("check", "ic sm")} Mark as handled</button>`}</div></article>`).join("") : `<p class="muted">No messages or bookings yet.</p>`}</div>`
     : `<div class="desk">
-      <nav class="queue" aria-label="Orders">${list.length ? list.map(o => `<button type="button" class="q ${o.status}" data-sel="${o.id}" aria-current="${o.id === st.sel}">
-        <span class="top"><b class="mono">${o.id}</b>${statusTag(o)}</span>
-        <span class="small">${esc(o.rxRequest && !o.items.length ? "Prescription request" : o.items.join(", "))}</span>
-        <span class="small muted">${esc(o.customer)} · ${stamp(o.createdAt)} · ${o.priced ? NGN(o.total) : "to price"}</span></button>`).join("") : `<p class="muted small" style="padding:1rem">Nothing here right now.</p>`}</nav>
+      <div class="queue-wrap">${queueTools(list)}<nav class="queue" id="queue" aria-label="Orders">${queueRows(list)}</nav></div>
       <section class="panel" aria-live="polite">${deskDetail()}</section>
     </div>`}`;
+}
+/* Desk order list: search, delivery and status filters, and sorting (most urgent first by default) */
+const SPEEDS = [["express", "30-minute"], ["sameday", "Same-day"], ["nextday", "Next-day"], ["states", "Other states"]];
+const URGENCY = { express: 0, sameday: 1, nextday: 2, states: 3 };
+function queueFilter(list) {
+  const st = S.staff, q = norm(st.q || "");
+  const out = list.filter(o => (!st.speed || o.speedId === st.speed) && (!st.status || o.status === st.status)
+    && (!q || norm([o.id, o.customer, o.phone, o.city, o.state, o.items.join(" ")].join(" ")).includes(q)));
+  const t = o => Date.parse(o.createdAt) || 0, sort = st.sort || "urgent";
+  return out.sort(sort === "newest" ? (a, b) => t(b) - t(a) : sort === "oldest" ? (a, b) => t(a) - t(b) : sort === "total" ? (a, b) => (b.total || 0) - (a.total || 0)
+    : (a, b) => ((URGENCY[a.speedId] ?? 9) - (URGENCY[b.speedId] ?? 9)) || t(a) - t(b));
+}
+function queueTools(list) {
+  const st = S.staff, statuses = [...new Set(list.map(o => o.status))];
+  const opt = (v, l, cur) => `<option value="${v}"${v === (cur || "") ? " selected" : ""}>${l}</option>`;
+  return `<div class="queue-tools">
+    <label for="deskq" class="sr">Search orders</label><input id="deskq" type="search" placeholder="Search order no., name, phone, item or town" value="${esc(st.q || "")}" autocomplete="off">
+    <div class="queue-selects">
+      <label><span class="sr">Sort orders</span><select id="desksort">${[["urgent", "Most urgent first"], ["newest", "Newest first"], ["oldest", "Oldest first"], ["total", "Highest total"]].map(([v, l]) => opt(v, l, st.sort || "urgent")).join("")}</select></label>
+      <label><span class="sr">Delivery</span><select id="deskspeed">${opt("", "All delivery", st.speed)}${SPEEDS.map(([v, l]) => opt(v, l, st.speed)).join("")}</select></label>
+      ${statuses.length > 1 || st.status ? `<label><span class="sr">Status</span><select id="deskstatus">${opt("", "All statuses", st.status)}${[...new Set(statuses.concat(st.status ? [st.status] : []))].map(v => opt(v, esc((list.find(o => o.status === v) || {}).statusLabel || v), st.status)).join("")}</select></label>` : ""}
+    </div><p class="small muted" id="queue-count" role="status">${queueCount(list)}</p></div>`;
+}
+function queueCount(list) { const n = queueFilter(list).length; return n === list.length ? `${n} order${n === 1 ? "" : "s"}` : `Showing ${n} of ${list.length}`; }
+function queueRows(list) {
+  const st = S.staff, shown = queueFilter(list);
+  if (!list.length) return `<p class="muted small" style="padding:1rem">Nothing here right now.</p>`;
+  if (!shown.length) return `<p class="muted small" style="padding:1rem">No orders match. <button class="linkbtn" type="button" data-qclear>Clear filters</button></p>`;
+  return shown.map(o => `<button type="button" class="q ${o.status}" data-sel="${o.id}" aria-current="${o.id === st.sel}">
+        <span class="top"><b class="mono">${o.id}</b>${statusTag(o)}</span>
+        <span class="small">${esc(o.rxRequest && !o.items.length ? "Prescription request" : o.items.join(", "))}</span>
+        ${o.speedId ? `<span class="small"><span class="tag ${o.speedId === "express" ? "bad" : o.speedId === "sameday" ? "warn" : "gen"}">${esc((SPEEDS.find(x => x[0] === o.speedId) || [, ""])[1])}</span>${o.city ? ` ${esc(o.city)}${o.state ? ", " + esc(o.state) : ""}` : ""}</span>` : ""}
+        <span class="small muted">${esc(o.customer)} · ${stamp(o.createdAt)} · ${o.priced ? NGN(o.total) : "to price"}</span></button>`).join("");
+}
+function deskGroup() { const g = deskGroups(S.staff.list); return g[S.staff.tab] || []; }
+function refreshQueue() { const l = deskGroup(), q = $("#queue"), c = $("#queue-count"); if (q) q.innerHTML = queueRows(l); if (c) c.textContent = queueCount(l); }
+function deskGroups(d) {
+  return {
+    review: d.orders.filter(o => ["pending_review", "info_needed"].includes(o.status)),
+    pack: d.orders.filter(o => ["paid", "packed", "out_for_delivery"].includes(o.status)),
+    pay: d.orders.filter(o => ["awaiting_payment", "approved_awaiting_payment"].includes(o.status)),
+    done: d.orders.filter(o => ["delivered", "rejected", "cancelled"].includes(o.status))
+  };
 }
 function deskDetail() {
   const st = S.staff, o = st.detail;
@@ -1209,7 +1244,9 @@ function render(scroll) {
   clearInterval(deskTimer); clearInterval(trackTimer);
   let title;
   if (staff) {
+    const a = document.activeElement, keep = a && ["deskq", "stockq"].includes(a.id) ? [a.id, a.selectionStart, a.selectionEnd] : null;
     $("#staff-view").innerHTML = vStaff(); title = "Pharmacist Desk";
+    if (keep) { const el = document.getElementById(keep[0]); if (el) { el.focus(); try { el.setSelectionRange(keep[1], keep[2]); } catch (e) { /* not a text box */ } } }
     $("#staff-signout").hidden = !S.staff.token;
     if (S.staff.token) deskTimer = setInterval(() => loadDesk(true), 10000);
     const waiting = S.staff.list ? (c => c.pack + c.review)(deskCounts(S.staff.list)) : 0;
@@ -1218,6 +1255,7 @@ function render(scroll) {
     const V = { home: vHome, shop: vShop, product: vProduct, controlled: vControlled, basket: vBasket, checkout: vCheckout, rx: vRx, track: vTrack, page: vPage, notfound: vNotFound }[S.view] || vHome;
     $("#view").innerHTML = V();
     renderCount();
+    $("#desk-link").hidden = !S.staff.token; // staff signed in on this device get a shortcut back to the desk
     if (S.view === "track" && S.track && !["delivered", "rejected", "cancelled"].includes(S.track.status)) trackTimer = setInterval(() => loadTrack(), 15000);
     const here = pathFor();
     document.querySelectorAll(".nav a[data-link], .drawer a[data-link]").forEach(a => {
@@ -1347,6 +1385,7 @@ let sgTimer;
 document.addEventListener("input", e => {
   if (e.target.id === "q") { clearTimeout(sgTimer); sgTimer = setTimeout(openSuggest, 60); }
   if (e.target.id === "em") showEmailFix();
+  if (e.target.id === "deskq") { S.staff.q = e.target.value; refreshQueue(); }
   if (e.target.id === "stockq") { S.staff.stockQ = e.target.value; const l = $("#stocklist"); if (l) l.innerHTML = stockRows(); }
 });
 document.addEventListener("focusin", e => { if (e.target.id === "q") openSuggest(); });
@@ -1479,7 +1518,8 @@ document.addEventListener("click", e => {
   if ("clear" in d) { S.q = ""; $("#q").value = ""; render(); return; }
   if (d.step) { saveForm(); S.step = Number(d.step); S.error = ""; render(true); return; }
   if (d.pay) { startPayment(d.pay); return; }
-  if (d.dtab) { S.staff.tab = d.dtab; S.staff.sel = null; S.staff.detail = null; render(); loadDesk(true); return; }
+  if ("qclear" in d) { Object.assign(S.staff, { q: "", speed: "", status: "" }); render(); return; }
+  if (d.dtab) { S.staff.tab = d.dtab; S.staff.status = ""; S.staff.sel = null; S.staff.detail = null; render(); loadDesk(true); return; }
   if (d.sel) { loadDeskOrder(d.sel); return; }
   if (d.act) { deskAction(d.act); return; }
 });
@@ -1502,6 +1542,7 @@ document.addEventListener("keydown", e => {
 document.addEventListener("change", async e => {
   const t = e.target;
   if (t.id === "sort") { S.sort = t.value; render(); return; }
+  if (["desksort", "deskspeed", "deskstatus"].includes(t.id)) { S.staff[{ desksort: "sort", deskspeed: "speed", deskstatus: "status" }[t.id]] = t.value; refreshQueue(); return; }
   if (t.name === "unit" && S.view === "product") { S.unit = t.value; S.qty = 1; render(); const el = document.querySelector(`input[name=unit][value="${t.value}"]`); if (el) el.focus(); return; }
   if (t.id === "st" || t.name === "speed") { saveForm(); render(); const el = $(t.id === "st" ? "#st" : `#sp-${S.form.speed}`); if (el) el.focus(); return; }
   if (t.id === "city" && S.view === "checkout") { // 30-minute delivery depends on the town: refresh the options, keeping the cursor where it went

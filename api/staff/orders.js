@@ -35,7 +35,8 @@ export default handle(async (req, res) => {
   const ids = await db.latest("orders", 200);
   const orders = (await Promise.all(ids.map(id => db.get("order:" + id)))).filter(Boolean).map(o => ({
     id: o.id, createdAt: o.createdAt, status: o.status, statusLabel: STATUS[o.status], rx: o.rx, rxRequest: o.rxRequest,
-    customer: o.customer.name, total: o.total, priced: o.priced !== false, items: o.items.map(i => `${i.qty} × ${i.name}`), speed: o.delivery.label
+    customer: o.customer.name, phone: o.customer.phone || "", total: o.total, priced: o.priced !== false, items: o.items.map(i => `${i.qty} × ${i.name}`),
+    speed: o.delivery.label, speedId: o.delivery.speed || "", city: o.delivery.city || "", state: o.delivery.state || ""
   }));
   const rids = await db.latest("requests", 100);
   const requests = (await Promise.all(rids.map(id => db.get("req:" + id)))).filter(Boolean);

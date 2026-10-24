@@ -140,7 +140,9 @@ test("prescription orders wait for a pharmacist, who can approve them for paymen
   const token = login.json.token;
 
   const desk = await api("staff/orders", { token });
-  assert.ok(desk.json.orders.some(x => x.id === o.id));
+  const row = desk.json.orders.find(x => x.id === o.id);
+  assert.ok(row);
+  for (const k of ["speedId", "city", "state", "phone"]) assert.ok(k in row, `desk list carries ${k} for sorting and search`);
   assert.ok(Array.isArray(desk.json.setup));
   const full = await api(`staff/order?id=${o.id}`, { token });
   assert.equal(full.json.file.data, tinyPng);
@@ -266,5 +268,6 @@ test("sitemap and robots follow the catalogue and site address", async () => {
   assert.match(sm, /\/product\/para</);
   const robots = await (await fetch(BASE + "/robots.txt")).text();
   assert.match(robots, /Disallow: \/pharmacist/);
+  assert.match(robots, /Disallow: \/desk/);
   assert.match(robots, /Sitemap: https?:\/\/.+\/sitemap\.xml/);
 });

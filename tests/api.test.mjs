@@ -200,6 +200,8 @@ test("sitemap follows a custom domain and leaves out alcohol", async () => {
   const sm = await (await fetch(BASE + "/sitemap.xml", { headers: { "x-forwarded-host": "www.synakopharmacy.com" } })).text();
   assert.match(sm, /<loc>https:\/\/www\.synakopharmacy\.com\/product\/para<\/loc>/);
   assert.doesNotMatch(sm, /\/product\/sweet-red/);
+  const locs = [...sm.matchAll(/<loc>([^<]+)<\/loc>/g)].map(m => m[1]);
+  assert.equal(new Set(locs).size, locs.length, "no address is listed twice");
   const odd = await (await fetch(BASE + "/robots.txt", { headers: { "x-forwarded-host": "evil.com/<x>" } })).text();
   assert.doesNotMatch(odd, /evil/);
 });

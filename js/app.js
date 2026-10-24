@@ -1395,6 +1395,7 @@ const wide = window.matchMedia("(min-width: 1001px)");
 if (wide.addEventListener) wide.addEventListener("change", m => { if (m.matches) closeDrawer(true); });
 
 async function startPayment(id) {
+  if (!paymentsOn()) await checkLive(); // the page may have loaded before payments were switched on
   if (!paymentsOn()) { toast("Online payment isn't switched on yet. Please contact the pharmacy to pay."); return; }
   const phone = phoneFor(id); S.busy = true; render();
   try { const { order } = await payOrder(id, phone); S.track = order; toast("Payment received. Thank you!"); }

@@ -10,7 +10,7 @@ export default function handler(req, res) {
     ...CATS.map(c => [`/products/${c.id}`, "0.7", "weekly"]),
     ...P.filter(p => !p.age).map(p => [`/product/${p.id}`, "0.6", "weekly"]),
     ...["otc", "equipment", "surgical", "personal-care", "provisions", "wines", "bulk", "tablets", "liquids", "ointments"].map(f => [`/products/${f}`, "0.8", "daily"]),
-    ["/prescriptions", "0.8", "monthly"], ["/wholesale", "0.8", "monthly"], ["/controlled-medicines", "0.5", "monthly"],
+    ["/prescriptions", "0.8", "monthly"], ["/controlled-medicines", "0.5", "monthly"],
     ...PAGES.map(pg => [`/${pg}`, "0.4", "monthly"])
   ];
   const body = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n` +

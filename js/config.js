@@ -14,7 +14,7 @@
     },
     business: {
       name: "Synako Pharmacy",
-      companyName: "",            // registered company name, e.g. "Synako Pharmacy Ltd"
+      companyName: "Synako Pharmaceutical LTD", // registered company name
       rcNumber: "",               // CAC RC number
       address: "",                // street address of the pharmacy
       city: "",                   // e.g. "Ikeja"

@@ -352,3 +352,49 @@ test("unpaid orders get one reminder, then are cancelled; a late payment still c
   assert.equal((await api("staff/orders?task=reminders")).status, 401, "the daily job needs its secret");
   assert.equal((await api("staff/orders?task=reminders", { headers: { Authorization: "Bearer cron-secret" } })).status, 200);
 });
+
+test("supply: wholesalers, the shortage list, purchase orders and restocking", async () => {
+  const token = (await api("staff/login", { body: { password: "desk" }, headers: ip(60) })).json.token;
+  const rider = (await api("staff/login", { body: { password: "ride", role: "rider" }, headers: ip(60) })).json.token;
+  assert.equal((await api("staff/orders?view=supply", { token: rider })).status, 401, "riders can't see supply");
+  assert.equal((await api("staff/orders", { token, body: { action: "supplier-save", supplier: { name: "No Contact Ltd" } } })).status, 400, "a wholesaler needs a way to be reached");
+  const saved = await api("staff/orders", { token, body: { action: "supplier-save", supplier: { name: "Ondo Pharma Wholesale", phone: "08030000000", email: "orders@ondo-wholesale.example", leadDays: 3 } } });
+  const sup = saved.json.suppliers.find(s => s.name === "Ondo Pharma Wholesale");
+  assert.ok(sup);
+
+  await api("staff/orders", { token, body: { action: "stock", id: "amlo", out: true, by: "Pharm. Test" } });
+  const low = await api("staff/orders", { token, body: { action: "stock-low", id: "ors", low: true, by: "Pharm. Test" } });
+  assert.ok(low.json.low.includes("ors"));
+  await api("requests", { body: { type: "restock", product: "amlo", contact: "kemi@example.com" }, headers: ip(61) });
+  const view = (await api("staff/orders?view=supply", { token })).json;
+  const amlo = view.shortages.find(s => s.id === "amlo"), ors = view.shortages.find(s => s.id === "ors");
+  assert.equal(amlo.state, "out");
+  assert.equal(amlo.waiting, 1, "customers waiting are counted");
+  assert.equal(ors.state, "low");
+  assert.ok(view.shortages.indexOf(amlo) < view.shortages.indexOf(ors), "out of stock with customers waiting comes first");
+
+  assert.equal((await api("staff/orders", { token, body: { action: "po-create", supplier: sup.id, lines: [] } })).status, 400);
+  const made = await api("staff/orders", { token, body: { action: "po-create", supplier: sup.id, lines: [{ id: "amlo", qty: 20 }, { id: "ors", qty: 50 }], by: "Supply Manager" } });
+  assert.equal(made.status, 201);
+  const po = made.json.po;
+  assert.match(po.id, /^PO-/);
+  assert.equal(po.status, "draft");
+  assert.ok(po.expected, "the delivery date follows the wholesaler's usual lead time");
+  assert.equal(made.json.shortages.find(s => s.id === "amlo").onOrder[0].po, po.id, "the shortage shows it's on order");
+
+  const sent = await api("staff/orders", { token, body: { action: "po-update", id: po.id, po: "send", via: "email" } });
+  assert.equal(sent.json.po.status, "sent");
+  assert.ok(sent.json.po.history.some(h => /Emailed to orders@ondo-wholesale.example .*: sent/.test(h.m)));
+  const late = await api("staff/orders", { token, body: { action: "supply-digest", now: Date.now() + 10 * 864e5 } });
+  assert.ok(late.json.overdue >= 1, "an unconfirmed, overdue order shows in the daily summary");
+
+  const got = await api("staff/orders", { token, body: { action: "po-update", id: po.id, po: "received", by: "Supply Manager" } });
+  assert.equal(got.json.po.status, "received");
+  assert.ok(!got.json.shortages.some(s => s.id === "amlo" || s.id === "ors"), "received items leave the shortage list");
+  assert.ok(!(await api("health")).json.out.includes("amlo"), "and are back in stock for customers");
+  assert.ok(got.json.po.history.some(h => /1 waiting customer emailed/.test(h.m)));
+  assert.equal((await api("staff/orders", { token, body: { action: "po-update", id: po.id, po: "cancel" } })).status, 409, "a received order can't be cancelled");
+
+  const gone = await api("staff/orders", { token, body: { action: "supplier-delete", id: sup.id } });
+  assert.ok(!gone.json.suppliers.some(s => s.id === sup.id));
+});

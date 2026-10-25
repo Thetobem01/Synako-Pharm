@@ -68,6 +68,12 @@
       remindUnpaidAfterHours: 2,  // one reminder (email, and SMS if set up) to finish paying; 0 = no reminders
       cancelUnpaidAfterHours: 48  // unpaid orders are cancelled after this long, keeping the desk tidy; 0 = never
     },
+    supply: {
+      // Wholesalers you buy from regularly. They appear under Supply → Wholesalers on the Pharmacist Desk
+      // until staff first save a change there (after that, the desk's list is used). Example:
+      // { name: "Example Pharma Distributors Ltd", contact: "Mr Ade", phone: "0803 000 0000", whatsapp: "", email: "orders@example.com", leadDays: 3, notes: "Antibiotics, analgesics" }
+      suppliers: []
+    },
     sms: {
       // Texts to customers, sent only once TERMII_API_KEY is added in the hosting settings (each text costs a few naira).
       // Remove any you don't want: paid (with the delivery code), approve, info, reject, dispatched, delivered, reminder

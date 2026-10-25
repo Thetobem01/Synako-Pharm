@@ -76,3 +76,4 @@ retail and wholesale pharmacy in Okitipupa, roughly how big it is, and anything 
 - **Riders:** a rider page (`/rider`) with Call, WhatsApp and Directions buttons, and a delivery code the customer gives at the door.
 - **SMS updates** through Termii (switched off until the account is added), texts to the shop's phone, and one-tap WhatsApp updates from the desk.
 - **Unpaid orders:** one reminder after 2 hours, then automatic cancellation after 48 hours.
+- **Supply chain:** a Supply tab with the shortage list, wholesalers, purchase orders by email or WhatsApp (receiving puts items back in stock), "running low" alerts and a daily summary for the supply manager.

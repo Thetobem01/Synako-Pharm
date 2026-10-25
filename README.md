@@ -142,6 +142,17 @@ The Pharmacist Desk lists any hosting settings that are still missing.
   - once a day at 10:00 (Lagos time) through Vercel's scheduled jobs, which need **CRON_SECRET** (any long random text) in the hosting settings
   - any time you press **Send payment reminders now** on the desk
 
+## Supply: shortages, wholesalers and purchase orders
+
+The **Supply** tab on the Pharmacist Desk (shortcut `7`) is for whoever buys stock.
+
+- **Running low and out of stock:** in the **Stock** tab, staff mark items as **Running low**, an early warning that customers don't see, or **Out of stock**, which stops online orders. Either one alerts the supply manager.
+- **Shortages:** everything running low or out of stock, most pressing first. Each item shows customers waiting for it, items sold this week and anything already on order, with a suggested quantity. Tick items, choose a wholesaler and press **Create purchase order**.
+- **Purchase orders:** each one goes to the wholesaler by **email**, **WhatsApp** (opens with the order typed out) or **Copy order text**, and moves from *sent* to *wholesaler confirmed* to **Received**. Pressing Received puts the items back in stock and emails customers who asked to be told. An expected delivery date is filled in from the wholesaler's usual delivery time and can be changed. Orders past their date, or unconfirmed after 2 days, are flagged **Late**.
+- **Wholesalers:** add, edit or remove the suppliers you buy from (name, contact person, phone, WhatsApp, email, usual delivery days, notes). A starter list can also go in `supply.suppliers` in `js/config.js`.
+- **Alerts for the supply manager:** set **SUPPLY_EMAIL** and/or **SUPPLY_SMS** in the hosting settings. Without them, alerts go to `STAFF_EMAIL` / `STAFF_SMS`. There's an alert whenever something is marked running low or out of stock, plus a **daily supply summary** listing what to order and any late purchase orders. The summary goes out with the first desk refresh of the day and with the daily scheduled job.
+- **Ordering online from wholesalers:** purchase orders go by email or WhatsApp, because most Nigerian wholesalers don't offer an ordering link for websites. If one of yours does, it can be connected to send purchase orders automatically.
+
 ## Keep an eye on it
 
 - **Uptime:** add `https://YOUR-DOMAIN/api/health?deep=1` to a free monitor such as UptimeRobot or Better Stack. It answers 200 when the site and the order database are working, and 503 if the database stops answering, so you get an alert either way.

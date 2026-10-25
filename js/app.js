@@ -980,6 +980,7 @@ async function loadDesk(silent) {
       if (news.length) { toast(news.join(" · ")); chime(); }
     }
     if (st.sel && !silent) await loadDeskOrder(st.sel, true);
+    if (st.tab === "supply") await loadSupply(true);
   } catch (e) { if (e.status === 401) signOut(); else st.err = e.message; }
   if (S.mode === "staff") render();
 }
@@ -1018,9 +1019,9 @@ function vStaff() {
   const d = st.list;
   if (!d) return `<div class="wrap"><p class="muted" style="padding:2rem 0">Loading the desk…</p></div>`;
   const groups = deskGroups(d);
-  const tabs = [["review", "To review"], ["pack", "To pack & deliver"], ["pay", "Awaiting payment"], ["done", "Completed"], ["requests", "Messages & bookings"], ["stock", "Stock"]];
+  const tabs = [["review", "To review"], ["pack", "To pack & deliver"], ["pay", "Awaiting payment"], ["done", "Completed"], ["requests", "Messages & bookings"], ["stock", "Stock"], ["supply", "Supply"]];
   if (d.out) applyStock(d.out);
-  const list = ["requests", "stock"].includes(st.tab) ? null : groups[st.tab];
+  const list = ["requests", "stock", "supply"].includes(st.tab) ? null : groups[st.tab];
   const day = t => new Date(t).toLocaleDateString("en-CA", { timeZone: CFG.site.timezone }), today = day(Date.now());
   const paidToday = d.orders.filter(o => PAID(o.status) && day(o.createdAt) === today);
   const takings = paidToday.reduce((t, o) => t + (Number(o.total) || 0), 0);
@@ -1033,7 +1034,7 @@ function vStaff() {
     + stat("pay", "", groups.pay.length, "Awaiting payment", "", false)
     + `<button type="button" class="stat money" data-dtab="done" data-dstatus="" title="Paid orders placed today, and the last 7 days"><b>${NGN(takings)}</b><span>Today · ${paidToday.length} paid</span>${weekBars(d.orders, day)}</button>`;
   return `<div class="desk-top">
-      <div class="desk-tabs" role="tablist" aria-label="Desk sections">${tabs.map(([k, l]) => `<button type="button" role="tab" data-dtab="${k}" aria-selected="${st.tab === k}">${l}${k === "requests" ? ` <span class="count">${d.requests.filter(r => r.status === "new").length}</span>` : k === "stock" ? ` <span class="count">${P.filter(p => p.out).length} out</span>` : ` <span class="count">${groups[k].length}</span>`}</button>`).join("")}</div>
+      <div class="desk-tabs" role="tablist" aria-label="Desk sections">${tabs.map(([k, l]) => `<button type="button" role="tab" data-dtab="${k}" aria-selected="${st.tab === k}">${l}${k === "requests" ? ` <span class="count">${d.requests.filter(r => r.status === "new").length}</span>` : k === "stock" ? ` <span class="count">${P.filter(p => p.out).length} out</span>` : k === "supply" ? ` <span class="count${shortCount(d) ? " warn" : ""}">${shortCount(d)} short</span>` : ` <span class="count">${groups[k].length}</span>`}</button>`).join("")}</div>
       <div class="desk-tools"><button class="linkbtn" type="button" data-sound aria-pressed="${soundOn()}">${soundOn() ? "🔔 Sound on" : "🔕 Sound off"}</button><button class="linkbtn" type="button" data-keys>⌨ Shortcuts</button><button class="linkbtn" type="button" data-csv>${icon("download", "ic sm")} Download orders (CSV)</button><button class="linkbtn" type="button" data-testmail>${icon("chat", "ic sm")} Send test email</button><button class="linkbtn" type="button" data-remind>${icon("card", "ic sm")} Send payment reminders now</button><a class="linkbtn" href="/rider" data-link>${icon("truck", "ic sm")} Rider page</a><p class="small muted" role="status">Updates every 10 seconds${st.updated ? ` · last ${st.updated.toLocaleTimeString("en-GB")}` : ""}</p></div></div>
     ${st.err ? alertBox(st.err) : ""}
     ${st.mail ? `<div class="notice ${/NOT sent/.test(st.mail) ? "bad" : "info"} small" role="status"><span>${esc(st.mail)}</span></div>` : ""}
@@ -1041,7 +1042,7 @@ function vStaff() {
       ? `<p class="small muted">${d.missing.length} licence details to add later · <button class="linkbtn" type="button" data-missing="show">Show</button></p>`
       : `<details class="setup"><summary><b>${d.missing.length} licence details to add</b> · the shop works without them; they're left off the Licences page and receipts until added</summary><p class="small">Still to add: ${d.missing.map(esc).join(", ")}. Send them to whoever looks after the website (they go in <code>js/config.js</code>).</p><button class="linkbtn" type="button" data-missing="hide">Hide this for 30 days</button></details>`) : ""}
     ${d.setup && d.setup.length ? `<details class="setup"><summary><b>${d.setup.length} hosting setting${d.setup.length === 1 ? "" : "s"} to add</b> · in Vercel, Settings → Environment Variables</summary><p class="small">${d.setup.map(esc).join(", ")}. See the README for what each one does.</p></details>` : ""}
-    ${st.tab === "stock" ? stockPanel() : st.tab === "requests" ? `<div class="requests">${d.requests.length ? d.requests.slice().sort((a, b) => (a.status === "done") - (b.status === "done")).map(r => `<article class="panel req${r.status === "done" ? " done" : ""}"><div class="top"><b>${{ appointment: "Consultation booking", message: "Message", careers: "Careers interest", trade: "Wholesale quote request", restock: "Back-in-stock request" }[r.type]}</b><span class="small muted">${stamp(r.createdAt)}</span></div>
+    ${st.tab === "supply" ? supplyPanel() : st.tab === "stock" ? stockPanel() : st.tab === "requests" ? `<div class="requests">${d.requests.length ? d.requests.slice().sort((a, b) => (a.status === "done") - (b.status === "done")).map(r => `<article class="panel req${r.status === "done" ? " done" : ""}"><div class="top"><b>${{ appointment: "Consultation booking", message: "Message", careers: "Careers interest", trade: "Wholesale quote request", restock: "Back-in-stock request" }[r.type]}</b><span class="small muted">${stamp(r.createdAt)}</span></div>
         <div class="small"><b>${esc(r.name)}</b> · ${r.phone ? `<a href="tel:${esc(r.phone)}">${esc(r.phone)}</a>` : ""} ${esc(r.email || "")}</div>
         ${r.type === "appointment" ? `<div class="small">Wants: <b>${esc(r.date)} at ${esc(PR.fmt12(r.time || "00:00"))}</b></div>` : ""}${r.topic ? `<div class="small">${esc(r.topic)}</div>` : ""}${r.role ? `<div class="small">${esc(r.role)} ${r.pcn ? `· PCN ${esc(r.pcn)}` : ""}</div>` : ""}${r.business ? `<div class="small"><b>${esc(r.business)}</b>${r.bizType ? ` · ${esc(r.bizType)}` : ""}${r.state ? ` · ${esc(r.state)}` : ""}${r.pcn && !r.role ? ` · Licence ${esc(r.pcn)}` : ""}</div>` : ""}
         ${r.message ? `<p class="small" style="white-space:pre-line">${esc(r.message)}</p>` : ""}
@@ -1066,7 +1067,7 @@ function weekBars(orders, day) {
 const soundOn = () => store.get("synako.sound", true) !== false;
 function keysHelp() {
   return `<div class="keys-help" role="dialog" aria-label="Keyboard shortcuts"><div class="panel"><div class="top"><h2 class="h3">Keyboard shortcuts</h2><button class="iconbtn" type="button" data-keys aria-label="Close">✕</button></div>
-    <dl class="kv"><dt><kbd>1</kbd>–<kbd>6</kbd></dt><dd>Switch section</dd><dt><kbd>/</kbd></dt><dd>Search orders</dd><dt><kbd>J</kbd> <kbd>K</kbd> or <kbd>↓</kbd> <kbd>↑</kbd></dt><dd>Next / previous order</dd><dt><kbd>Esc</kbd></dt><dd>Close the order, or this box</dd><dt><kbd>R</kbd></dt><dd>Refresh now</dd><dt><kbd>?</kbd></dt><dd>Show or hide these shortcuts</dd></dl></div></div>`;
+    <dl class="kv"><dt><kbd>1</kbd>–<kbd>7</kbd></dt><dd>Switch section</dd><dt><kbd>/</kbd></dt><dd>Search orders</dd><dt><kbd>J</kbd> <kbd>K</kbd> or <kbd>↓</kbd> <kbd>↑</kbd></dt><dd>Next / previous order</dd><dt><kbd>Esc</kbd></dt><dd>Close the order, or this box</dd><dt><kbd>R</kbd></dt><dd>Refresh now</dd><dt><kbd>?</kbd></dt><dd>Show or hide these shortcuts</dd></dl></div></div>`;
 }
 /* Order progress at a glance, from its record */
 function progressSteps(o) {
@@ -1076,6 +1077,118 @@ function progressSteps(o) {
   if (["rejected", "cancelled"].includes(o.status)) return `<p class="small"><span class="tag bad">${esc(o.statusLabel || o.status)}</span></p>`;
   const cur = steps.findIndex(x => !x[1]);
   return `<ol class="steps">${steps.map(([l, t], i) => `<li class="${t ? "done" : i === cur ? "now" : ""}"><span class="dot" aria-hidden="true">${t ? "✓" : i + 1}</span><b>${l}</b><span class="small muted">${t ? stamp(t) : i === cur ? "Next" : ""}</span></li>`).join("")}</ol>`;
+}
+/* ---------- Supply: shortages, purchase orders to wholesalers, suppliers ---------- */
+const shortCount = d => new Set([...(d.out || []), ...(d.low || []), ...P.filter(p => p.outInData).map(p => p.id)]).size;
+async function loadSupply(silent) {
+  const st = S.staff; if (!st.token) return;
+  try { st.supply = DEMO ? { shortages: [], suppliers: [], pos: [], overdue: [], email: false, sms: false } : await call("staff/orders?view=supply", { token: st.token }); st.supplyErr = ""; }
+  catch (e) { if (e.status === 401) return signOut(); st.supplyErr = e.message; }
+  if (S.mode === "staff" && st.tab === "supply") render();
+}
+async function supplyPost(body, btn) {
+  if (btn) btn.disabled = true;
+  try { const r = await call("staff/orders", { method: "POST", body: Object.assign({ by: S.staff.name }, body), token: S.staff.token }); if (r.shortages) S.staff.supply = r; return r; }
+  catch (e) { if (e.status === 401) signOut(); else toast(e.message); return null; }
+  finally { if (btn) btn.disabled = false; }
+}
+async function setLowStock(id, low, btn) {
+  const r = await supplyPost({ action: "stock-low", id, low }, btn);
+  if (r) { S.staff.list.low = r.low; toast(low ? `${prod(id).name} marked running low. The supply manager has been told.` : `${prod(id).name} is no longer marked low.`); render(); }
+}
+async function supplierCall(body, btn, msg, close) {
+  const r = await supplyPost(body, btn);
+  if (r) { if (close) S.staff.editSup = null; toast(msg); render.fresh = true; render(); }
+}
+async function createPO(btn) {
+  const st = S.staff, sh = (st.supply || {}).shortages || [], sel = st.shsel || {};
+  const lines = sh.filter(x => sel[x.id]).map(x => ({ id: x.id, qty: Number(($("#shq-" + x.id) || {}).value || 0) }));
+  const supplier = ($("#po-sup") || {}).value || "";
+  if (!lines.length) return toast("Tick the items to order.");
+  if (!supplier) return toast("Choose a wholesaler.");
+  const r = await supplyPost({ action: "po-create", supplier, lines, note: ($("#po-note") || {}).value || "" }, btn);
+  if (r) { st.shsel = {}; st.sview = "pos"; st.openPo = r.po.id; toast(`Purchase order ${r.po.id} created. Send it to ${r.po.supplierName} next.`); render.fresh = true; render(); }
+}
+function poText(po) {
+  return [`Purchase order ${po.id} from ${B.companyName || B.name}`, ...po.lines.map(l => `• ${l.qty} × ${l.name}${l.pack ? ` (${l.pack})` : ""}`), po.note ? `Note: ${po.note}` : "",
+    `Deliver to: ${[B.address, B.city, B.state].filter(has).join(", ")}`, `Contact: ${[B.phone, B.email].filter(has).join(" · ")}`, "Please confirm availability, price and delivery date. Thank you."].filter(Boolean).join("\n");
+}
+async function poAction(act, extra, btn) {
+  const st = S.staff, po = ((st.supply || {}).pos || []).find(x => x.id === st.openPo); if (!po) return;
+  const sup = ((st.supply || {}).suppliers || []).find(x => x.id === po.supplier) || {};
+  if (extra.via === "copy") { try { await navigator.clipboard.writeText(poText(po)); toast("Order copied. Paste it into a message to the wholesaler."); } catch (e) { toast("Couldn't copy on this device."); } return; }
+  if (extra.via === "whatsapp") { const link = waTo(sup.whatsapp || sup.phone, poText(po)); if (!link) return toast("Add a WhatsApp or phone number for this wholesaler first."); window.open(link, "_blank", "noopener"); }
+  const r = await supplyPost(Object.assign({ action: "po-update", id: po.id, po: act }, extra), btn);
+  if (r) toast({ send: extra.via === "email" ? `Emailed to ${sup.email}.` : "Marked as sent.", confirmed: "Marked as confirmed.", received: "Received. The items are back in stock.", cancel: "Purchase order cancelled.", "": "Delivery date saved." }[act] || "Saved.");
+  if (r && act === "received") await loadDesk(true);
+  render();
+}
+function supplyPanel() {
+  const st = S.staff, sp = st.supply, view = st.sview || "short";
+  if (!sp) return `<section class="panel supply"><p class="muted">${st.supplyErr ? esc(st.supplyErr) : "Loading supply…"}</p></section>`;
+  const toOrder = sp.shortages.filter(x => !x.onOrder.length).length, open = sp.pos.filter(p => ["draft", "sent", "confirmed"].includes(p.status));
+  const nav = [["short", `Shortages <span class="count${toOrder ? " warn" : ""}">${toOrder} to order</span>`], ["pos", `Purchase orders <span class="count${sp.overdue.length ? " warn" : ""}">${open.length} open${sp.overdue.length ? ` · ${sp.overdue.length} late` : ""}</span>`], ["suppliers", `Wholesalers <span class="count">${sp.suppliers.length}</span>`]];
+  return `<section class="supply">
+    <div class="seg" role="tablist" aria-label="Supply">${nav.map(([k, l]) => `<button type="button" role="tab" data-sview="${k}" aria-selected="${view === k}">${l}</button>`).join("")}</div>
+    ${view === "short" ? shortagesView(sp) : view === "pos" ? posView(sp) : suppliersView(sp)}
+  </section>`;
+}
+function shortagesView(sp) {
+  const st = S.staff, sel = st.shsel || {}, picked = sp.shortages.filter(x => sel[x.id]).length;
+  if (!sp.shortages.length) return `<div class="panel empty-state">${icon("check", "ic big")}<p><b>Nothing is short right now</b></p><p class="muted small">When staff mark items as running low or out of stock (in the Stock tab), they appear here to order.</p></div>`;
+  const suggest = x => Math.max(10, Math.ceil((x.sold7 * 2 + x.waiting) / 5) * 5);
+  return `<div class="panel">
+    <div class="sup-head"><div><h2 class="h3">Shortages</h2><p class="small muted">Out of stock or running low. Most pressing first: customers waiting, then sales this week. Tick items, choose a wholesaler and create a purchase order.</p></div><button class="linkbtn" type="button" data-shall>Tick all not on order</button></div>
+    <div class="short-list">${sp.shortages.map(x => `<div class="short-row${x.onOrder.length ? " ordered" : ""}">
+      <label class="check"><input type="checkbox" id="sh-${esc(x.id)}" data-shsel="${esc(x.id)}" ${sel[x.id] ? "checked" : ""}><span><b>${esc(x.name)}</b> <span class="small muted">${esc(x.pack)}</span></span></label>
+      <span class="short-tags">${x.state === "out" ? `<span class="tag bad">Out of stock</span>` : `<span class="tag warn">Running low</span>`}${x.waiting ? `<span class="tag gen">${x.waiting} waiting</span>` : ""}${x.sold7 ? `<span class="small muted">${x.sold7} sold this week</span>` : ""}${x.onOrder.map(o => `<span class="small ok-text">On order: ${o.qty} · ${esc(o.po)} (${esc(o.status)})</span>`).join("")}</span>
+      <label class="short-qty"><span class="sr">Quantity of ${esc(x.name)}</span><input id="shq-${esc(x.id)}" type="number" min="1" step="1" inputmode="numeric" value="${suggest(x)}"></label>
+    </div>`).join("")}</div>
+    <div class="po-make">
+      ${sp.suppliers.length ? `<label for="po-sup">Wholesaler<select id="po-sup"><option value="">Choose…</option>${sp.suppliers.map(s => `<option value="${esc(s.id)}">${esc(s.name)}${s.leadDays ? ` · ${s.leadDays} day${s.leadDays === 1 ? "" : "s"}` : ""}</option>`).join("")}</select></label>
+      <label for="po-note">Note to the wholesaler<input id="po-note" placeholder="Optional, e.g. deliver before Friday"></label>
+      <button class="btn btn-primary" type="button" data-pocreate ${picked ? "" : "disabled"}>Create purchase order${picked ? ` (${picked} item${picked === 1 ? "" : "s"})` : ""}</button>`
+      : `<p class="small">Add your wholesalers first. <button class="linkbtn" type="button" data-supedit="">Add a wholesaler</button></p>`}
+    </div></div>`;
+}
+function posView(sp) {
+  const st = S.staff, late = new Set(sp.overdue);
+  if (!sp.pos.length) return `<div class="panel empty-state">${icon("box", "ic big")}<p><b>No purchase orders yet</b></p><p class="muted small">Create one from the Shortages list.</p></div>`;
+  const tagCls = { draft: "gen", sent: "warn", confirmed: "otc", received: "ok", cancelled: "bad" };
+  return `<div class="po-list">${sp.pos.map(po => {
+    const sup = sp.suppliers.find(x => x.id === po.supplier) || {}, isOpen = st.openPo === po.id, closed = ["received", "cancelled"].includes(po.status);
+    return `<article class="panel po${late.has(po.id) ? " late" : ""}">
+      <button type="button" class="po-top" data-poopen="${esc(po.id)}" aria-expanded="${isOpen}"><b class="mono">${esc(po.id)}</b><span>${esc(po.supplierName)}</span><span class="tag ${tagCls[po.status]}">${esc(po.status)}</span>${late.has(po.id) ? `<span class="tag bad">Late</span>` : ""}<span class="small muted">${po.lines.length} item${po.lines.length === 1 ? "" : "s"} · ${stamp(po.createdAt)}${po.expected ? ` · due ${esc(po.expected)}` : ""}</span></button>
+      ${isOpen ? `<div class="po-body">
+        <ul class="po-lines">${po.lines.map(l => `<li>${l.qty} × ${esc(l.name)} <span class="muted small">${esc(l.pack)}</span></li>`).join("")}</ul>
+        ${po.note ? `<p class="small"><b>Note:</b> ${esc(po.note)}</p>` : ""}
+        ${closed ? "" : `<div class="po-actions">
+          ${sup.email ? `<button class="btn btn-sm btn-primary" type="button" data-posend="email">${icon("chat", "ic sm")} Email to ${esc(sup.name)}</button>` : ""}
+          ${sup.whatsapp || sup.phone ? `<button class="btn btn-sm ${sup.email ? "btn-ghost" : "btn-primary"}" type="button" data-posend="whatsapp">${icon("chat", "ic sm")} Send on WhatsApp</button>` : ""}
+          ${sup.phone ? `<a class="btn btn-sm btn-ghost" href="tel:${esc(sup.phone)}">${icon("phone", "ic sm")} Call</a>` : ""}
+          <button class="btn btn-sm btn-ghost" type="button" data-posend="copy">Copy order text</button>
+        </div>
+        <div class="po-actions">
+          ${["draft", "sent"].includes(po.status) ? `<button class="btn btn-sm btn-ghost" type="button" data-poact="confirmed">Wholesaler confirmed</button>` : ""}
+          <button class="btn btn-sm btn-success" type="button" data-poact="received">${icon("check", "ic sm")} Received: back in stock</button>
+          <button class="btn btn-sm btn-ghost" type="button" data-poact="cancel">Cancel</button>
+        </div>
+        <div class="po-date"><label for="po-date">Expected delivery<input id="po-date" type="date" value="${esc(po.expected || "")}"></label><button class="btn btn-sm btn-ghost" type="button" data-podate>Save date</button></div>`}
+        <div class="audit">${po.history.slice().reverse().map(h => `<div><span>${stamp(h.t)}</span><b style="font-weight:500">${esc(h.m)}</b></div>`).join("")}</div>
+      </div>` : ""}
+    </article>`; }).join("")}</div>`;
+}
+function suppliersView(sp) {
+  const st = S.staff, ed = st.editSup, cur = ed && ed !== "new" ? sp.suppliers.find(x => x.id === ed) || {} : {};
+  const form = ed ? `<form class="f panel" id="supform" novalidate><h2 class="h3">${ed === "new" ? "Add a wholesaler" : "Edit wholesaler"}</h2>
+      <div class="row2"><label for="sup-name">Business name<input id="sup-name" required value="${esc(cur.name || "")}"></label><label for="sup-contact">Contact person<input id="sup-contact" value="${esc(cur.contact || "")}"></label></div>
+      <div class="row2"><label for="sup-phone">Phone<input id="sup-phone" type="tel" value="${esc(cur.phone || "")}"></label><label for="sup-wa">WhatsApp<span class="hint">If different from the phone.</span><input id="sup-wa" type="tel" value="${esc(cur.whatsapp || "")}"></label></div>
+      <div class="row2"><label for="sup-email">Email<span class="hint">Orders can be emailed once your order emails work.</span><input id="sup-email" type="email" value="${esc(cur.email || "")}"></label><label for="sup-lead">Usual delivery time (days)<input id="sup-lead" type="number" min="0" max="60" value="${esc(cur.leadDays || "")}"></label></div>
+      <label for="sup-notes">Notes<span class="hint">What they stock, payment terms, minimum order…</span><textarea id="sup-notes" rows="2">${esc(cur.notes || "")}</textarea></label>
+      <div class="actions"><button class="btn btn-primary" type="submit">Save</button><button class="btn btn-ghost" type="button" data-supcancel>Cancel</button></div></form>` : "";
+  return `${form}<div class="panel"><div class="sup-head"><div><h2 class="h3">Wholesalers</h2><p class="small muted">The suppliers you buy from. Purchase orders go to them by email or WhatsApp.</p></div>${ed ? "" : `<button class="btn btn-primary btn-sm" type="button" data-supedit="">Add a wholesaler</button>`}</div>
+    ${sp.suppliers.length ? `<div class="sup-list">${sp.suppliers.map(x => `<div class="sup-row"><div><b>${esc(x.name)}</b>${x.contact ? ` <span class="small muted">· ${esc(x.contact)}</span>` : ""}<div class="small">${[x.phone && `<a href="tel:${esc(x.phone)}">${esc(x.phone)}</a>`, x.whatsapp && `WhatsApp ${esc(x.whatsapp)}`, x.email && esc(x.email), x.leadDays && `${x.leadDays} day${x.leadDays === 1 ? "" : "s"} delivery`].filter(Boolean).join(" · ")}</div>${x.notes ? `<div class="small muted">${esc(x.notes)}</div>` : ""}</div>
+      <div class="sup-btns"><button class="linkbtn" type="button" data-supedit="${esc(x.id)}">Edit</button><button class="linkbtn" type="button" data-supdel="${esc(x.id)}">Remove</button></div></div>`).join("")}</div>` : `<p class="muted small">No wholesalers yet.</p>`}</div>`;
 }
 /* Desk order list: search, delivery and status filters, and sorting (most urgent first by default) */
 const SPEEDS = [["express", "30-minute"], ["sameday", "Same-day"], ["nextday", "Next-day"], ["states", "Other states"]];
@@ -1541,12 +1654,12 @@ document.addEventListener("keydown", e => {
   const typing = /^(TEXTAREA|SELECT)$/.test(e.target.tagName) || (e.target.tagName === "INPUT" && !/^(checkbox|radio|button|submit)$/.test(e.target.type));
   if (e.key === "Escape") { if (S.staff.keys) S.staff.keys = false; else if (typing) { e.target.blur(); return; } else { S.staff.sel = null; S.staff.detail = null; } render(); return; }
   if (typing) return;
-  const tabs = ["review", "pack", "pay", "done", "requests", "stock"];
-  if (/^[1-6]$/.test(e.key)) { S.staff.tab = tabs[Number(e.key) - 1]; S.staff.status = ""; S.staff.sel = null; S.staff.detail = null; render(); e.preventDefault(); return; }
+  const tabs = ["review", "pack", "pay", "done", "requests", "stock", "supply"];
+  if (/^[1-7]$/.test(e.key)) { S.staff.tab = tabs[Number(e.key) - 1]; S.staff.status = ""; S.staff.sel = null; S.staff.detail = null; render(); if (S.staff.tab === "supply") loadSupply(); e.preventDefault(); return; }
   if (e.key === "/") { const q = $("#deskq") || $("#stockq"); if (q) { q.focus(); e.preventDefault(); } return; }
   if (e.key === "?") { S.staff.keys = !S.staff.keys; render(); return; }
   if (e.key === "r" || e.key === "R") { loadDesk(); return; }
-  if (["j", "k", "ArrowDown", "ArrowUp"].includes(e.key) && !["requests", "stock"].includes(S.staff.tab)) {
+  if (["j", "k", "ArrowDown", "ArrowUp"].includes(e.key) && !["requests", "stock", "supply"].includes(S.staff.tab)) {
     const shown = queueFilter(deskGroup()); if (!shown.length) return;
     const i = shown.findIndex(o => o.id === S.staff.sel), step = e.key === "j" || e.key === "ArrowDown" ? 1 : -1;
     const next = shown[i < 0 ? 0 : Math.min(shown.length - 1, Math.max(0, i + step))];
@@ -1604,10 +1717,11 @@ function reorder() {
 function stockRows() {
   const q = norm(S.staff.stockQ || "");
   const list = P.filter(p => !q || norm([p.name, p.generic, p.brand, cat(p.cat).name].join(" ")).includes(q))
-    .sort((a, b) => (b.out - a.out) || a.name.localeCompare(b.name)).slice(0, 80);
+    .sort((a, b) => (b.out - a.out) || ((S.staff.list.low || []).includes(b.id) - (S.staff.list.low || []).includes(a.id)) || a.name.localeCompare(b.name)).slice(0, 80);
   const waiting = id => (S.staff.list.requests || []).filter(r => r.type === "restock" && r.product === id && r.status === "new").length;
-  return list.length ? list.map(p => `<div class="stock-row${p.out ? " out" : ""}"><span><b>${esc(p.name)}</b><span class="small muted">${esc(p.pack)} · ${esc(dept(p.dept).short)}${waiting(p.id) ? ` · <b>${waiting(p.id)} waiting</b>` : ""}</span></span>
-    ${p.outInData ? `<span class="small muted">Out in js/data.js</span>` : `<button class="btn btn-sm ${p.out ? "btn-primary" : "btn-ghost"}" type="button" data-stock="${esc(p.id)}" data-out="${p.out ? "" : "1"}">${p.out ? "Mark back in stock" : "Mark out of stock"}</button>`}</div>`).join("")
+  const low = new Set(S.staff.list.low || []);
+  return list.length ? list.map(p => `<div class="stock-row${p.out ? " out" : low.has(p.id) ? " low" : ""}"><span><b>${esc(p.name)}</b>${!p.out && low.has(p.id) ? ` <span class="tag warn">Running low</span>` : ""}<span class="small muted">${esc(p.pack)} · ${esc(dept(p.dept).short)}${waiting(p.id) ? ` · <b>${waiting(p.id)} waiting</b>` : ""}</span></span>
+    ${p.outInData ? `<span class="small muted">Out in js/data.js</span>` : `<span class="stock-btns">${p.out ? "" : `<button class="btn btn-sm btn-ghost" type="button" data-low="${esc(p.id)}" data-on="${low.has(p.id) ? "" : "1"}">${low.has(p.id) ? "Not low" : "Running low"}</button>`}<button class="btn btn-sm ${p.out ? "btn-primary" : "btn-ghost"}" type="button" data-stock="${esc(p.id)}" data-out="${p.out ? "" : "1"}">${p.out ? "Mark back in stock" : "Mark out of stock"}</button></span>`}</div>`).join("")
     : `<p class="muted small">No products match.</p>`;
 }
 function stockPanel() {
@@ -1677,6 +1791,17 @@ document.addEventListener("click", e => {
   if ("promoRemove" in d) { S.form.promo = ""; render(); return; }
   if (d.emfix) { const i = $("#em"); i.value = d.emfix; showEmailFix(); i.focus(); return; }
   if (d.stock) { setStock(d.stock, !!d.out, t); return; }
+  if (d.low) { setLowStock(d.low, !!d.on, t); return; }
+  if (d.sview) { S.staff.sview = d.sview; S.staff.editSup = null; render(); return; }
+  if ("pocreate" in d) { createPO(t); return; }
+  if (d.poopen) { S.staff.openPo = S.staff.openPo === d.poopen ? null : d.poopen; render(); return; }
+  if (d.posend) { poAction(d.posend === "copy" ? null : "send", { via: d.posend }, t); return; }
+  if (d.poact) { if (d.poact !== "cancel" || confirm("Cancel this purchase order?")) poAction(d.poact, {}, t); return; }
+  if ("podate" in d) { poAction("", { expected: ($("#po-date") || {}).value || "" }, t); return; }
+  if (d.supedit !== undefined) { S.staff.editSup = d.supedit || "new"; S.staff.sview = "suppliers"; render.fresh = true; render(); const f = $("#sup-name"); if (f) f.focus(); return; }
+  if (d.supdel) { if (confirm("Remove this wholesaler from your list?")) supplierCall({ action: "supplier-delete", id: d.supdel }, t, "Wholesaler removed."); return; }
+  if ("supcancel" in d) { S.staff.editSup = null; render(); return; }
+  if ("shall" in d) { const sh = (S.staff.supply || {}).shortages || []; const sel = S.staff.shsel || (S.staff.shsel = {}); const all = sh.filter(x => !x.onOrder.length).every(x => sel[x.id]); sh.filter(x => !x.onOrder.length).forEach(x => { sel[x.id] = !all; }); render(); return; }
   if (d.age === "yes") { S.age18 = true; store.set("synako.age18", true); render(); return; }
   if ("rxreq" in d) { S.rxRequest = true; S.step = 1; go("/checkout"); toast("Prescription request started."); return; }
   if ("rxreqRemove" in d) { S.rxRequest = false; render(); return; }
@@ -1691,6 +1816,7 @@ document.addEventListener("click", e => {
   if ("keys" in d) { S.staff.keys = !S.staff.keys; render(); return; }
   if ("deskback" in d) { S.staff.sel = null; S.staff.detail = null; render(); return; }
   if (d.dtab && "dstatus" in d) { S.staff.tab = d.dtab; S.staff.status = d.dstatus; S.staff.sel = null; S.staff.detail = null; render(); loadDesk(true); return; }
+  if (d.dtab === "supply") { S.staff.tab = "supply"; render(); loadSupply(); return; }
   if (d.dtab) { S.staff.tab = d.dtab; S.staff.status = ""; S.staff.sel = null; S.staff.detail = null; render(); loadDesk(true); return; }
   if (d.sel) { loadDeskOrder(d.sel); return; }
   if (d.act) { deskAction(d.act); return; }
@@ -1714,6 +1840,7 @@ document.addEventListener("keydown", e => {
 document.addEventListener("change", async e => {
   const t = e.target;
   if (t.id === "sort") { S.sort = t.value; render(); return; }
+  if (t.dataset && t.dataset.shsel) { const sel = S.staff.shsel || (S.staff.shsel = {}); sel[t.dataset.shsel] = t.checked; render(); return; }
   if (t.dataset && t.dataset.pack) {
     const id = t.dataset.pack, n = Number(t.dataset.n), p = S.staff.packed || (S.staff.packed = {}), l = p[id] || (p[id] = []);
     if (t.checked && !l.includes(n)) l.push(n); else if (!t.checked) p[id] = l.filter(x => x !== n);
@@ -1776,6 +1903,12 @@ document.addEventListener("submit", async e => {
     S.staff.name = f.sname.value.trim(); store.sset("synako.staffName", S.staff.name);
     try { const { token } = await api.staffLogin(f.spw.value); S.staff.token = token; S.staff.err = ""; store.sset("synako.staff", token); render.fresh = true; render(); loadDesk(); }
     catch (er) { S.staff.err = er.message; render(); }
+    return;
+  }
+  if (f.id === "supform") {
+    if (!f.reportValidity()) return;
+    const v = id => (f.querySelector("#" + id) || {}).value || "";
+    await supplierCall({ action: "supplier-save", supplier: { id: S.staff.editSup === "new" ? "" : S.staff.editSup, name: v("sup-name"), contact: v("sup-contact"), phone: v("sup-phone"), whatsapp: v("sup-wa"), email: v("sup-email"), leadDays: v("sup-lead"), notes: v("sup-notes") } }, f.querySelector("[type=submit]"), "Wholesaler saved.", true);
     return;
   }
   if (f.id === "riderform") {

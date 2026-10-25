@@ -72,7 +72,9 @@
       // Wholesalers you buy from regularly. They appear under Supply → Wholesalers on the Pharmacist Desk
       // until staff first save a change there (after that, the desk's list is used). Example:
       // { name: "Example Pharma Distributors Ltd", contact: "Mr Ade", phone: "0803 000 0000", whatsapp: "", email: "orders@example.com", leadDays: 3, notes: "Antibiotics, analgesics" }
-      suppliers: []
+      suppliers: [
+        { name: "Tuyil Pharmaceuticals LTD", contact: "Tuyil Pharma", phone: "0807 876 5654", whatsapp: "0807 876 5654", email: "tuyilpharma@gmail.com", leadDays: 5, notes: "Usually delivers in 4–5 working days." }
+      ]
     },
     sms: {
       // Texts to customers, sent only once TERMII_API_KEY is added in the hosting settings (each text costs a few naira).

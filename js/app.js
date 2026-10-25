@@ -986,6 +986,7 @@ async function loadDesk(silent) {
 const deskCounts = d => ({ pack: d.orders.filter(o => o.status === "paid").length, review: d.orders.filter(o => o.status === "pending_review").length, requests: (d.requests || []).filter(r => r.status === "new").length });
 /* A short two-note chime, so a desk left open at the counter is noticed (no sound file needed) */
 function chime() {
+  if (!soundOn()) return;
   try {
     const A = window.AudioContext || window.webkitAudioContext; if (!A) return;
     const ctx = chime.ctx || (chime.ctx = new A());
@@ -1023,10 +1024,17 @@ function vStaff() {
   const day = t => new Date(t).toLocaleDateString("en-CA", { timeZone: CFG.site.timezone }), today = day(Date.now());
   const paidToday = d.orders.filter(o => PAID(o.status) && day(o.createdAt) === today);
   const takings = paidToday.reduce((t, o) => t + (Number(o.total) || 0), 0);
-  $("#staff-stats").innerHTML = `<div><b>${groups.review.length}</b>To review</div><div><b>${groups.pack.length}</b>To pack</div><div><b>${groups.pay.length}</b>Awaiting payment</div><div title="Paid orders placed today"><b>${NGN(takings)}</b>Today · ${paidToday.length} paid</div>`;
+  const toPack = d.orders.filter(o => o.status === "paid"), onRoad = d.orders.filter(o => o.status === "out_for_delivery");
+  const oldest = l => l.length ? `<small>oldest ${waitText(Math.min(...l.map(waitFrom)))}</small>` : "";
+  const stat = (tab, status, n, label, extra, hot) => `<button type="button" class="stat${hot ? " hot" : ""}" data-dtab="${tab}" data-dstatus="${status}"><b>${n}</b><span>${label}${extra}</span></button>`;
+  $("#staff-stats").innerHTML = stat("review", "", groups.review.length, "To review", oldest(groups.review), groups.review.some(o => waitMins(o) > 60))
+    + stat("pack", "paid", toPack.length, "To pack", oldest(toPack), toPack.some(o => waitMins(o) > 60))
+    + stat("pack", "out_for_delivery", onRoad.length, "On the road", "", false)
+    + stat("pay", "", groups.pay.length, "Awaiting payment", "", false)
+    + `<button type="button" class="stat money" data-dtab="done" data-dstatus="" title="Paid orders placed today, and the last 7 days"><b>${NGN(takings)}</b><span>Today · ${paidToday.length} paid</span>${weekBars(d.orders, day)}</button>`;
   return `<div class="desk-top">
       <div class="desk-tabs" role="tablist" aria-label="Desk sections">${tabs.map(([k, l]) => `<button type="button" role="tab" data-dtab="${k}" aria-selected="${st.tab === k}">${l}${k === "requests" ? ` <span class="count">${d.requests.filter(r => r.status === "new").length}</span>` : k === "stock" ? ` <span class="count">${P.filter(p => p.out).length} out</span>` : ` <span class="count">${groups[k].length}</span>`}</button>`).join("")}</div>
-      <div class="desk-tools"><button class="linkbtn" type="button" data-csv>${icon("download", "ic sm")} Download orders (CSV)</button><button class="linkbtn" type="button" data-testmail>${icon("chat", "ic sm")} Send test email</button><button class="linkbtn" type="button" data-remind>${icon("card", "ic sm")} Send payment reminders now</button><a class="linkbtn" href="/rider" data-link>${icon("truck", "ic sm")} Rider page</a><p class="small muted" role="status">Updates every 10 seconds${st.updated ? ` · last ${st.updated.toLocaleTimeString("en-GB")}` : ""}</p></div></div>
+      <div class="desk-tools"><button class="linkbtn" type="button" data-sound aria-pressed="${soundOn()}">${soundOn() ? "🔔 Sound on" : "🔕 Sound off"}</button><button class="linkbtn" type="button" data-keys>⌨ Shortcuts</button><button class="linkbtn" type="button" data-csv>${icon("download", "ic sm")} Download orders (CSV)</button><button class="linkbtn" type="button" data-testmail>${icon("chat", "ic sm")} Send test email</button><button class="linkbtn" type="button" data-remind>${icon("card", "ic sm")} Send payment reminders now</button><a class="linkbtn" href="/rider" data-link>${icon("truck", "ic sm")} Rider page</a><p class="small muted" role="status">Updates every 10 seconds${st.updated ? ` · last ${st.updated.toLocaleTimeString("en-GB")}` : ""}</p></div></div>
     ${st.err ? alertBox(st.err) : ""}
     ${st.mail ? `<div class="notice ${/NOT sent/.test(st.mail) ? "bad" : "info"} small" role="status"><span>${esc(st.mail)}</span></div>` : ""}
     ${d.missing && d.missing.length ? (store.get("synako.hideMissing", 0) > Date.now()
@@ -1038,10 +1046,36 @@ function vStaff() {
         ${r.type === "appointment" ? `<div class="small">Wants: <b>${esc(r.date)} at ${esc(PR.fmt12(r.time || "00:00"))}</b></div>` : ""}${r.topic ? `<div class="small">${esc(r.topic)}</div>` : ""}${r.role ? `<div class="small">${esc(r.role)} ${r.pcn ? `· PCN ${esc(r.pcn)}` : ""}</div>` : ""}${r.business ? `<div class="small"><b>${esc(r.business)}</b>${r.bizType ? ` · ${esc(r.bizType)}` : ""}${r.state ? ` · ${esc(r.state)}` : ""}${r.pcn && !r.role ? ` · Licence ${esc(r.pcn)}` : ""}</div>` : ""}
         ${r.message ? `<p class="small" style="white-space:pre-line">${esc(r.message)}</p>` : ""}
         <div class="req-foot">${r.status === "done" ? `<span class="tag ok">Handled${r.handledBy ? ` by ${esc(r.handledBy)}` : ""}</span><button class="linkbtn" type="button" data-req="${esc(r.id)}" data-st="new">Mark as new</button>` : `<button class="btn btn-secondary btn-sm" type="button" data-req="${esc(r.id)}" data-st="done">${icon("check", "ic sm")} Mark as handled</button>`}</div></article>`).join("") : `<p class="muted">No messages or bookings yet.</p>`}</div>`
-    : `<div class="desk">
+    : `<div class="desk${st.sel ? " has-sel" : ""}">
       <div class="queue-wrap">${queueTools(list)}<nav class="queue" id="queue" aria-label="Orders">${queueRows(list)}</nav></div>
       <section class="panel" aria-live="polite">${deskDetail()}</section>
-    </div>`}`;
+    </div>`}
+    ${st.keys ? keysHelp() : ""}`;
+}
+/* How long an order has been waiting on us: prescriptions since they arrived, paid orders since payment */
+const waitFrom = o => Date.parse(o.status === "paid" && o.paidAt ? o.paidAt : o.createdAt) || Date.now();
+const waitMins = o => (Date.now() - waitFrom(o)) / 60000;
+function waitText(t) { const m = Math.max(0, Math.round((Date.now() - t) / 60000)); return m < 60 ? `${m}m` : m < 1440 ? `${Math.floor(m / 60)}h ${m % 60}m` : `${Math.floor(m / 1440)}d`; }
+/* Takings for the last 7 days as a small bar chart (from the latest 200 orders) */
+function weekBars(orders, day) {
+  const days = [...Array(7)].map((_, i) => day(Date.now() - (6 - i) * 864e5));
+  const sums = days.map(k => orders.filter(o => PAID(o.status) && day(o.createdAt) === k).reduce((t, o) => t + (Number(o.total) || 0), 0));
+  const max = Math.max(...sums, 1);
+  return `<svg class="week" viewBox="0 0 70 18" role="img" aria-label="Takings, last 7 days: ${sums.map(n => NGN(n)).join(", ")}">${sums.map((n, i) => `<rect x="${i * 10 + 1}" y="${18 - Math.max(1.5, 16 * n / max)}" width="7" height="${Math.max(1.5, 16 * n / max)}" rx="1.5"${i === 6 ? ' class="now"' : ""}><title>${days[i]}: ${NGN(n)}</title></rect>`).join("")}</svg>`;
+}
+const soundOn = () => store.get("synako.sound", true) !== false;
+function keysHelp() {
+  return `<div class="keys-help" role="dialog" aria-label="Keyboard shortcuts"><div class="panel"><div class="top"><h2 class="h3">Keyboard shortcuts</h2><button class="iconbtn" type="button" data-keys aria-label="Close">✕</button></div>
+    <dl class="kv"><dt><kbd>1</kbd>–<kbd>6</kbd></dt><dd>Switch section</dd><dt><kbd>/</kbd></dt><dd>Search orders</dd><dt><kbd>J</kbd> <kbd>K</kbd> or <kbd>↓</kbd> <kbd>↑</kbd></dt><dd>Next / previous order</dd><dt><kbd>Esc</kbd></dt><dd>Close the order, or this box</dd><dt><kbd>R</kbd></dt><dd>Refresh now</dd><dt><kbd>?</kbd></dt><dd>Show or hide these shortcuts</dd></dl></div></div>`;
+}
+/* Order progress at a glance, from its record */
+function progressSteps(o) {
+  const pub = o.history.filter(h => !h.internal), at = re => (pub.find(h => re.test(h.m)) || {}).t;
+  const steps = [["Placed", at(/^Order placed/)]].concat(o.rx ? [["Approved", at(/^Prescription approved/)]] : [],
+    [["Paid", at(/^Payment received/)], ["Packed", at(/^Packed/)], ["On the road", at(/^Out for delivery/)], ["Delivered", at(/^Delivered/)]]);
+  if (["rejected", "cancelled"].includes(o.status)) return `<p class="small"><span class="tag bad">${esc(o.statusLabel || o.status)}</span></p>`;
+  const cur = steps.findIndex(x => !x[1]);
+  return `<ol class="steps">${steps.map(([l, t], i) => `<li class="${t ? "done" : i === cur ? "now" : ""}"><span class="dot" aria-hidden="true">${t ? "✓" : i + 1}</span><b>${l}</b><span class="small muted">${t ? stamp(t) : i === cur ? "Next" : ""}</span></li>`).join("")}</ol>`;
 }
 /* Desk order list: search, delivery and status filters, and sorting (most urgent first by default) */
 const SPEEDS = [["express", "30-minute"], ["sameday", "Same-day"], ["nextday", "Next-day"], ["states", "Other states"]];
@@ -1071,7 +1105,7 @@ function queueRows(list) {
   if (!list.length) return `<p class="muted small" style="padding:1rem">Nothing here right now.</p>`;
   if (!shown.length) return `<p class="muted small" style="padding:1rem">No orders match. <button class="linkbtn" type="button" data-qclear>Clear filters</button></p>`;
   return shown.map(o => `<button type="button" class="q ${o.status}" data-sel="${o.id}" aria-current="${o.id === st.sel}">
-        <span class="top"><b class="mono">${o.id}</b>${statusTag(o)}</span>
+        <span class="top"><b class="mono">${o.id}</b><span class="q-tags">${["pending_review", "paid"].includes(o.status) ? `<span class="wait ${waitMins(o) > 60 ? "late" : waitMins(o) > 30 ? "soon" : ""}" title="Waiting since ${stamp(waitFrom(o))}">${waitText(waitFrom(o))}</span>` : ""}${statusTag(o)}</span></span>
         <span class="small">${esc(o.rxRequest && !o.items.length ? "Prescription request" : o.items.join(", "))}</span>
         ${o.speedId ? `<span class="small"><span class="tag ${o.speedId === "express" ? "bad" : o.speedId === "sameday" ? "warn" : "gen"}">${esc((SPEEDS.find(x => x[0] === o.speedId) || [, ""])[1])}</span>${o.city ? ` ${esc(o.city)}${o.state ? ", " + esc(o.state) : ""}` : ""}</span>` : ""}
         <span class="small muted">${esc(o.customer)} · ${stamp(o.createdAt)} · ${o.priced ? NGN(o.total) : "to price"}${o.rider && o.status === "out_for_delivery" ? ` · with ${esc(o.rider)}` : ""}${o.reminded && /awaiting_payment/.test(o.status) ? " · reminder sent" : ""}</span></button>`).join("");
@@ -1182,12 +1216,17 @@ function deskDetail() {
   const fileView = f ? (f.data.startsWith("data:application/pdf") ? `<p><a class="btn btn-ghost" href="${f.data}" download="${esc(f.name || "prescription.pdf")}">Open prescription PDF</a></p>` : `<a href="${f.data}" target="_blank" rel="noopener"><img class="rx-img" src="${f.data}" alt="Uploaded prescription for order ${esc(o.id)}"></a>`) : (o.rx ? `<p class="muted small">No prescription file.</p>` : "");
   const A = o.actions || [];
   const reviewing = A.includes("approve");
-  return `<div style="display:flex;justify-content:space-between;gap:1rem;flex-wrap:wrap"><div><div class="muted small">Order</div><h2 class="mono" style="font-size:1.35rem">${esc(o.id)}</h2><div class="muted small">${stamp(o.createdAt)} · ${esc(o.delivery.label)}</div></div>${statusTag(o)}</div>
+  const packing = A.includes("packed"), ticks = (st.packed && st.packed[o.id]) || [];
+  const allTicked = o.items.every((_, i) => ticks.includes(i));
+  return `<button class="linkbtn desk-back" type="button" data-deskback>← All orders</button>
+    <div style="display:flex;justify-content:space-between;gap:1rem;flex-wrap:wrap"><div><div class="muted small">Order</div><h2 class="mono" style="font-size:1.35rem">${esc(o.id)}</h2><div class="muted small">${stamp(o.createdAt)} · ${esc(o.delivery.label)}</div></div>${statusTag(o)}</div>
+    ${progressSteps(o)}
     <div class="desk-print"><button class="btn btn-ghost btn-sm" type="button" data-dreceipt>${icon("download", "ic sm")} ${PAID(o.status) ? "Receipt (PDF)" : "Order summary (PDF)"}</button><button class="btn btn-ghost btn-sm" type="button" data-print>${icon("print", "ic sm")} Print delivery note</button>${waTo(o.customer.phone, waUpdate(o)) ? `<a class="btn btn-ghost btn-sm" href="${esc(waTo(o.customer.phone, waUpdate(o)))}" target="_blank" rel="noopener">${icon("chat", "ic sm")} WhatsApp the customer</a>` : ""}</div>
     <div class="review">
       <div style="display:grid;gap:.8rem;align-content:start">
         <dl class="kv"><dt>Customer</dt><dd>${esc(o.customer.name)}</dd><dt>Phone</dt><dd><a href="tel:${esc(o.customer.phone)}">${esc(o.customer.phone)}</a></dd><dt>Email</dt><dd>${esc(o.customer.email)}</dd>${o.customer.dob ? `<dt>Date of birth</dt><dd>${esc(o.customer.dob)}</dd>` : ""}
           <dt>Deliver to</dt><dd>${esc([o.delivery.addr, o.delivery.landmark, o.delivery.city, o.delivery.state].filter(has).join(", "))}</dd>${o.rider ? `<dt>Rider</dt><dd>${esc(o.rider)}</dd>` : ""}${has(o.delivery.note) ? `<dt>Customer note</dt><dd><b>${esc(o.delivery.note)}</b></dd>` : ""}</dl>
+        ${packing ? `<fieldset class="packlist"><legend>Packing checklist <span class="small muted">${ticks.length} of ${o.items.length} ticked</span></legend>${o.items.map((i, n) => `<label class="check"><input type="checkbox" data-pack="${esc(o.id)}" data-n="${n}" ${ticks.includes(n) ? "checked" : ""}><span>${i.qty} × ${esc(i.name)}${i.n > 1 ? ` <span class="muted">(${i.qty * i.n} packs)</span>` : ""} · check batch and expiry</span></label>`).join("")}</fieldset>` : ""}
         <div class="small" style="display:grid;gap:.3rem">${o.items.map(i => `<div class="r"><span>${i.qty} × ${esc(i.name)} ${i.cls === "pom" ? `<span class="tag rx">POM</span>` : ""}${i.age ? `<span class="tag age">18+ ID</span>` : ""}${i.n > 1 ? `<span class="muted"> (${i.qty * i.n} packs)</span>` : ""}</span><span class="num">${NGN(i.total)}</span></div>`).join("")}
           ${o.discount ? `<div class="r"><span>Discount${o.promo ? ` (${esc(o.promo.code)})` : ""}</span><span class="num">−${NGN(o.discount)}</span></div>` : ""}<div class="r"><span>Delivery</span><span class="num">${NGN(o.deliveryFee)}</span></div><div class="r"><b>Total</b><b class="num">${o.priced === false ? "to price" : NGN(o.total)}</b></div></div>
       </div>
@@ -1210,7 +1249,7 @@ function deskDetail() {
       ${A.some(a => ["info", "reject", "cancel", "delivered"].includes(a)) ? `<label for="anote">${A.includes("delivered") ? "Note" : "Note to the customer"}<span class="hint">${A.includes("delivered") ? (o.deliveryCode ? "Only if there's no code, say why (for example, collected in store)." : "Optional.") : "Required if you ask for information or don't approve."}</span><textarea id="anote" rows="2"></textarea></label>` : ""}
       <div class="actions">${A.map(a => {
         const L2 = { approve: ["Approve and request payment", "btn-success"], info: ["Ask for more information", "btn-ghost"], reject: ["Don't approve", "btn-danger"], resume: ["Back to review", "btn-ghost"], cancel: ["Cancel order", "btn-danger"], packed: ["Mark as packed", "btn-primary"], dispatched: ["Mark out for delivery", "btn-primary"], delivered: ["Mark as delivered", "btn-success"] }[a];
-        return `<button class="btn ${L2[1]}" type="button" data-act="${a}" ${S.busy ? "disabled" : ""}>${L2[0]}</button>`; }).join("")}</div>
+        return `<button class="btn ${L2[1]}" type="button" data-act="${a}" ${S.busy || (a === "packed" && !allTicked) ? "disabled" : ""}>${L2[0]}</button>`; }).join("")}${packing && !allTicked ? `<span class="small muted">Tick every item to mark it packed.</span>` : ""}</div>
     </form>` : ""}
     <div><h3 class="h4" style="margin-bottom:.5rem">Order record</h3><div class="audit">${o.history.slice().reverse().map(l => `<div><span>${stamp(l.t)}</span><b style="font-weight:500">${esc(l.m)}</b></div>`).join("")}</div></div>`;
 }
@@ -1496,6 +1535,25 @@ document.addEventListener("input", e => {
   if (e.target.id === "stockq") { S.staff.stockQ = e.target.value; const l = $("#stocklist"); if (l) l.innerHTML = stockRows(); }
 });
 document.addEventListener("focusin", e => { if (e.target.id === "q") openSuggest(); });
+/* Desk keyboard shortcuts, for the counter computer */
+document.addEventListener("keydown", e => {
+  if (S.mode !== "staff" || !S.staff.token || !S.staff.list || e.ctrlKey || e.metaKey || e.altKey) return;
+  const typing = /^(TEXTAREA|SELECT)$/.test(e.target.tagName) || (e.target.tagName === "INPUT" && !/^(checkbox|radio|button|submit)$/.test(e.target.type));
+  if (e.key === "Escape") { if (S.staff.keys) S.staff.keys = false; else if (typing) { e.target.blur(); return; } else { S.staff.sel = null; S.staff.detail = null; } render(); return; }
+  if (typing) return;
+  const tabs = ["review", "pack", "pay", "done", "requests", "stock"];
+  if (/^[1-6]$/.test(e.key)) { S.staff.tab = tabs[Number(e.key) - 1]; S.staff.status = ""; S.staff.sel = null; S.staff.detail = null; render(); e.preventDefault(); return; }
+  if (e.key === "/") { const q = $("#deskq") || $("#stockq"); if (q) { q.focus(); e.preventDefault(); } return; }
+  if (e.key === "?") { S.staff.keys = !S.staff.keys; render(); return; }
+  if (e.key === "r" || e.key === "R") { loadDesk(); return; }
+  if (["j", "k", "ArrowDown", "ArrowUp"].includes(e.key) && !["requests", "stock"].includes(S.staff.tab)) {
+    const shown = queueFilter(deskGroup()); if (!shown.length) return;
+    const i = shown.findIndex(o => o.id === S.staff.sel), step = e.key === "j" || e.key === "ArrowDown" ? 1 : -1;
+    const next = shown[i < 0 ? 0 : Math.min(shown.length - 1, Math.max(0, i + step))];
+    e.preventDefault(); loadDeskOrder(next.id);
+    setTimeout(() => { const b = document.querySelector(`[data-sel="${next.id}"]`); if (b) b.scrollIntoView({ block: "nearest" }); }, 0);
+  }
+});
 document.addEventListener("focusout", e => { if (e.target.closest && e.target.closest("#search-form")) setTimeout(() => { if (!document.activeElement || !document.activeElement.closest("#search-form")) closeSuggest(); }, 120); });
 document.addEventListener("keydown", e => {
   if (e.target.id !== "q") return;
@@ -1629,6 +1687,10 @@ document.addEventListener("click", e => {
   if (d.rtake) { riderTake(d.rtake, t); return; }
   if ("remind" in d) { sendReminders(t); return; }
   if ("qclear" in d) { Object.assign(S.staff, { q: "", speed: "", status: "" }); render(); return; }
+  if ("sound" in d) { store.set("synako.sound", !soundOn()); if (soundOn()) chime(); render(); return; }
+  if ("keys" in d) { S.staff.keys = !S.staff.keys; render(); return; }
+  if ("deskback" in d) { S.staff.sel = null; S.staff.detail = null; render(); return; }
+  if (d.dtab && "dstatus" in d) { S.staff.tab = d.dtab; S.staff.status = d.dstatus; S.staff.sel = null; S.staff.detail = null; render(); loadDesk(true); return; }
   if (d.dtab) { S.staff.tab = d.dtab; S.staff.status = ""; S.staff.sel = null; S.staff.detail = null; render(); loadDesk(true); return; }
   if (d.sel) { loadDeskOrder(d.sel); return; }
   if (d.act) { deskAction(d.act); return; }
@@ -1652,6 +1714,11 @@ document.addEventListener("keydown", e => {
 document.addEventListener("change", async e => {
   const t = e.target;
   if (t.id === "sort") { S.sort = t.value; render(); return; }
+  if (t.dataset && t.dataset.pack) {
+    const id = t.dataset.pack, n = Number(t.dataset.n), p = S.staff.packed || (S.staff.packed = {}), l = p[id] || (p[id] = []);
+    if (t.checked && !l.includes(n)) l.push(n); else if (!t.checked) p[id] = l.filter(x => x !== n);
+    render.fresh = true; render(); const el = document.querySelector(`[data-pack="${id}"][data-n="${n}"]`); if (el) el.focus(); return;
+  }
   if (["desksort", "deskspeed", "deskstatus"].includes(t.id)) { S.staff[{ desksort: "sort", deskspeed: "speed", deskstatus: "status" }[t.id]] = t.value; refreshQueue(); return; }
   if (t.name === "unit" && S.view === "product") { S.unit = t.value; S.qty = 1; render(); const el = document.querySelector(`input[name=unit][value="${t.value}"]`); if (el) el.focus(); return; }
   if (t.id === "st" || t.name === "speed") { saveForm(); render(); const el = $(t.id === "st" ? "#st" : `#sp-${S.form.speed}`); if (el) el.focus(); return; }

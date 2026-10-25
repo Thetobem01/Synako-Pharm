@@ -82,5 +82,11 @@
       "includeFiles": "{js/**,assets/receipt-logo.jpg}",
       "maxDuration": 15
     }
-  }
+  },
+  "crons": [
+    {
+      "path": "/api/staff/orders?task=reminders",
+      "schedule": "0 9 * * *"
+    }
+  ]
 }

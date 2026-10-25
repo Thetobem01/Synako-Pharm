@@ -96,6 +96,9 @@ The Pharmacist Desk lists any hosting settings that are still missing.
 - **Pause online orders** (public holiday, stock count, no riders): write the reason in `orders.paused` in `js/config.js` and redeploy. Customers can still browse, and checkout shows your message and your phone number. Set it back to `""` to reopen.
 - **Search:** the search box suggests products, departments and popular searches as customers type, and understands common brand names (Panadol, Flagyl, Buscopan, Vicks and more). Add local names to `SYNONYMS` in `js/data.js`.
 - **Finding the desk:** go to `/pharmacist` (or `/desk`), or use **Pharmacist Desk · staff sign-in** at the bottom of every page or under *Staff* in the menu. Once signed in, a **Desk** button appears in the shop header on that device.
+- **At a glance:** the figures at the top of the desk are buttons. Tap *To pack* to see only paid orders waiting to be packed, *On the road* for orders with riders, and so on. Prescriptions and paid orders show how long they've been waiting (amber after 30 minutes, red after an hour), and the takings figure has a small chart of the last 7 days.
+- **On each order:** a progress bar (placed, approved, paid, packed, on the road, delivered, with times), and for paid orders a **packing checklist**. *Mark as packed* stays off until every item is ticked. On phones an open order fills the screen, with **← All orders** to go back.
+- **Counter computer:** keyboard shortcuts (press `?` on the desk): `1`–`6` switch sections, `/` searches, `J`/`K` or the arrow keys move between orders, `Esc` closes, `R` refreshes. **Sound on/off** switches the new-order chime.
 - **Finding orders fast:** each desk list has a search box (order number, customer name, phone, item or town), filters for delivery type and status, and sorting. *Most urgent first* is the default: 30-minute deliveries, then same-day, next-day and other states, oldest first within each.
 - **Pharmacist Desk** (`/pharmacist`): review prescriptions, move orders through packed, out for delivery and delivered, **print a delivery note** for the rider, **download orders as CSV** for your accounts, and **mark messages, bookings and trade quotes as handled**.
 - **Customers** can see recently viewed products, reorder a past order with one tap from its tracking page, share a product, and add a note at checkout (sizes, delivery instructions). If you set `business.whatsapp`, product pages and the basket also offer *Ask on WhatsApp* / *Send us this basket*.
@@ -105,6 +108,39 @@ The Pharmacist Desk lists any hosting settings that are still missing.
 
 - **Receipts:** when a payment goes through, the customer's "Payment received" email has the **PDF receipt attached**, plus a link to their order page, where **Download receipt** makes a fresh copy at any time (before payment it's an order summary). Staff can download the same PDF from the Pharmacist Desk. The PDF comes from `js/receipt.js` and shows your business and licence details from `js/config.js`, so fill those in before launch.
 - **How the pharmacy hears about orders:** every new order, payment and message emails `STAFF_EMAIL`, and the Pharmacist Desk refreshes every 10 seconds. When something new arrives it **chimes**, shows what came in ("1 new paid order to pack") and counts waiting orders in the browser tab. Keep `/pharmacist` open on the counter computer during opening hours.
+
+## Riders and deliveries
+
+- **Delivery codes:** when an order is paid, the customer gets a 4-digit **delivery code** (on their order page, in the payment email and, if SMS is on, by text). They give it to the rider at the door, and the order can only be marked delivered with that code. If there's no code, for example the customer collected in store, staff mark it delivered on the desk with a short note saying why.
+- **Rider page:** riders open `/rider` on their phone and sign in with their name and the rider password (`RIDER_PASSWORD` in the hosting settings, separate from the desk password). They see:
+  - packed orders **ready to collect**, most urgent first
+  - each customer's name, address, landmark and note, with **Call**, **WhatsApp** and **Directions** (Google Maps) buttons
+  - **Start this delivery**, which tells the customer who is coming
+  - a code box and **Delivered** button
+
+  Riders never see medicine names or health details, only the number of items in the sealed bag, and a **Check ID 18+** flag on orders with alcohol. The page refreshes every 20 seconds and chimes when a new order is packed.
+- **On the desk:** you can still mark orders out for delivery yourself (with the rider's name) or delivered (with the code). **WhatsApp the customer** on any order opens WhatsApp with an update for that order's status, ready to send from your phone.
+
+## SMS and WhatsApp updates
+
+- **Texts to customers** are sent through [Termii](https://termii.com), a Nigerian SMS provider costing a few naira per message:
+  1. Open a Termii account and register a sender ID, for example `Synako`.
+  2. Add **TERMII_API_KEY** and **TERMII_SENDER_ID** in the hosting settings. If Termii's dashboard shows you a different API address, also add **TERMII_BASE_URL**.
+  3. Optionally add **TERMII_CHANNEL**. `generic` is the default. Use `dnd` so texts also reach numbers on Do-Not-Disturb, once Termii approves your sender ID for it. Termii can also send over WhatsApp if you set that up with them.
+- **Which texts go out:** customers get texts for payment received (with the delivery code), prescription approved (with the pay link), more information needed, not approved, out for delivery, delivered, and the unpaid reminder. Remove any you don't want from `sms.events` in `js/config.js`.
+- **Texts to the shop:** add **STAFF_SMS** (a phone number) to get a text for every paid order and every prescription to review. This is handy while the order emails aren't set up.
+- **Records:** every text is noted on the order's staff-only record as sent, or with Termii's reason if not.
+- **Without Termii:** the **WhatsApp** buttons on the desk and the rider page work straight away, using the WhatsApp on the phone in hand.
+
+## Unpaid orders
+
+- **Reminder:** an unpaid order gets **one reminder** (email, plus SMS if it's on) after `orders.remindUnpaidAfterHours` hours (2 by default).
+- **Cancellation:** an order still unpaid after `orders.cancelUnpaidAfterHours` hours (48 by default) is **cancelled automatically**, and the customer is told. Set either value to `0` to turn it off.
+- **Late payments:** if a payment that was already under way arrives after a cancellation, the order is reinstated and the desk notes it, so staff can check stock.
+- **When they run:**
+  - every 15 minutes while the Pharmacist Desk is open
+  - once a day at 10:00 (Lagos time) through Vercel's scheduled jobs, which need **CRON_SECRET** (any long random text) in the hosting settings
+  - any time you press **Send payment reminders now** on the desk
 
 ## Keep an eye on it
 
@@ -134,7 +170,7 @@ Work through this before switching to live Paystack keys and sharing the address
 
 With the three email settings above, the site sends:
 
-- **To the customer:** order received, payment received, prescription approved (with a link to pay), more information needed, not approved, out for delivery, delivered. Each email links to the order's tracking page.
+- **To the customer:** order received, payment received (with the receipt and delivery code), prescription approved (with a link to pay), more information needed, not approved, a reminder for unpaid orders, cancelled for non-payment, out for delivery (with the rider's name), delivered. Each email links to the order's tracking page.
 - **To `STAFF_EMAIL`:** a new order or prescription to review, a payment received, and a new message or consultation request. Staff alerts contain only the order number and a link to the desk, never health details.
 
 Emails are best-effort: if Resend is down, the order still goes through.

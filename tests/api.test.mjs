@@ -11,6 +11,7 @@ let server;
 before(async () => {
   server = spawn(process.execPath, ["dev/server.mjs"], {
     env: { ...process.env, PORT: String(PORT), SYNAKO_DEV: "1", PAYSTACK_MOCK: "1", STAFF_PASSWORD: "desk", SESSION_SECRET: "test-secret",
+      RIDER_PASSWORD: "ride", TERMII_API_KEY: "test", STAFF_SMS: "08011112222", CRON_SECRET: "cron-secret",
       RESEND_API_KEY: "test", MAIL_FROM: "Synako <orders@example.com>", STAFF_EMAIL: "desk@example.com", PAYSTACK_SECRET_KEY: "", KV_REST_API_URL: "", UPSTASH_REDIS_REST_URL: "" },
     stdio: ["ignore", "pipe", "inherit"]
   });
@@ -270,4 +271,84 @@ test("sitemap and robots follow the catalogue and site address", async () => {
   assert.match(robots, /Disallow: \/pharmacist/);
   assert.match(robots, /Disallow: \/desk/);
   assert.match(robots, /Sitemap: https?:\/\/.+\/sitemap\.xml/);
+});
+
+async function paidOrder(n) {
+  const placed = await api("orders", { body: { items: [{ id: "para", q: 1 }], customer, delivery, consent: true }, headers: ip(n) });
+  const start = await api("pay-start", { body: { id: placed.json.order.id, phone: "4567" }, headers: ip(n) });
+  return (await api("pay-verify", { body: { reference: start.json.reference }, headers: ip(n) })).json.order;
+}
+
+test("paid orders get a delivery code, and the desk needs it to mark them delivered", async () => {
+  const o = await paidOrder(40);
+  assert.match(o.deliveryCode, /^\d{4}$/, "the customer sees their code once paid");
+  const token = (await api("staff/login", { body: { password: "desk" }, headers: ip(41) })).json.token;
+  const h = (await api(`staff/order?id=${o.id}`, { token })).json.order.history.map(x => x.m);
+  assert.ok(h.some(m => /SMS to customer "paid": sent/.test(m)), "payment text recorded");
+  assert.ok(h.some(m => /SMS to staff .*: sent/.test(m)), "the shop's phone is told too");
+
+  await api("staff/order", { token, body: { id: o.id, action: "packed", by: "Pharm. Test" } });
+  const out = await api("staff/order", { token, body: { id: o.id, action: "dispatched", rider: "Musa Bello", by: "Pharm. Test" } });
+  assert.equal(out.json.order.rider, "Musa Bello");
+  assert.equal((await api(`order?id=${o.id}&phone=4567`)).json.order.rider, "Musa", "the customer sees who is coming");
+
+  assert.equal((await api("staff/order", { token, body: { id: o.id, action: "delivered" }, headers: ip(42) })).status, 400, "no code and no reason");
+  const wrong = String((Number(o.deliveryCode) + 1) % 10000).padStart(4, "0");
+  assert.equal((await api("staff/order", { token, body: { id: o.id, action: "delivered", code: wrong }, headers: ip(42) })).status, 400);
+  const done = await api("staff/order", { token, body: { id: o.id, action: "delivered", code: o.deliveryCode }, headers: ip(42) });
+  assert.equal(done.json.order.status, "delivered");
+  assert.equal((await api(`order?id=${o.id}&phone=4567`)).json.order.deliveryCode, "", "the code is hidden once delivered");
+});
+
+test("riders sign in with their own password and only see deliveries", async () => {
+  assert.equal((await api("staff/login", { body: { password: "ride" }, headers: ip(43) })).status, 401, "not a desk password");
+  const r = await api("staff/login", { body: { password: "ride", role: "rider" }, headers: ip(43) });
+  assert.equal(r.json.role, "rider");
+  const rider = r.json.token;
+  assert.equal((await api("staff/orders", { token: rider })).status, 401, "riders can't open the desk");
+  assert.equal((await api("staff/order?id=SYN-NOPE00", { token: rider })).status, 401);
+  assert.equal((await api("staff/orders", { token: rider, body: { action: "stock", id: "vitc", out: true } })).status, 401);
+
+  const o = await paidOrder(44);
+  const token = (await api("staff/login", { body: { password: "desk" }, headers: ip(45) })).json.token;
+  await api("staff/order", { token, body: { id: o.id, action: "packed" } });
+  const list = (await api("staff/orders?view=rider", { token: rider })).json.deliveries;
+  const d = list.find(x => x.id === o.id);
+  assert.ok(d, "packed orders are listed");
+  assert.equal(d.addr, delivery.addr);
+  assert.equal(typeof d.items, "number", "item count only, no medicine names");
+
+  const take = await api("staff/orders", { token: rider, body: { action: "rider-take", id: o.id, by: "Musa" } });
+  assert.equal(take.json.deliveries.find(x => x.id === o.id).rider, "Musa");
+  assert.equal((await api("staff/orders", { token: rider, body: { action: "rider-take", id: o.id, by: "Tunde" } })).status, 409, "two riders can't take one order");
+  const wrong = String((Number(o.deliveryCode) + 1) % 10000).padStart(4, "0");
+  assert.equal((await api("staff/orders", { token: rider, body: { action: "rider-delivered", id: o.id, code: wrong }, headers: ip(46) })).status, 400);
+  const done = await api("staff/orders", { token: rider, body: { action: "rider-delivered", id: o.id, code: o.deliveryCode, by: "Musa" }, headers: ip(46) });
+  assert.equal(done.status, 200);
+  assert.equal((await api(`order?id=${o.id}&phone=4567`)).json.order.status, "delivered");
+});
+
+test("unpaid orders get one reminder, then are cancelled; a late payment still counts", async () => {
+  const placed = (await api("orders", { body: { items: [{ id: "para", q: 1 }], customer, delivery, consent: true }, headers: ip(47) })).json.order;
+  const late = (await api("orders", { body: { items: [{ id: "para", q: 1 }], customer, delivery, consent: true }, headers: ip(47) })).json.order;
+  const started = (await api("pay-start", { body: { id: late.id, phone: "4567" }, headers: ip(47) })).json.reference;
+  const token = (await api("staff/login", { body: { password: "desk" }, headers: ip(48) })).json.token;
+  assert.equal((await api("staff/orders", { body: { action: "reminders" } })).status, 401);
+
+  const first = await api("staff/orders", { token, body: { action: "reminders", now: Date.now() + 3 * 3600e3 } });
+  assert.ok(first.json.reminded >= 2);
+  await api("staff/orders", { token, body: { action: "reminders", now: Date.now() + 4 * 3600e3 } });
+  const h = (await api(`staff/order?id=${placed.id}`, { token })).json.order.history.map(x => x.m);
+  assert.equal(h.filter(m => m === "Payment reminder sent").length, 1, "only one reminder");
+  assert.ok(h.some(m => /Email to customer "Your order is waiting for payment/.test(m)));
+  assert.ok(h.some(m => /SMS to customer "reminder": sent/.test(m)));
+
+  const later = await api("staff/orders", { token, body: { action: "reminders", now: Date.now() + 49 * 3600e3 } });
+  assert.ok(later.json.cancelled >= 2);
+  assert.equal((await api(`order?id=${placed.id}&phone=4567`)).json.order.status, "cancelled");
+  const paid = await api("pay-verify", { body: { reference: started }, headers: ip(47) });
+  assert.equal(paid.json.order.status, "paid", "a payment that was already under way reinstates the order");
+
+  assert.equal((await api("staff/orders?task=reminders")).status, 401, "the daily job needs its secret");
+  assert.equal((await api("staff/orders?task=reminders", { headers: { Authorization: "Bearer cron-secret" } })).status, 200);
 });

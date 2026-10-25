@@ -38,7 +38,7 @@ test("every page address is served by the app (deep links, refreshes, email link
   // With cleanUrls on, /index.html is not a valid destination and Vercel answers 404 for /track/…, /product/… etc.
   if (v.cleanUrls) assert.notEqual(spa.destination, "/index.html", "with cleanUrls, rewrite page addresses to \"/\", not \"/index.html\"");
   const re = new RegExp("^" + spa.source + "$");
-  for (const p of ["/track/SYN-ABC123", "/product/para", "/products/otc", "/pharmacist", "/desk", "/staff", "/wholesale"]) assert.ok(re.test(p), `${p} must reach the app`);
+  for (const p of ["/track/SYN-ABC123", "/product/para", "/products/otc", "/pharmacist", "/desk", "/staff", "/rider", "/wholesale"]) assert.ok(re.test(p), `${p} must reach the app`);
   for (const p of ["/api/health", "/assets/logo.png", "/js/app.js", "/css/styles.css"]) assert.ok(!re.test(p), `${p} must not be rewritten`);
 });
 
@@ -56,4 +56,14 @@ test("the server builds a PDF receipt for the payment email", async () => {
   assert.ok(pdf.includes("/Subtype /Image"), "the logo is embedded");
   const hex = t => Buffer.from(t, "latin1").toString("hex");
   for (const t of ["Receipt", "SYN-TEST01", "SYN-TEST01-1", "Ada Test", "PAID"]) assert.ok(pdf.includes(hex(t)), `shows ${t}`);
+});
+
+test("scheduled jobs point at an existing function and run at most daily (Vercel Hobby)", () => {
+  const v = JSON.parse(fs.readFileSync("vercel.json", "utf8"));
+  for (const c of v.crons || []) {
+    const file = c.path.replace(/^\//, "").replace(/\?.*$/, "") + ".js";
+    assert.ok(fs.existsSync(file), `${c.path} needs ${file}`);
+    const [min, hour] = c.schedule.split(" ");
+    assert.ok(/^\d+$/.test(min) && /^\d+$/.test(hour), `${c.schedule}: Hobby allows one run a day at a fixed time`);
+  }
 });

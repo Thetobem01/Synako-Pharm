@@ -5,5 +5,5 @@ export default function handler(req, res) {
   res.statusCode = 200;
   res.setHeader("Content-Type", "text/plain; charset=utf-8");
   res.setHeader("Cache-Control", "public, max-age=3600");
-  res.end(["User-agent: *", "Allow: /", "Disallow: /api/", "Disallow: /pharmacist", "Disallow: /desk", "Disallow: /staff", "Disallow: /admin", "Disallow: /checkout", "Disallow: /basket", "Disallow: /track", "", `Sitemap: ${base}/sitemap.xml`, ""].join("\n"));
+  res.end(["User-agent: *", "Allow: /", "Disallow: /api/", "Disallow: /pharmacist", "Disallow: /desk", "Disallow: /staff", "Disallow: /admin", "Disallow: /rider", "Disallow: /checkout", "Disallow: /basket", "Disallow: /track", "", `Sitemap: ${base}/sitemap.xml`, ""].join("\n"));
 }

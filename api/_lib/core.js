@@ -46,7 +46,13 @@ function devRedis([op, key, ...a]) { // in-memory stand-in, only when SYNAKO_DEV
   if (!DEV) throw new Error("Storage isn't configured.");
   switch (op) {
     case "GET": return mem.kv.has(key) ? mem.kv.get(key) : null;
-    case "SET": mem.kv.set(key, a[0]); return "OK";
+    case "SET": { // supports SET key value [NX] [EX seconds]
+      const u = a.map(x => String(x).toUpperCase());
+      if (u.includes("NX") && mem.kv.has(key)) return null;
+      mem.kv.set(key, a[0]);
+      const ex = u.indexOf("EX"); if (ex > 0) { const t = setTimeout(() => mem.kv.delete(key), Number(a[ex + 1]) * 1000); if (t.unref) t.unref(); }
+      return "OK";
+    }
     case "INCR": { const n = Number(mem.kv.get(key) || 0) + 1; mem.kv.set(key, String(n)); return n; }
     case "EXPIRE": { const t = setTimeout(() => mem.kv.delete(key), Number(a[0]) * 1000); if (t.unref) t.unref(); return 1; }
     case "ZADD": { const z = mem.z.get(key) || new Map(); z.set(a[1], Number(a[0])); mem.z.set(key, z); return 1; }
@@ -58,7 +64,9 @@ export const db = {
   async get(key) { const v = await redis(["GET", key]); return v ? JSON.parse(v) : null; },
   async set(key, val) { return redis(["SET", key, JSON.stringify(val)]); },
   async index(list, member, score) { return redis(["ZADD", list, String(score), member]); },
-  async latest(list, n) { return (await redis(["ZREVRANGE", list, "0", String(n - 1)])) || []; }
+  async latest(list, n) { return (await redis(["ZREVRANGE", list, "0", String(n - 1)])) || []; },
+  /* true the first time in each window: for jobs that should run at most every few minutes */
+  async once(key, seconds) { return (await redis(["SET", key, "1", "NX", "EX", String(seconds)])) === "OK"; }
 };
 
 /* ---------- Stock set from the Pharmacist Desk (on top of out: true in js/data.js) ---------- */
@@ -131,14 +139,25 @@ export function checkPassword(pw) {
   const a = Buffer.from(String(pw || "")), b = Buffer.from(process.env.STAFF_PASSWORD || "");
   return a.length === b.length && b.length > 0 && crypto.timingSafeEqual(a, b);
 }
-export function issueToken(hours = 12) { const exp = String(Date.now() + hours * 3600e3); return exp + "." + hmac(exp); }
-export function requireStaff(req) {
-  const t = (req.headers.authorization || "").replace(/^Bearer\s+/i, "");
-  const [exp, sig] = t.split(".");
-  if (!SECRET || !exp || !sig || Number(exp) < Date.now()) throw fail(401, "Please sign in again.");
-  const good = hmac(exp);
-  if (sig.length !== good.length || !crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(good))) throw fail(401, "Please sign in again.");
+/* Riders have their own password (RIDER_PASSWORD) and only see the delivery list, never the full desk */
+export function riderReady() { return !!process.env.RIDER_PASSWORD; }
+export function checkRiderPassword(pw) {
+  const a = Buffer.from(String(pw || "")), b = Buffer.from(process.env.RIDER_PASSWORD || "");
+  return a.length === b.length && b.length > 0 && crypto.timingSafeEqual(a, b);
 }
+/* Staff token: "expiry.signature". Rider token: "expiry.rider.signature" */
+export function issueToken(hours = 12, role) { const exp = String(Date.now() + hours * 3600e3), body = role ? `${exp}.${role}` : exp; return body + "." + hmac(body); }
+function tokenRole(req) {
+  const t = (req.headers.authorization || "").replace(/^Bearer\s+/i, "");
+  const parts = t.split("."), sig = parts.pop(), body = parts.join(".");
+  if (!SECRET || !parts.length || parts.length > 2 || !sig || Number(parts[0]) < Date.now() || (parts[1] && parts[1] !== "rider")) throw fail(401, "Please sign in again.");
+  const good = hmac(body);
+  if (sig.length !== good.length || !crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(good))) throw fail(401, "Please sign in again.");
+  return parts[1] || "staff";
+}
+export function requireStaff(req) { if (tokenRole(req) !== "staff") throw fail(401, "Please sign in again."); }
+/* Riders and staff may both use the delivery list */
+export function requireRider(req) { return tokenRole(req); }
 
 /* ---------- Orders ---------- */
 export function newId(prefix = "SYN") {
@@ -147,6 +166,15 @@ export function newId(prefix = "SYN") {
   return `${prefix}-${s}`;
 }
 export const digits = s => String(s || "").replace(/\D/g, "");
+/* The customer gives this 4-digit code to the rider at the door; the rider enters it to finish the delivery */
+export const newDeliveryCode = () => String(crypto.randomInt(10000)).padStart(4, "0");
+export const ON_THE_WAY = ["paid", "packed", "out_for_delivery"];
+/* Orders paid before codes existed have none, and need none */
+export function checkDeliveryCode(o, code) {
+  if (!o.deliveryCode) return true;
+  const a = Buffer.from(digits(code).padEnd(4, "x").slice(0, 8)), b = Buffer.from(o.deliveryCode);
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
 export const STATUS = {
   awaiting_payment: "Awaiting payment",
   pending_review: "Pharmacist review",
@@ -169,6 +197,8 @@ export function publicOrder(o) {
     canPay: ["awaiting_payment", "approved_awaiting_payment"].includes(o.status) && o.priced !== false,
     history: o.history.filter(h => !h.internal).map(h => ({ t: h.t, m: h.m })),
     customer: { name: o.customer.name },
+    deliveryCode: ON_THE_WAY.includes(o.status) ? o.deliveryCode || "" : "",
+    rider: o.status === "out_for_delivery" && o.rider ? String(o.rider).split(" ")[0] : "",
     payment: o.payment && o.payment.status === "paid"
       ? { status: "paid", channel: o.payment.channel || "", reference: o.payment.reference || "", paidAt: o.payment.paidAt || "" }
       : { status: "unpaid" }
@@ -218,11 +248,11 @@ export async function sendEmail(to, subject, lines, attachments) {
     return { ok: false, why };
   } catch (e) { console.error("Email failed", e); return { ok: false, why: e.name === "TimeoutError" ? "Resend didn't answer in time" : String(e.message || e).slice(0, 200) }; }
 }
-/* Writes the email result onto the order's staff-only record, so the desk shows whether customers were reached */
-async function recordEmail(o, who, subject, res) {
+/* Writes an email or SMS result onto the order's staff-only record, so the desk shows whether customers were reached */
+async function recordEmail(o, who, subject, res, kind = "Email") {
   try {
     const fresh = (await db.get("order:" + o.id)) || o;
-    log(fresh, `Email to ${who} "${subject}": ${res.ok ? "sent" : "NOT sent · " + res.why}`, { internal: true });
+    log(fresh, `${kind} to ${who} "${subject}": ${res.ok ? "sent" : "NOT sent · " + res.why}`, { internal: true });
     await db.set("order:" + o.id, fresh);
     o.history = fresh.history;
   } catch (e) { console.error("Couldn't record email result", e); }
@@ -237,17 +267,58 @@ export function publicUrl(req) {
   return "https://" + host;
 }
 const naira = n => site().pricing.fmtMoney(n, site().config);
+/* Plain-text amount for SMS: the ₦ sign would force a short, costlier Unicode message */
+const ngn = n => "NGN " + Math.round(Number(n) || 0).toLocaleString("en-NG");
+
+/* ---------- SMS (optional, via Termii: TERMII_API_KEY, TERMII_SENDER_ID; Termii can also deliver over WhatsApp) ---------- */
+export const smsReady = () => !!setting("TERMII_API_KEY");
+/* Nigerian numbers to international form: 0803… → 234803… */
+export function intlPhone(p) {
+  let d = digits(p);
+  if (d.startsWith("0") && d.length === 11) d = "234" + d.slice(1);
+  return d.length >= 10 ? d : "";
+}
+export async function sendSms(to, text) {
+  if (!smsReady()) return { ok: false, why: "SMS isn't set up (TERMII_API_KEY)" };
+  const num = intlPhone(to);
+  if (!num) return { ok: false, why: "No valid phone number" };
+  try {
+    if (DEV && setting("TERMII_API_KEY") === "test") { console.log(`[sms] to ${num}: ${text}`); return { ok: true }; }
+    const base = String(setting("TERMII_BASE_URL") || "https://api.ng.termii.com").replace(/\/$/, "");
+    const r = await fetch(base + "/api/sms/send", {
+      method: "POST", signal: AbortSignal.timeout(6000), headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ api_key: setting("TERMII_API_KEY"), to: num, from: setting("TERMII_SENDER_ID") || "Synako", sms: text, type: "plain", channel: setting("TERMII_CHANNEL") || "generic" })
+    });
+    const detail = await r.text();
+    if (r.ok) return { ok: true };
+    console.error("SMS failed", r.status, detail);
+    let why = `Termii said ${r.status}`; try { why += ": " + String(JSON.parse(detail).message || detail).slice(0, 200); } catch (e) { why += ": " + detail.slice(0, 200); }
+    return { ok: false, why };
+  } catch (e) { console.error("SMS failed", e); return { ok: false, why: e.name === "TimeoutError" ? "Termii didn't answer in time" : String(e.message || e).slice(0, 200) }; }
+}
+const shop = () => site().config.business.name;
+const CUSTOMER_SMS = { // short and plain, to fit one message
+  paid: o => `${shop()}: ${ngn(o.total)} paid for ${o.id}. Delivery code ${o.deliveryCode}: give it to the rider. ${baseUrl()}/track/${o.id}`,
+  approve: o => `${shop()}: your prescription for ${o.id} is approved. Pay ${ngn(o.total)} here: ${baseUrl()}/track/${o.id}`,
+  info: o => `${shop()}: our pharmacist needs more information about ${o.id}. Please call us or check ${baseUrl()}/track/${o.id}`,
+  reject: o => `${shop()}: we couldn't approve the prescription for ${o.id}. You have not been charged. Details: ${baseUrl()}/track/${o.id}`,
+  dispatched: o => `${shop()}: ${o.id} is on its way${o.rider ? ` with ${String(o.rider).split(" ")[0]}` : ""}.${o.deliveryCode ? ` Give the rider your code ${o.deliveryCode}.` : ""}`,
+  delivered: o => `${shop()}: ${o.id} has been delivered. Thank you!`,
+  reminder: o => `${shop()}: your order ${o.id} (${ngn(o.total)}) is waiting for payment. Pay here: ${baseUrl()}/track/${o.id}`
+};
 const CUSTOMER_MAIL = {
   placed: o => o.rx ? [`Thank you. We've received your order ${o.id} and your prescription. A pharmacist will review it during opening hours, and we'll email you when it's approved and ready to pay.`]
     : [`Thank you. We've received your order ${o.id} (${naira(o.total)}).`, "If you didn't finish paying, you can pay from the tracking page below."],
-  paid: o => [`We've received your payment of ${naira(o.total)} for order ${o.id}. We're preparing it now.`, "Your receipt is attached as a PDF. You can download it again at any time from your order page."],
+  paid: o => [`We've received your payment of ${naira(o.total)} for order ${o.id}. We're preparing it now.`, ...(o.deliveryCode ? [`Your delivery code is ${o.deliveryCode}. Please give it to the rider when your order arrives.`] : []), "Your receipt is attached as a PDF. You can download it again at any time from your order page."],
   approve: o => [`Good news: our pharmacist has approved your prescription for order ${o.id}. The total is ${naira(o.total)}.`, "Open the tracking page below and press Pay now to complete your order."],
   info: o => [`Our pharmacist needs a little more information about order ${o.id}:`, `“${o.note}”`, "Please call or message us, quoting your order number."],
   reject: o => [`Our pharmacist couldn't approve the prescription for order ${o.id}:`, `“${o.note}”`, "You haven't been charged. Please contact us if you have any questions."],
-  dispatched: o => [`Your order ${o.id} is on its way.`],
+  dispatched: o => [`Your order ${o.id} is on its way${o.rider ? ` with our rider ${String(o.rider).split(" ")[0]}` : ""}.`, ...(o.deliveryCode ? [`Please give the rider your delivery code: ${o.deliveryCode}`] : [])],
+  reminder: o => [`Your order ${o.id} (${naira(o.total)}) is still waiting for payment.`, "Open your order page below and press Pay now. If you've changed your mind, you can ignore this email."],
+  expired: o => [`Your order ${o.id} was cancelled because it wasn't paid in time. You haven't been charged.`, "You're welcome to order again at any time."],
   delivered: o => [`Your order ${o.id} has been delivered. Thank you for choosing ${site().config.business.name}.`]
 };
-const SUBJECT = { placed: "Order received", paid: "Payment received", approve: "Prescription approved, ready to pay", info: "We need more information", reject: "Prescription not approved", dispatched: "Your order is on its way", delivered: "Your order has been delivered" };
+const SUBJECT = { reminder: "Your order is waiting for payment", expired: "Order cancelled: not paid", placed: "Order received", paid: "Payment received", approve: "Prescription approved, ready to pay", info: "We need more information", reject: "Prescription not approved", dispatched: "Your order is on its way", delivered: "Your order has been delivered" };
 export async function notifyCustomer(o, event) {
   const make = CUSTOMER_MAIL[event];
   if (!make) return;
@@ -258,16 +329,19 @@ export async function notifyCustomer(o, event) {
   const res = await sendEmail(o.customer.email, subject, [`Hello ${name},`, ...make(o), link(`${baseUrl()}/track/${o.id}`, event === "paid" ? "View your order and download your receipt" : "Track your order"),
     `${site().config.business.name}. Your pathway to health and wellness.`], attachments);
   if (emailReady()) await recordEmail(o, "customer", subject, res);
+  const sms = CUSTOMER_SMS[event];
+  if (sms && smsReady() && (site().config.sms || {}).events?.includes(event)) await recordEmail(o, "customer", event, await sendSms(o.customer.phone, sms(o)), "SMS");
 }
 /* Staff alerts carry no health details: just the order number and a link to the desk */
 export async function notifyStaff(o, event) {
   const to = process.env.STAFF_EMAIL;
-  if (!to) return;
   const what = event === "paid" ? `Payment received for ${o.id} (${naira(o.total)}). Ready to pack.`
     : o.rx ? `New prescription order ${o.id} is waiting for pharmacist review.` : `New order ${o.id} placed (${naira(o.total)}), awaiting payment.`;
   const subject = `${event === "paid" ? "Paid" : o.rx ? "To review" : "New order"} · ${o.id}`;
-  const res = await sendEmail(to, subject, [what, link(`${baseUrl()}/pharmacist`, "Open the Pharmacist Desk")]);
-  await recordEmail(o, "staff", subject, res);
+  if (to) await recordEmail(o, "staff", subject, await sendEmail(to, subject, [what, link(`${baseUrl()}/pharmacist`, "Open the Pharmacist Desk")]));
+  // A text to the shop's phone too (STAFF_SMS), for paid orders and prescriptions to review
+  const staffPhone = setting("STAFF_SMS");
+  if (staffPhone && smsReady() && (event === "paid" || o.rx)) await recordEmail(o, "staff", subject, await sendSms(staffPhone, `${shop()}: ${event === "paid" ? `PAID ${o.id} ${ngn(o.total)}, ready to pack.` : `prescription order ${o.id} to review.`} Desk: ${baseUrl()}/desk`), "SMS");
 }
 
 /* ---------- Paystack ---------- */
@@ -292,10 +366,37 @@ export async function settle(orderId, tx) {
     throw fail(409, "The payment amount didn't match your order. Our team will contact you.");
   }
   o.status = "paid";
+  o.deliveryCode = o.deliveryCode || newDeliveryCode();
   o.payment = Object.assign(o.payment || {}, { status: "paid", reference: tx.reference, channel: tx.channel, paidAt: tx.paid_at || new Date().toISOString() });
   log(o, `Payment received · ${tx.channel || "Paystack"}`);
+  if (o.cancelledUnpaid) log(o, "Paid after it was cancelled for non-payment · order reinstated, please check stock", { internal: true });
   log(o, "Order recorded for the National Electronic Pharmacy Platform (integration pending)", { internal: true });
   await db.set("order:" + o.id, o);
   await notifyCustomer(o, "paid"); await notifyStaff(o, "paid");
   return o;
+}
+
+/* ---------- Unpaid orders: one friendly reminder, then cancel after a while (hours in js/config.js) ---------- */
+export async function remindUnpaid(now = Date.now()) {
+  const c = site().config.orders || {}, remindH = Number(c.remindUnpaidAfterHours) || 0, cancelH = Number(c.cancelUnpaidAfterHours) || 0;
+  const done = { reminded: 0, cancelled: 0 };
+  if (!remindH && !cancelH) return done;
+  const ids = await db.latest("orders", 300);
+  for (const id of ids) {
+    const o = await db.get("order:" + id);
+    if (!o || !["awaiting_payment", "approved_awaiting_payment"].includes(o.status) || o.priced === false) continue;
+    const hours = (now - Date.parse(o.approvedAt || o.createdAt)) / 3600e3;
+    if (cancelH && hours >= cancelH) {
+      o.status = "cancelled"; o.cancelledUnpaid = true;
+      log(o, `Cancelled automatically: not paid within ${cancelH} hours`);
+      await db.set("order:" + o.id, o); done.cancelled++;
+      await notifyCustomer(o, "expired");
+    } else if (remindH && hours >= remindH && !o.reminded) {
+      o.reminded = new Date(now).toISOString();
+      log(o, "Payment reminder sent", { internal: true });
+      await db.set("order:" + o.id, o); done.reminded++;
+      await notifyCustomer(o, "reminder");
+    }
+  }
+  return done;
 }

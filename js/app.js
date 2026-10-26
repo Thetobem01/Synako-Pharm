@@ -341,6 +341,12 @@ function card(p) {
   </article>`;
 }
 /* Section heading: eyebrow, title, optional intro and "view all" link */
+/* A fine botanical sprig, purely decorative (hidden from assistive technology) */
+function sprig(cls) {
+  return `<svg class="sprig ${cls || ""}" viewBox="0 0 120 160" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke">
+    <path d="M60 158C58 118 62 76 78 30"/><path d="M61 128c-14-4-24-14-28-28 14 2 24 12 28 28z"/><path d="M62 104c14-6 22-18 24-32-12 4-22 16-24 32z"/>
+    <path d="M66 74c-12-6-18-18-18-30 12 4 18 16 18 30z"/><path d="M72 52c10-6 16-16 16-28-10 4-16 14-16 28z"/><path d="M78 30c-2-10 0-18 6-26 2 10 0 18-6 26z"/></g></svg>`;
+}
 function sectionHead(id, eyebrow, title, intro, more, center) {
   return `<header class="shead${center ? " center" : ""}"><div>${eyebrow ? `<p class="eyebrow">${eyebrow}</p>` : ""}<h2 id="${id}">${title}</h2>${intro ? `<p class="shead-intro">${intro}</p>` : ""}</div>${more || ""}</header>`;
 }
@@ -386,7 +392,7 @@ function vHome() {
   <section class="hero" aria-labelledby="hero-title"><div class="wrap hero-grid">
     <div class="hero-copy">
       <p class="eyebrow">Retail &amp; wholesale pharmacy · Delivery across Nigeria</p>
-      <h1 id="hero-title">Your Pathway to <br class="br-lg">Health and Wellness</h1>
+      <h1 id="hero-title">Your Pathway to <br class="br-lg">Health and <em>Wellness</em></h1>
       <p class="lede">Genuine NAFDAC-registered medicines checked by our pharmacists, plus medical equipment, surgical supplies and provisions. Buy one pack or a whole carton, and we'll deliver it to your door.</p>
       <div class="ctas">${link("/products", "Shop all products", "btn btn-primary btn-lg")}${link("/prescriptions", "Send a prescription", "btn btn-accent btn-lg")}</div>
       <ul class="hero-points">
@@ -396,6 +402,9 @@ function vHome() {
       </ul>
     </div>
     <figure class="hero-media">
+      <svg class="hero-arch" viewBox="0 0 400 520" preserveAspectRatio="none" aria-hidden="true" focusable="false"><path d="M1 519V200A199 199 0 0 1 399 200V519" fill="none" stroke="currentColor" stroke-width="1" vector-effect="non-scaling-stroke"/></svg>
+      ${sprig("hero-sprig")}
+      <span class="hero-orb" aria-hidden="true">${popular[0] ? media(popular[0]) : ""}</span>
       <img src="${IMG.hero}" alt="A smiling Synako pharmacist at his desk" width="960" height="1196" fetchpriority="high" decoding="async">
       <figcaption class="hero-card">${icon("shield", "ic")}<span><b>Pharmacist-checked</b><span>Every order is reviewed by a registered Synako pharmacist.</span></span></figcaption>
     </figure>
@@ -408,13 +417,13 @@ function vHome() {
     <div>${icon("card", "ic")}<p><b>Secure payment</b><span>Card, transfer or USSD by Paystack</span></p></div>
   </div></section>
 
-  <section class="section" aria-labelledby="routes-title"><div class="wrap">
-    ${sectionHead("routes-title", "Shop by department", "Everything in our store, online", "", "", true)}
+  <section class="section" aria-labelledby="routes-title"><div class="wrap"><div class="bpanel">
+    ${sectionHead("routes-title", "Shop by department", "Everything in our store, <em>online</em>", "", "", true)}
     <div class="routes depts">
       ${DEPTS.map(d => `<a class="route${d.id === "pom" ? " rx" : d.age ? " age" : ""}" href="${fpath(d.id)}" data-link><span class="route-ic">${icon(d.icon, "ic")}</span><span><b>${esc(d.name)}</b><span>${P.filter(p => p.dept === d.id).length} products${d.age ? ` · ${d.age}+ only` : d.id === "pom" ? " · prescription needed" : ""}</span></span><span class="arrow" aria-hidden="true">→</span></a>`).join("")}
       <a class="route lock" href="/controlled-medicines" data-link><span class="route-ic">${icon("lock", "ic")}</span><span><b>Controlled medicines</b><span>In store only · not sold online</span></span><span class="arrow" aria-hidden="true">→</span></a>
     </div>
-  </div></section>
+  </div></div></section>
 
   <section class="section tight" aria-labelledby="popular-title"><div class="wrap">
     ${sectionHead("popular-title", "Bestsellers", "Most popular products", "", link("/products", "View all products <span aria-hidden=\"true\">→</span>", "more"))}
@@ -448,11 +457,11 @@ function vHome() {
     <div class="center">${link("/products/" + S.tab, "View all " + esc(cat(S.tab).name.toLowerCase()), "btn btn-secondary")}</div>
   </div></section>
 
-  <section class="section tight" aria-labelledby="steps-title"><div class="wrap">
-    ${sectionHead("steps-title", "Prescriptions", "How prescription orders work", "Required by Nigeria's Electronic Pharmacy Regulations 2026, and it keeps you safe.", "", true)}
+  <section class="section tight" aria-labelledby="steps-title"><div class="wrap"><div class="bfield">
+    ${sectionHead("steps-title", "Prescriptions", "How prescription orders <em>work</em>", "Required by Nigeria's Electronic Pharmacy Regulations 2026, and it keeps you safe.", "", true)}
     <ol class="steps">${stepsHTML()}</ol>
     <div class="center">${link("/prescriptions", "Start a prescription order", "btn btn-accent btn-lg")}</div>
-  </div></section>
+  </div></div></section>
 
   ${mobileBanner()}`;
 }

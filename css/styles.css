@@ -1274,3 +1274,12 @@ kbd { display: inline-block; min-width: 1.6em; padding: .05rem .35rem; border: 1
   .dtable td[data-label="On order"] { flex-wrap: wrap; }
   .dtable td[data-label="On order"] > span:not(.muted) { display: block; margin-left: auto; }
 }
+/* Overview: "How work flows" sits at the very top */
+.ov-flowtop { margin-bottom: 0; }
+.ov-flowtop .dk-flow { display: grid; justify-items: stretch; }
+.ov-flowtop .dk-flow > * { width: 100%; max-width: 760px; margin-inline: auto; }
+.ov-flowtop .dk-flow .flow-row.flow-out, .ov-flowtop .dk-flow .flow-core { max-width: 456px; }
+.ov-flowtop .dk-flow .ov-sub { max-width: none; }
+.ov-flowtop .dk-flow figcaption { display: none; }
+.ov-grid { grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 1051px) { .ov-grid .dk-facts { grid-template-columns: repeat(6, minmax(0, 1fr)); } }

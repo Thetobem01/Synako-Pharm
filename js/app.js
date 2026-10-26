@@ -1054,7 +1054,7 @@ function vStaff() {
       <p class="dk-sync" role="status"><span class="dot" aria-hidden="true"></span>Live · ${st.updated ? `updated ${st.updated.toLocaleTimeString("en-GB")}` : "connecting"}</p>
     </nav>
     <div class="dk-main">
-      ${ov ? ov.progress : ""}
+      ${ov ? ov.flow + ov.progress : ""}
       <header class="dk-head${tab === "overview" ? " is-dash" : ""}"><div><p class="dk-eyebrow">${group}</p><h1 tabindex="-1" id="dk-title">${title}</h1>${sub ? `<p>${sub}</p>` : ""}</div>${tab === "overview" ? overviewActions(d, groups) : ""}</header>
       ${st.err ? alertBox(st.err) : ""}
       ${st.mail ? `<div class="notice ${/NOT sent/.test(st.mail) ? "bad" : "info"} small" role="status"><span>${esc(st.mail)}</span></div>` : ""}
@@ -1166,16 +1166,17 @@ function overviewPanel(d, groups, takings, paidToday, day) {
           <li><button type="button" class="fact" data-dtab="done" data-dstatus=""><span class="fact-label">Takings today</span><b>${NGN(takings)}</b><span class="fact-note">${paidToday.length} paid · 7 days ${weekBars(d.orders, day)}</span></button></li>
         </ul>
       </section>
-      <figure class="dk-flow" aria-labelledby="flow-h">
+
+    </div>`;
+  const flow = `<section class="ov-flowtop" aria-label="How work flows"><figure class="dk-flow" aria-labelledby="flow-h">
         <h2 id="flow-h" class="h3 ov-sub">How work flows</h2>
         <div class="flow-row">${tile("review", "", "Prescriptions", groups.review.length)}${tile("pack", "paid", "Paid orders", toPack.length)}${tile("supply", "", "Wholesaler orders", openPos === null ? "…" : openPos)}${tile("requests", "", "Messages", newMsgs)}</div>
         <svg class="flow-lines" viewBox="0 0 100 40" preserveAspectRatio="none" aria-hidden="true"><path d="M12.5 0 C12.5 22 50 18 50 40M37.5 0 C37.5 22 50 18 50 40M62.5 0 C62.5 22 50 18 50 40M87.5 0 C87.5 22 50 18 50 40"/></svg>
         <div class="flow-core"><span>Dispensary</span><b>${now + onRoad.length}</b><span>orders in progress</span></div>
         <svg class="flow-lines" viewBox="0 0 100 40" preserveAspectRatio="none" aria-hidden="true"><path d="M50 0 C50 22 30 18 30 40M50 0 C50 22 70 18 70 40"/></svg>
         <div class="flow-row flow-out">${tile("pack", "out_for_delivery", "With riders", onRoad.length)}${tile("done", "", "Delivered today", delivered)}</div>
-      </figure>
-    </div>`;
-  return { progress, rest };
+      </figure></section>`;
+  return { flow, progress, rest };
 }
 /* Command palette: Ctrl/⌘+K jumps to any order, section, product or action */
 let cmdkList = [];

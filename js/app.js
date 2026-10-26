@@ -1505,6 +1505,7 @@ function deskDetail() {
 function renderShell() {
   document.documentElement.lang = CFG.site.locale || "en";
   const yr = $("#year"); if (yr) yr.textContent = new Date().getFullYear();
+  const syr = $("#staff-year"); if (syr) syr.textContent = new Date().getFullYear();
   orgLd();
   const hours = () => { const el = $("#topbar-hours"); if (el) el.innerHTML = openStatus(); };
   hours(); clearInterval(renderShell.t); renderShell.t = setInterval(hours, 60000);

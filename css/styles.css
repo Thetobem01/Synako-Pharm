@@ -1091,3 +1091,11 @@ kbd { display: inline-block; min-width: 1.6em; padding: .05rem .35rem; border: 1
   #shell-staff .btn:hover, #shell-staff .step:hover, #shell-staff .flow-tile:hover { transform: none !important; }
 }
 @media print { .dk-nav, .cmdk, .dk-head p { display: none !important; } .dk { display: block; } }
+
+/* Desk footer: terms and conditions, kept small (12px, the smallest legible size in the desk's type scale) */
+.staff-foot { border-top: 1px solid var(--dp-color-rule); background: var(--dp-color-ground); }
+.staff-foot-inner { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 4px 16px; padding-block: 12px 16px; font-size: 12px; line-height: 1.5; color: var(--dp-color-ink-secondary); }
+.staff-foot nav { display: flex; flex-wrap: wrap; gap: 4px 14px; }
+.staff-foot a { color: var(--dp-color-ink-secondary); text-decoration: underline; text-underline-offset: 2px; }
+.staff-foot a:hover { color: var(--dp-color-accent); }
+@media print { .staff-foot { display: none !important; } }

@@ -1034,7 +1034,8 @@ function vStaff() {
   const navHtml = DESK_NAV.map(([label, items]) => `<p class="dk-nav-label">${label}</p>${items.map(([k, l, ic]) => { n++; return `<button type="button" class="dk-link" data-dtab="${k}"${tab === k ? ' aria-current="page"' : ""}>${icon(ic, "ic sm")}<span>${l}</span>${count[k] ? `<span class="count${warn[k] ? " warn" : ""}">${count[k]}${k === "stock" ? " out" : ""}</span>` : ""}<kbd aria-hidden="true">${n}</kbd></button>`; }).join("")}`).join("");
   let [group, title, sub] = DESK_TITLES[tab] || DESK_TITLES.overview;
   if (tab === "overview") { group = "Main dashboard"; title = `${greeting()}, ${esc(String(st.name || "").split(" ")[0] || "team")}.`; sub = overviewSummary(d, groups); }
-  const body = tab === "overview" ? overviewPanel(d, groups, takings, paidToday, day)
+  const ov = tab === "overview" ? overviewPanel(d, groups, takings, paidToday, day) : null;
+  const body = ov ? ov.rest
     : tab === "supply" ? supplyPanel() : tab === "stock" ? stockPanel() : tab === "requests" ? requestsPanel(d)
     : `<div class="desk${st.sel ? " has-sel" : ""}">
       <div class="queue-wrap">${queueTools(list)}<nav class="queue" id="queue" aria-label="Orders">${queueRows(list)}</nav></div>
@@ -1053,6 +1054,7 @@ function vStaff() {
       <p class="dk-sync" role="status"><span class="dot" aria-hidden="true"></span>Live · ${st.updated ? `updated ${st.updated.toLocaleTimeString("en-GB")}` : "connecting"}</p>
     </nav>
     <div class="dk-main">
+      ${ov ? ov.progress : ""}
       <header class="dk-head${tab === "overview" ? " is-dash" : ""}"><div><p class="dk-eyebrow">${group}</p><h1 tabindex="-1" id="dk-title">${title}</h1>${sub ? `<p>${sub}</p>` : ""}</div>${tab === "overview" ? overviewActions(d, groups) : ""}</header>
       ${st.err ? alertBox(st.err) : ""}
       ${st.mail ? `<div class="notice ${/NOT sent/.test(st.mail) ? "bad" : "info"} small" role="status"><span>${esc(st.mail)}</span></div>` : ""}
@@ -1144,7 +1146,7 @@ function overviewPanel(d, groups, takings, paidToday, day) {
   const fact = (tab, status, label, value, note, hot) => `<li><button type="button" class="fact${hot ? " hot" : ""}" data-dtab="${tab}" data-dstatus="${status}"><span class="fact-label">${label}</span><b>${value}</b><span class="fact-note">${note}</span></button></li>`;
   const tile = (tab, status, label, value) => `<button type="button" class="flow-tile" data-dtab="${tab}" data-dstatus="${status}"><b>${value}</b><span>${label}</span></button>`;
   const step = (i, tab, status, label, n, note, hot) => `<li><button type="button" class="step${hot ? " hot" : ""}${n ? " live" : ""}" data-dtab="${tab}" data-dstatus="${status}"><span class="step-n" aria-hidden="true">${i}</span><span class="step-label">${label}</span><b>${n}</b><span class="fact-note">${note}</span></button></li>`;
-  return `<section class="ov-field" aria-labelledby="pipe-h">
+  const progress = `<section class="ov-field ov-top" aria-labelledby="pipe-h">
       <div class="ov-field-head"><h2 id="pipe-h" class="h3">Order progress</h2><p class="small">Every order moves left to right. Select a stage to open it.</p></div>
       <ol class="dk-steps">
         ${step(1, "review", "", "Pharmacist review", groups.review.length, oldest(groups.review), groups.review.some(o => waitMins(o) > 60))}
@@ -1152,8 +1154,8 @@ function overviewPanel(d, groups, takings, paidToday, day) {
         ${step(3, "pack", "paid", "Pack and check", toPack.length, oldest(toPack), toPack.some(o => waitMins(o) > 60))}
         ${step(4, "pack", "out_for_delivery", "Deliver with code", onRoad.length, `${delivered} delivered today`, false)}
       </ol>
-    </section>
-    <div class="ov-grid">
+    </section>`;
+  const rest = `<div class="ov-grid">
       <section aria-labelledby="facts-h"><h2 id="facts-h" class="h3 ov-sub">Today at a glance</h2>
         <ul class="dk-facts">
           ${fact("review", "", "To review", groups.review.length, oldest(groups.review), groups.review.some(o => waitMins(o) > 60))}
@@ -1173,6 +1175,7 @@ function overviewPanel(d, groups, takings, paidToday, day) {
         <div class="flow-row flow-out">${tile("pack", "out_for_delivery", "With riders", onRoad.length)}${tile("done", "", "Delivered today", delivered)}</div>
       </figure>
     </div>`;
+  return { progress, rest };
 }
 /* Command palette: Ctrl/⌘+K jumps to any order, section, product or action */
 let cmdkList = [];

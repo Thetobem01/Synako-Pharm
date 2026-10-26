@@ -1033,8 +1033,9 @@ function vStaff() {
   let n = 0;
   const navHtml = DESK_NAV.map(([label, items]) => `<p class="dk-nav-label">${label}</p>${items.map(([k, l, ic]) => { n++; return `<button type="button" class="dk-link" data-dtab="${k}"${tab === k ? ' aria-current="page"' : ""}>${icon(ic, "ic sm")}<span>${l}</span>${count[k] ? `<span class="count${warn[k] ? " warn" : ""}">${count[k]}${k === "stock" ? " out" : ""}</span>` : ""}<kbd aria-hidden="true">${n}</kbd></button>`; }).join("")}`).join("");
   let [group, title, sub] = DESK_TITLES[tab] || DESK_TITLES.overview;
-  if (tab === "overview") { group = "Main dashboard"; title = `${greeting()}, ${esc(String(st.name || "").split(" ")[0] || "team")}.`; sub = overviewSummary(d, groups); }
+  if (tab === "overview") { group = "Main dashboard"; title = `${greeting()}, ${esc(String(st.name || "").split(/\s+/).filter(w => w && !/^(pharm|dr|mr|mrs|ms|miss|prof|pst|chief)\.?$/i.test(w))[0] || "team")}.`; sub = overviewSummary(d, groups); }
   const ov = tab === "overview" ? overviewPanel(d, groups, takings, paidToday, day) : null;
+  const head = `<header class="dk-head${tab === "overview" ? " is-dash" : ""}"><div><p class="dk-eyebrow">${group}</p><h1 tabindex="-1" id="dk-title">${title}</h1>${sub ? `<p>${sub}</p>` : ""}</div>${tab === "overview" ? overviewActions(d, groups) : ""}</header>`;
   const body = ov ? ov.rest
     : tab === "supply" ? supplyPanel() : tab === "stock" ? stockPanel() : tab === "requests" ? requestsPanel(d)
     : `<div class="desk${st.sel ? " has-sel" : ""}">
@@ -1054,11 +1055,11 @@ function vStaff() {
       <p class="dk-sync" role="status"><span class="dot" aria-hidden="true"></span>Live · ${st.updated ? `updated ${st.updated.toLocaleTimeString("en-GB")}` : "connecting"}</p>
     </nav>
     <div class="dk-main">
-      ${ov ? ov.flow + ov.progress : ""}
-      <header class="dk-head${tab === "overview" ? " is-dash" : ""}"><div><p class="dk-eyebrow">${group}</p><h1 tabindex="-1" id="dk-title">${title}</h1>${sub ? `<p>${sub}</p>` : ""}</div>${tab === "overview" ? overviewActions(d, groups) : ""}</header>
+      ${ov ? `<div class="ov-hero2">${head}${ov.flow}</div>` : head}
       ${st.err ? alertBox(st.err) : ""}
       ${st.mail ? `<div class="notice ${/NOT sent/.test(st.mail) ? "bad" : "info"} small" role="status"><span>${esc(st.mail)}</span></div>` : ""}
       ${body}
+      ${ov ? ov.progress : ""}
     </div>
   </div>
   ${st.keys ? keysHelp() : ""}${st.cmdk ? cmdkView() : ""}`;

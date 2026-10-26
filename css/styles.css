@@ -1290,3 +1290,13 @@ kbd { display: inline-block; min-width: 1.6em; padding: .05rem .35rem; border: 1
 #shell-staff .q.delivered { border-left-color: var(--dp-color-rule); }
 #shell-staff .steps.complete li.done::before { background: #cfe3d6; }
 #shell-staff .steps.complete li.done .dot { border-color: #b7d8c2; background: var(--dp-color-panel); color: var(--ok); }
+/* Overview: greeting on the left, "How work flows" beside it, Today at a glance below */
+.ov-hero2 { display: grid; grid-template-columns: 1.45fr 1fr; gap: var(--dp-spacing-grid-gap); align-items: start; margin-bottom: var(--dp-spacing-grid-gap); }
+.ov-hero2 > * { min-width: 0; }
+.ov-hero2 .dk-head { display: flex; flex-direction: column; align-items: flex-start; gap: 16px; margin: 0; padding-top: 8px; }
+.ov-hero2 .dk-head .ov-actions { margin-top: 0; }
+.ov-hero2 .ov-flowtop .dk-flow > * { max-width: none; }
+.ov-hero2 .ov-flowtop .dk-flow .flow-core, .ov-hero2 .ov-flowtop .dk-flow .flow-row.flow-out { max-width: none; }
+.dk-main > .ov-field.ov-top { margin-top: var(--dp-spacing-grid-gap); }
+@media (max-width: 1050px) { .ov-hero2 { grid-template-columns: 1fr; } }
+.ov-hero2 .dk-head > div { flex: none; width: 100%; }

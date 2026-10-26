@@ -107,6 +107,7 @@ const ICONS = {
   share: '<circle cx="18" cy="5" r="2.5"/><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="19" r="2.5"/><path d="M8.2 10.8l7.6-4.4M8.2 13.2l7.6 4.4"/>',
   print: '<path d="M6 9V3h12v6M6 18H4a1 1 0 0 1-1-1v-6a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v6a1 1 0 0 1-1 1h-2"/><rect x="6" y="14" width="12" height="7"/>',
   phone: '<path d="M5 3h4l2 5-2.5 1.5a11 11 0 0 0 6 6L16 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 5a2 2 0 0 1 2-2"/>',
+  search: '<circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/>',
   pin: '<path d="M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/>',
   download: '<path d="M12 3v12M7 10l5 5 5-5M4 21h16"/>'
 };
@@ -124,7 +125,7 @@ const S = {
   cart: store.get("synako.cart", []).filter(l => l && prod(l.id)).map(l => ({ id: l.id, q: l.q, u: l.u || "1" })), rxRequest: false, step: 1, form: {}, busy: false, error: "",
   mine: store.get("synako.orders", []), seen: store.get("synako.seen", []).filter(id => prod(id)), trackId: null, track: null, trackErr: "",
   rider: { token: store.sget("synako.rider"), name: store.get("synako.riderName", ""), list: null, err: "" },
-  staff: { token: store.sget("synako.staff"), name: store.sget("synako.staffName"), list: null, sel: null, detail: null, file: null, tab: "review", err: "", updated: null }
+  staff: { token: store.sget("synako.staff"), name: store.sget("synako.staffName"), list: null, sel: null, detail: null, file: null, tab: "overview", err: "", updated: null }
 };
 const saveCart = () => store.set("synako.cart", S.cart);
 const saveMine = () => store.set("synako.orders", S.mine.slice(0, 20));
@@ -980,7 +981,7 @@ async function loadDesk(silent) {
       if (news.length) { toast(news.join(" · ")); chime(); }
     }
     if (st.sel && !silent) await loadDeskOrder(st.sel, true);
-    if (st.tab === "supply") await loadSupply(true);
+    if (st.tab === "supply" || (st.tab === "overview" && !st.supply)) await loadSupply(true);
   } catch (e) { if (e.status === 401) signOut(); else st.err = e.message; }
   if (S.mode === "staff") render();
 }
@@ -1006,7 +1007,7 @@ async function loadDeskOrder(id, quiet) {
   catch (e) { if (e.status === 401) return signOut(); st.err = e.message; }
   if (S.mode === "staff") render();
 }
-function signOut() { S.staff = { token: "", name: S.staff.name, list: null, sel: null, detail: null, file: null, tab: "review", err: "" }; store.sset("synako.staff", ""); render(); }
+function signOut() { S.staff = { token: "", name: S.staff.name, list: null, sel: null, detail: null, file: null, tab: "overview", err: "" }; store.sset("synako.staff", ""); render(); }
 function vStaff() {
   const st = S.staff;
   if (!st.token) return `<div class="wrap desk-login"><form class="f panel" id="staffform" novalidate>
@@ -1019,39 +1020,52 @@ function vStaff() {
   const d = st.list;
   if (!d) return `<div class="wrap"><p class="muted" style="padding:2rem 0">Loading the desk…</p></div>`;
   const groups = deskGroups(d);
-  const tabs = [["review", "To review"], ["pack", "To pack & deliver"], ["pay", "Awaiting payment"], ["done", "Completed"], ["requests", "Messages & bookings"], ["stock", "Stock"], ["supply", "Supply"]];
   if (d.out) applyStock(d.out);
-  const list = ["requests", "stock", "supply"].includes(st.tab) ? null : groups[st.tab];
+  const tab = st.tab || "overview";
+  const list = groups[tab] || null;
   const day = t => new Date(t).toLocaleDateString("en-CA", { timeZone: CFG.site.timezone }), today = day(Date.now());
   const paidToday = d.orders.filter(o => PAID(o.status) && day(o.createdAt) === today);
   const takings = paidToday.reduce((t, o) => t + (Number(o.total) || 0), 0);
-  const toPack = d.orders.filter(o => o.status === "paid"), onRoad = d.orders.filter(o => o.status === "out_for_delivery");
-  const oldest = l => l.length ? `<small>oldest ${waitText(Math.min(...l.map(waitFrom)))}</small>` : "";
-  const stat = (tab, status, n, label, extra, hot) => `<button type="button" class="stat${hot ? " hot" : ""}" data-dtab="${tab}" data-dstatus="${status}"><b>${n}</b><span>${label}${extra}</span></button>`;
-  $("#staff-stats").innerHTML = stat("review", "", groups.review.length, "To review", oldest(groups.review), groups.review.some(o => waitMins(o) > 60))
-    + stat("pack", "paid", toPack.length, "To pack", oldest(toPack), toPack.some(o => waitMins(o) > 60))
-    + stat("pack", "out_for_delivery", onRoad.length, "On the road", "", false)
-    + stat("pay", "", groups.pay.length, "Awaiting payment", "", false)
-    + `<button type="button" class="stat money" data-dtab="done" data-dstatus="" title="Paid orders placed today, and the last 7 days"><b>${NGN(takings)}</b><span>Today · ${paidToday.length} paid</span>${weekBars(d.orders, day)}</button>`;
-  return `<div class="desk-top">
-      <div class="desk-tabs" role="tablist" aria-label="Desk sections">${tabs.map(([k, l]) => `<button type="button" role="tab" data-dtab="${k}" aria-selected="${st.tab === k}">${l}${k === "requests" ? ` <span class="count">${d.requests.filter(r => r.status === "new").length}</span>` : k === "stock" ? ` <span class="count">${P.filter(p => p.out).length} out</span>` : k === "supply" ? ` <span class="count${shortCount(d) ? " warn" : ""}">${shortCount(d)} short</span>` : ` <span class="count">${groups[k].length}</span>`}</button>`).join("")}</div>
-      <div class="desk-tools"><button class="linkbtn" type="button" data-sound aria-pressed="${soundOn()}">${soundOn() ? "🔔 Sound on" : "🔕 Sound off"}</button><button class="linkbtn" type="button" data-keys>⌨ Shortcuts</button><button class="linkbtn" type="button" data-csv>${icon("download", "ic sm")} Download orders (CSV)</button><button class="linkbtn" type="button" data-testmail>${icon("chat", "ic sm")} Send test email</button><button class="linkbtn" type="button" data-remind>${icon("card", "ic sm")} Send payment reminders now</button><a class="linkbtn" href="/rider" data-link>${icon("truck", "ic sm")} Rider page</a><p class="small muted" role="status">Updates every 10 seconds${st.updated ? ` · last ${st.updated.toLocaleTimeString("en-GB")}` : ""}</p></div></div>
-    ${st.err ? alertBox(st.err) : ""}
-    ${st.mail ? `<div class="notice ${/NOT sent/.test(st.mail) ? "bad" : "info"} small" role="status"><span>${esc(st.mail)}</span></div>` : ""}
-    ${d.missing && d.missing.length ? (store.get("synako.hideMissing", 0) > Date.now()
-      ? `<p class="small muted">${d.missing.length} licence details to add later · <button class="linkbtn" type="button" data-missing="show">Show</button></p>`
-      : `<details class="setup"><summary><b>${d.missing.length} licence details to add</b> · the shop works without them; they're left off the Licences page and receipts until added</summary><p class="small">Still to add: ${d.missing.map(esc).join(", ")}. Send them to whoever looks after the website (they go in <code>js/config.js</code>).</p><button class="linkbtn" type="button" data-missing="hide">Hide this for 30 days</button></details>`) : ""}
-    ${d.setup && d.setup.length ? `<details class="setup"><summary><b>${d.setup.length} hosting setting${d.setup.length === 1 ? "" : "s"} to add</b> · in Vercel, Settings → Environment Variables</summary><p class="small">${d.setup.map(esc).join(", ")}. See the README for what each one does.</p></details>` : ""}
-    ${st.tab === "supply" ? supplyPanel() : st.tab === "stock" ? stockPanel() : st.tab === "requests" ? `<div class="requests">${d.requests.length ? d.requests.slice().sort((a, b) => (a.status === "done") - (b.status === "done")).map(r => `<article class="panel req${r.status === "done" ? " done" : ""}"><div class="top"><b>${{ appointment: "Consultation booking", message: "Message", careers: "Careers interest", trade: "Wholesale quote request", restock: "Back-in-stock request" }[r.type]}</b><span class="small muted">${stamp(r.createdAt)}</span></div>
-        <div class="small"><b>${esc(r.name)}</b> · ${r.phone ? `<a href="tel:${esc(r.phone)}">${esc(r.phone)}</a>` : ""} ${esc(r.email || "")}</div>
-        ${r.type === "appointment" ? `<div class="small">Wants: <b>${esc(r.date)} at ${esc(PR.fmt12(r.time || "00:00"))}</b></div>` : ""}${r.topic ? `<div class="small">${esc(r.topic)}</div>` : ""}${r.role ? `<div class="small">${esc(r.role)} ${r.pcn ? `· PCN ${esc(r.pcn)}` : ""}</div>` : ""}${r.business ? `<div class="small"><b>${esc(r.business)}</b>${r.bizType ? ` · ${esc(r.bizType)}` : ""}${r.state ? ` · ${esc(r.state)}` : ""}${r.pcn && !r.role ? ` · Licence ${esc(r.pcn)}` : ""}</div>` : ""}
-        ${r.message ? `<p class="small" style="white-space:pre-line">${esc(r.message)}</p>` : ""}
-        <div class="req-foot">${r.status === "done" ? `<span class="tag ok">Handled${r.handledBy ? ` by ${esc(r.handledBy)}` : ""}</span><button class="linkbtn" type="button" data-req="${esc(r.id)}" data-st="new">Mark as new</button>` : `<button class="btn btn-secondary btn-sm" type="button" data-req="${esc(r.id)}" data-st="done">${icon("check", "ic sm")} Mark as handled</button>`}</div></article>`).join("") : `<p class="muted">No messages or bookings yet.</p>`}</div>`
+  $("#staff-stats").innerHTML = `<button type="button" class="cmdk-btn" data-cmdk aria-keyshortcuts="Control+K Meta+K" aria-haspopup="dialog">${icon("search", "ic sm")}<span>Search orders, products and actions</span><kbd>Ctrl K</kbd></button>`;
+  const newMsgs = d.requests.filter(r => r.status === "new").length;
+  const count = { review: groups.review.length, pack: groups.pack.length, pay: groups.pay.length, requests: newMsgs, stock: P.filter(p => p.out).length, supply: shortCount(d) };
+  const warn = { review: groups.review.some(o => waitMins(o) > 60), pack: d.orders.some(o => o.status === "paid" && waitMins(o) > 60), supply: count.supply > 0, requests: newMsgs > 0 };
+  let n = 0;
+  const navHtml = DESK_NAV.map(([label, items]) => `<p class="dk-nav-label">${label}</p>${items.map(([k, l, ic]) => { n++; return `<button type="button" class="dk-link" data-dtab="${k}"${tab === k ? ' aria-current="page"' : ""}>${icon(ic, "ic sm")}<span>${l}</span>${count[k] ? `<span class="count${warn[k] ? " warn" : ""}">${count[k]}${k === "stock" ? " out" : ""}</span>` : ""}<kbd aria-hidden="true">${n}</kbd></button>`; }).join("")}`).join("");
+  const [group, title, sub] = DESK_TITLES[tab] || DESK_TITLES.overview;
+  const body = tab === "overview" ? overviewPanel(d, groups, takings, paidToday, day)
+    : tab === "supply" ? supplyPanel() : tab === "stock" ? stockPanel() : tab === "requests" ? requestsPanel(d)
     : `<div class="desk${st.sel ? " has-sel" : ""}">
       <div class="queue-wrap">${queueTools(list)}<nav class="queue" id="queue" aria-label="Orders">${queueRows(list)}</nav></div>
       <section class="panel" aria-live="polite">${deskDetail()}</section>
-    </div>`}
-    ${st.keys ? keysHelp() : ""}`;
+    </div>`;
+  return `<div class="dk">
+    <nav class="dk-nav" aria-label="Desk sections">${navHtml}
+      <div class="dk-tools" aria-label="Tools"><p class="dk-nav-label">Tools</p>
+        <button class="dk-tool" type="button" data-remind>${icon("card", "ic sm")} Send payment reminders</button>
+        <button class="dk-tool" type="button" data-csv>${icon("download", "ic sm")} Download orders (CSV)</button>
+        <button class="dk-tool" type="button" data-testmail>${icon("chat", "ic sm")} Send test email</button>
+        <a class="dk-tool" href="/rider" data-link>${icon("truck", "ic sm")} Rider page</a>
+        <button class="dk-tool" type="button" data-sound aria-pressed="${soundOn()}">${soundOn() ? "🔔 Sound on" : "🔕 Sound off"}</button>
+        <button class="dk-tool" type="button" data-keys>⌨ Keyboard shortcuts</button>
+      </div>
+      <p class="dk-sync" role="status"><span class="dot" aria-hidden="true"></span>Live · ${st.updated ? `updated ${st.updated.toLocaleTimeString("en-GB")}` : "connecting"}</p>
+    </nav>
+    <div class="dk-main">
+      <header class="dk-head"><p class="dk-eyebrow">${group}</p><h1 tabindex="-1" id="dk-title">${title}</h1>${sub ? `<p>${sub}</p>` : ""}</header>
+      ${st.err ? alertBox(st.err) : ""}
+      ${st.mail ? `<div class="notice ${/NOT sent/.test(st.mail) ? "bad" : "info"} small" role="status"><span>${esc(st.mail)}</span></div>` : ""}
+      ${body}
+    </div>
+  </div>
+  ${st.keys ? keysHelp() : ""}${st.cmdk ? cmdkView() : ""}`;
+}
+function requestsPanel(d) {
+  return `<div class="requests">${d.requests.length ? d.requests.slice().sort((a, b) => (a.status === "done") - (b.status === "done")).map(r => `<article class="panel req${r.status === "done" ? " done" : ""}"><div class="top"><b>${{ appointment: "Consultation booking", message: "Message", careers: "Careers interest", trade: "Wholesale quote request", restock: "Back-in-stock request" }[r.type]}</b><span class="small muted">${stamp(r.createdAt)}</span></div>
+        <div class="small"><b>${esc(r.name)}</b> · ${r.phone ? `<a href="tel:${esc(r.phone)}">${esc(r.phone)}</a>` : ""} ${esc(r.email || "")}</div>
+        ${r.type === "appointment" ? `<div class="small">Wants: <b>${esc(r.date)} at ${esc(PR.fmt12(r.time || "00:00"))}</b></div>` : ""}${r.topic ? `<div class="small">${esc(r.topic)}</div>` : ""}${r.role ? `<div class="small">${esc(r.role)} ${r.pcn ? `· PCN ${esc(r.pcn)}` : ""}</div>` : ""}${r.business ? `<div class="small"><b>${esc(r.business)}</b>${r.bizType ? ` · ${esc(r.bizType)}` : ""}${r.state ? ` · ${esc(r.state)}` : ""}${r.pcn && !r.role ? ` · Licence ${esc(r.pcn)}` : ""}</div>` : ""}
+        ${r.message ? `<p class="small" style="white-space:pre-line">${esc(r.message)}</p>` : ""}
+        <div class="req-foot">${r.status === "done" ? `<span class="tag ok">Handled${r.handledBy ? ` by ${esc(r.handledBy)}` : ""}</span><button class="linkbtn" type="button" data-req="${esc(r.id)}" data-st="new">Mark as new</button>` : `<button class="btn btn-secondary btn-sm" type="button" data-req="${esc(r.id)}" data-st="done">${icon("check", "ic sm")} Mark as handled</button>`}</div></article>`).join("") : `<p class="muted">No messages or bookings yet.</p>`}</div>`;
 }
 /* How long an order has been waiting on us: prescriptions since they arrived, paid orders since payment */
 const waitFrom = o => Date.parse(o.status === "paid" && o.paidAt ? o.paidAt : o.createdAt) || Date.now();
@@ -1067,7 +1081,7 @@ function weekBars(orders, day) {
 const soundOn = () => store.get("synako.sound", true) !== false;
 function keysHelp() {
   return `<div class="keys-help" role="dialog" aria-label="Keyboard shortcuts"><div class="panel"><div class="top"><h2 class="h3">Keyboard shortcuts</h2><button class="iconbtn" type="button" data-keys aria-label="Close">✕</button></div>
-    <dl class="kv"><dt><kbd>1</kbd>–<kbd>7</kbd></dt><dd>Switch section</dd><dt><kbd>/</kbd></dt><dd>Search orders</dd><dt><kbd>J</kbd> <kbd>K</kbd> or <kbd>↓</kbd> <kbd>↑</kbd></dt><dd>Next / previous order</dd><dt><kbd>Esc</kbd></dt><dd>Close the order, or this box</dd><dt><kbd>R</kbd></dt><dd>Refresh now</dd><dt><kbd>?</kbd></dt><dd>Show or hide these shortcuts</dd></dl></div></div>`;
+    <dl class="kv"><dt><kbd>Ctrl</kbd> <kbd>K</kbd></dt><dd>Search orders, products and actions</dd><dt><kbd>1</kbd>–<kbd>8</kbd></dt><dd>Go to a section (the numbers in the sidebar)</dd><dt><kbd>/</kbd></dt><dd>Search orders</dd><dt><kbd>J</kbd> <kbd>K</kbd> or <kbd>↓</kbd> <kbd>↑</kbd></dt><dd>Next / previous order</dd><dt><kbd>Esc</kbd></dt><dd>Close the order, or this box</dd><dt><kbd>R</kbd></dt><dd>Refresh now</dd><dt><kbd>?</kbd></dt><dd>Show or hide these shortcuts</dd></dl></div></div>`;
 }
 /* Order progress at a glance, from its record */
 function progressSteps(o) {
@@ -1078,13 +1092,145 @@ function progressSteps(o) {
   const cur = steps.findIndex(x => !x[1]);
   return `<ol class="steps">${steps.map(([l, t], i) => `<li class="${t ? "done" : i === cur ? "now" : ""}"><span class="dot" aria-hidden="true">${t ? "✓" : i + 1}</span><b>${l}</b><span class="small muted">${t ? stamp(t) : i === cur ? "Next" : ""}</span></li>`).join("")}</ol>`;
 }
+/* ---------- Desk layout: sections, overview and the command palette ---------- */
+/* The desk's own typefaces (Host Grotesk for headings, Instrument Sans for text), loaded only for staff screens */
+function deskFonts() {
+  if (deskFonts.done) return; deskFonts.done = true;
+  const l = document.createElement("link"); l.rel = "stylesheet";
+  l.href = "https://fonts.googleapis.com/css2?family=Host+Grotesk:wght@500;600;700;800&family=Instrument+Sans:wght@400;500;600;700&display=swap";
+  document.head.appendChild(l);
+}
+const DESK_NAV = [
+  ["Operations", [["overview", "Overview", "pulse"], ["review", "To review", "rx"], ["pack", "Pack & deliver", "box"], ["pay", "Awaiting payment", "card"], ["done", "Completed", "check"]]],
+  ["Customers", [["requests", "Messages & bookings", "chat"]]],
+  ["Inventory", [["stock", "Stock", "layers"], ["supply", "Supply", "truck"]]]
+];
+const DESK_TABS = DESK_NAV.flatMap(([, items]) => items.map(i => i[0]));
+const DESK_TITLES = {
+  overview: ["Operations", "Overview", ""],
+  review: ["Operations", "To review", "Prescriptions waiting for a pharmacist's decision, oldest first."],
+  pack: ["Operations", "Pack & deliver", "Paid orders to pack, and orders out with riders. 30-minute deliveries come first."],
+  pay: ["Operations", "Awaiting payment", "Placed or approved orders the customer hasn't paid yet. One reminder goes out after 2 hours."],
+  done: ["Operations", "Completed", "Delivered, cancelled and not-approved orders."],
+  requests: ["Customers", "Messages & bookings", "Messages, consultations, wholesale quotes and back-in-stock requests."],
+  stock: ["Inventory", "Stock", "Mark products running low or out of stock. Out-of-stock items can't be ordered online."],
+  supply: ["Inventory", "Supply", "Shortages, purchase orders to wholesalers, and your wholesaler list."]
+};
+function goDesk(tab, extra) {
+  const st = S.staff; st.tab = tab; st.sel = null; st.detail = null; st.status = ""; Object.assign(st, extra || {});
+  render(); if (tab === "supply" || tab === "overview") loadSupply(true);
+  const h = $("#dk-title"); if (h) h.focus({ preventScroll: true });
+}
+function greeting() { const h = Number(new Date().toLocaleString("en-GB", { hour: "numeric", hour12: false, timeZone: CFG.site.timezone })); return h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening"; }
+function overviewPanel(d, groups, takings, paidToday, day) {
+  const st = S.staff, sp = st.supply, today = day(Date.now());
+  const toPack = d.orders.filter(o => o.status === "paid"), onRoad = d.orders.filter(o => o.status === "out_for_delivery");
+  const delivered = d.orders.filter(o => o.status === "delivered" && day(o.createdAt) === today).length;
+  const newMsgs = d.requests.filter(r => r.status === "new").length, short = shortCount(d);
+  const openPos = sp ? sp.pos.filter(p => ["draft", "sent", "confirmed"].includes(p.status)).length : null;
+  const waiting = groups.review.concat(toPack).sort((a, b) => waitFrom(a) - waitFrom(b));
+  const next = waiting[0];
+  const oldest = l => l.length ? `oldest ${waitText(Math.min(...l.map(waitFrom)))}` : "nothing waiting";
+  const now = groups.review.length + toPack.length;
+  const summary = now ? `${now} order${now === 1 ? " needs" : "s need"} you now: ${[groups.review.length && `${groups.review.length} prescription${groups.review.length === 1 ? "" : "s"} to review`, toPack.length && `${toPack.length} to pack`].filter(Boolean).join(" and ")}.` : "Nothing is waiting on the dispensary right now.";
+  const fact = (tab, status, label, value, note, hot) => `<li><button type="button" class="fact${hot ? " hot" : ""}" data-dtab="${tab}" data-dstatus="${status}"><span class="fact-label">${label}</span><b>${value}</b><span class="fact-note">${note}</span></button></li>`;
+  const tile = (tab, status, label, value) => `<button type="button" class="flow-tile" data-dtab="${tab}" data-dstatus="${status}"><b>${value}</b><span>${label}</span></button>`;
+  const step = (i, tab, status, label, n, note) => `<li><button type="button" class="step" data-dtab="${tab}" data-dstatus="${status}"><span class="step-n" aria-hidden="true">${i}</span><span class="step-label">${label}</span><b>${n}</b><span class="fact-note">${note}</span></button></li>`;
+  const attention = [
+    ...waiting.filter(o => waitMins(o) > 60).slice(0, 6).map(o => ({ html: `<b class="mono">${esc(o.id)}</b> ${o.status === "paid" ? "paid and not packed" : "prescription not reviewed"} for ${waitText(waitFrom(o))}`, btn: `<button type="button" class="linkbtn" data-openorder="${esc(o.id)}" data-otab="${o.status === "paid" ? "pack" : "review"}">Open</button>` })),
+    ...(sp ? sp.pos.filter(p => sp.overdue.includes(p.id)).map(p => ({ html: `<b class="mono">${esc(p.id)}</b> from ${esc(p.supplierName)} is late or unconfirmed`, btn: `<button type="button" class="linkbtn" data-dtab="supply" data-dstatus="" data-sv="pos">View</button>` })) : []),
+    ...(sp ? sp.shortages.filter(x => x.state === "out" && x.waiting && !x.onOrder.length).slice(0, 5).map(x => ({ html: `<b>${esc(x.name)}</b> is out of stock with ${x.waiting} customer${x.waiting === 1 ? "" : "s"} waiting`, btn: `<button type="button" class="linkbtn" data-dtab="supply" data-dstatus="" data-sv="short">Order</button>` })) : []),
+    ...(newMsgs ? [{ html: `${newMsgs} new message${newMsgs === 1 ? "" : "s"} or booking${newMsgs === 1 ? "" : "s"}`, btn: `<button type="button" class="linkbtn" data-dtab="requests" data-dstatus="">Read</button>` }] : [])
+  ];
+  const hidden = store.get("synako.hideMissing", 0) > Date.now();
+  const setup = [...(d.setup || []).map(x => ({ t: x, k: "Hosting setting" })), ...(hidden ? [] : (d.missing || []).map(x => ({ t: x, k: "Licence detail" })))];
+  return `<section class="ov-hero">
+      <div class="ov-intro">
+        <h2>${greeting()}, ${esc(String(st.name || "").split(" ")[0] || "team")}.</h2>
+        <p class="lead">${summary} ${onRoad.length ? `${onRoad.length} on the road with riders.` : ""}</p>
+        <div class="ov-actions">${next ? `<button class="btn btn-primary" type="button" data-openorder="${esc(next.id)}" data-otab="${next.status === "paid" ? "pack" : "review"}">Open next order · <span class="mono">${esc(next.id)}</span></button>` : `<button class="btn btn-primary" type="button" data-dtab="pack" data-dstatus="">Go to Pack &amp; deliver</button>`}<button class="btn btn-ghost" type="button" data-dtab="supply" data-dstatus="" data-sv="short">Review shortages${short ? ` (${short})` : ""}</button><button class="btn btn-ghost" type="button" data-cmdk>Search · Ctrl K</button></div>
+      </div>
+      <figure class="dk-flow">
+        <figcaption>How work reaches the dispensary and leaves it</figcaption>
+        <div class="flow-row">${tile("review", "", "Prescriptions", groups.review.length)}${tile("pack", "paid", "Paid orders", toPack.length)}${tile("supply", "", "Wholesaler orders", openPos === null ? "…" : openPos)}${tile("requests", "", "Messages", newMsgs)}</div>
+        <svg class="flow-lines" viewBox="0 0 100 40" preserveAspectRatio="none" aria-hidden="true"><path d="M12.5 0 C12.5 22 50 18 50 40M37.5 0 C37.5 22 50 18 50 40M62.5 0 C62.5 22 50 18 50 40M87.5 0 C87.5 22 50 18 50 40"/></svg>
+        <div class="flow-core"><span>${esc(B.name || "Synako")} Dispensary</span><b>${now + onRoad.length}</b><span>orders in progress</span></div>
+        <svg class="flow-lines" viewBox="0 0 100 40" preserveAspectRatio="none" aria-hidden="true"><path d="M50 0 C50 22 30 18 30 40M50 0 C50 22 70 18 70 40"/></svg>
+        <div class="flow-row flow-out">${tile("pack", "out_for_delivery", "With riders", onRoad.length)}${tile("done", "", "Delivered today", delivered)}</div>
+      </figure>
+    </section>
+    <ul class="dk-facts" aria-label="Today at a glance">
+      ${fact("review", "", "To review", groups.review.length, oldest(groups.review), groups.review.some(o => waitMins(o) > 60))}
+      ${fact("pack", "paid", "To pack", toPack.length, oldest(toPack), toPack.some(o => waitMins(o) > 60))}
+      ${fact("pack", "out_for_delivery", "On the road", onRoad.length, "with riders", false)}
+      ${fact("pay", "", "Awaiting payment", groups.pay.length, "reminder after 2 h", false)}
+      ${fact("supply", "", "Items short", short, short ? "low or out of stock" : "all in stock", short > 0)}
+      <li><button type="button" class="fact" data-dtab="done" data-dstatus=""><span class="fact-label">Takings today</span><b>${NGN(takings)}</b><span class="fact-note">${paidToday.length} paid · last 7 days ${weekBars(d.orders, day)}</span></button></li>
+    </ul>
+    <section class="ov-field" aria-labelledby="pipe-h">
+      <h2 id="pipe-h" class="h3">Order pipeline</h2>
+      <ol class="dk-steps">
+        ${step(1, "review", "", "Pharmacist review", groups.review.length, oldest(groups.review))}
+        ${step(2, "pay", "", "Customer pays", groups.pay.length, "awaiting payment")}
+        ${step(3, "pack", "paid", "Pack and check", toPack.length, oldest(toPack))}
+        ${step(4, "pack", "out_for_delivery", "Deliver with code", onRoad.length, `${delivered} delivered today`)}
+      </ol>
+    </section>
+    <section class="dk-dark" aria-label="Needs attention and setup">
+      <div><h2 class="h3">Needs attention</h2>${attention.length ? `<ul class="dk-rows">${attention.map(a => `<li><span>${a.html}</span>${a.btn}</li>`).join("")}</ul>` : `<p class="dk-quiet">All clear. Nothing is late, and no out-of-stock item has customers waiting.</p>`}</div>
+      <div><h2 class="h3">Setup</h2>${setup.length ? `<ul class="dk-rows">${setup.map(x => `<li><span><span class="dk-k">${x.k}</span> ${esc(x.t)}</span></li>`).join("")}</ul>${(d.missing || []).length ? `<button class="linkbtn" type="button" data-missing="${hidden ? "show" : "hide"}">${hidden ? "Show licence details to add" : "Hide licence details for 30 days"}</button>` : ""}` : `<p class="dk-quiet">Everything is set up.</p>`}</div>
+    </section>`;
+}
+/* Command palette: Ctrl/⌘+K jumps to any order, section, product or action */
+let cmdkList = [];
+function cmdkItems(q) {
+  const st = S.staff, d = st.list, nq = norm(q || "");
+  const sections = DESK_NAV.flatMap(([g, items]) => items.map(([k, l]) => ({ kind: "Section", label: l, sub: g, run: () => goDesk(k) })));
+  const actions = [
+    { kind: "Action", label: "Send payment reminders now", run: () => { const b = document.querySelector("[data-remind]"); if (b) sendReminders(b); } },
+    { kind: "Action", label: "Create a purchase order", sub: "Supply · Shortages", run: () => goDesk("supply", { sview: "short" }) },
+    { kind: "Action", label: "Add a wholesaler", sub: "Supply · Wholesalers", run: () => goDesk("supply", { sview: "suppliers", editSup: "new" }) },
+    { kind: "Action", label: "Download orders (CSV)", run: () => downloadCsv() },
+    { kind: "Action", label: "Send test email", run: () => { const b = document.querySelector("[data-testmail]"); if (b) testEmail(b); } },
+    { kind: "Action", label: soundOn() ? "Turn the new-order sound off" : "Turn the new-order sound on", run: () => { store.set("synako.sound", !soundOn()); render(); } },
+    { kind: "Action", label: "Keyboard shortcuts", run: () => { st.keys = true; render(); } },
+    { kind: "Page", label: "Rider page", sub: "/rider", run: () => go("/rider") },
+    { kind: "Page", label: "Back to the shop", sub: "/", run: () => go("/") }
+  ];
+  const orders = (d ? d.orders : []).map(o => ({ kind: "Order", label: `${o.id} · ${o.customer}`, sub: `${o.statusLabel}${o.city ? ` · ${o.city}` : ""}`, key: [o.id, o.customer, o.phone, o.city, o.items.join(" ")].join(" "), run: () => openOrder(o.id) }));
+  const products = nq.length >= 2 ? P.filter(p => norm([p.name, p.generic, p.brand].join(" ")).includes(nq)).slice(0, 6).map(p => ({ kind: "Stock", label: p.name, sub: p.out ? "Out of stock" : (d && (d.low || []).includes(p.id)) ? "Running low" : "In stock", run: () => goDesk("stock", { stockQ: p.name }) })) : [];
+  const all = nq ? sections.concat(actions, orders, products).filter(i => norm([i.label, i.sub, i.key].join(" ")).includes(nq) || i.kind === "Stock") : sections.concat(actions.slice(0, 3), orders.slice(0, 5));
+  return all.slice(0, 14);
+}
+function cmdkOptions() {
+  const st = S.staff; cmdkList = cmdkItems(st.cq);
+  if (st.ci >= cmdkList.length) st.ci = Math.max(0, cmdkList.length - 1);
+  return cmdkList.length ? cmdkList.map((it, i) => `<li role="option" id="cmdk-${i}" data-cmd="${i}" aria-selected="${i === (st.ci || 0)}"><span class="cmdk-kind">${it.kind}</span><span class="cmdk-label">${esc(it.label)}</span>${it.sub ? `<span class="cmdk-sub">${esc(it.sub)}</span>` : ""}</li>`).join("") : `<li class="cmdk-empty" role="presentation">No matches. Try an order number, a name, a product or an action.</li>`;
+}
+function cmdkView() {
+  const st = S.staff;
+  return `<div class="cmdk" data-cmdkclose><div class="cmdk-box" role="dialog" aria-modal="true" aria-label="Search the desk">
+    <div class="cmdk-input">${icon("search", "ic sm")}<input id="cmdk-q" role="combobox" aria-expanded="true" aria-controls="cmdk-list" aria-autocomplete="list" aria-activedescendant="cmdk-${st.ci || 0}" autocomplete="off" spellcheck="false" placeholder="Search orders, products and actions" value="${esc(st.cq || "")}"></div>
+    <ul id="cmdk-list" role="listbox" aria-label="Results">${cmdkOptions()}</ul>
+    <p class="cmdk-hint"><kbd>↑</kbd><kbd>↓</kbd> move · <kbd>Enter</kbd> open · <kbd>Esc</kbd> close</p></div></div>`;
+}
+function cmdkOpen() { const st = S.staff; st.cmdk = true; st.cq = ""; st.ci = 0; st.cmdkFrom = document.activeElement; render(); const q = $("#cmdk-q"); if (q) q.focus(); }
+function cmdkClose() { const st = S.staff; st.cmdk = false; render(); const f = st.cmdkFrom; if (f && document.contains(f)) f.focus(); else { const b = $(".cmdk-btn"); if (b) b.focus(); } }
+function cmdkRefresh() { const l = $("#cmdk-list"), q = $("#cmdk-q"); if (l) l.innerHTML = cmdkOptions(); if (q) q.setAttribute("aria-activedescendant", "cmdk-" + (S.staff.ci || 0)); const a = $("#cmdk-" + (S.staff.ci || 0)); if (a) a.scrollIntoView({ block: "nearest" }); }
+function cmdkRun(i) { const it = cmdkList[i]; if (!it) return; S.staff.cmdk = false; it.run(); if (S.staff.cmdk === false && S.mode === "staff") render(); }
+function openOrder(id) {
+  const o = (S.staff.list ? S.staff.list.orders : []).find(x => x.id === id); if (!o) return;
+  const g = deskGroups(S.staff.list), tab = Object.keys(g).find(k => g[k].some(x => x.id === id)) || "done";
+  S.staff.tab = tab; S.staff.status = ""; S.staff.q = ""; loadDeskOrder(id);
+  setTimeout(() => { const b = document.querySelector(`[data-sel="${id}"]`); if (b) b.scrollIntoView({ block: "nearest" }); }, 0);
+}
 /* ---------- Supply: shortages, purchase orders to wholesalers, suppliers ---------- */
 const shortCount = d => new Set([...(d.out || []), ...(d.low || []), ...P.filter(p => p.outInData).map(p => p.id)]).size;
 async function loadSupply(silent) {
   const st = S.staff; if (!st.token) return;
   try { st.supply = DEMO ? { shortages: [], suppliers: [], pos: [], overdue: [], email: false, sms: false } : await call("staff/orders?view=supply", { token: st.token }); st.supplyErr = ""; }
   catch (e) { if (e.status === 401) return signOut(); st.supplyErr = e.message; }
-  if (S.mode === "staff" && st.tab === "supply") render();
+  if (S.mode === "staff" && ["supply", "overview"].includes(st.tab)) render();
 }
 async function supplyPost(body, btn) {
   if (btn) btn.disabled = true;
@@ -1494,6 +1640,7 @@ function render(scroll) {
   clearInterval(deskTimer); clearInterval(trackTimer); clearInterval(riderTimer);
   let title;
   if (staff) {
+    deskFonts();
     // The desk and rider page refresh themselves; keep whatever staff were typing (notes, codes, searches) and where the cursor was
     const view = $("#staff-view"), a = document.activeElement;
     const typed = render.fresh ? [] : [...view.querySelectorAll("input[id], textarea[id], select[id]")].map(el => [el.id, el.type === "checkbox" ? el.checked : el.value]);
@@ -1644,22 +1791,41 @@ let sgTimer;
 document.addEventListener("input", e => {
   if (e.target.id === "q") { clearTimeout(sgTimer); sgTimer = setTimeout(openSuggest, 60); }
   if (e.target.id === "em") showEmailFix();
+  if (e.target.id === "cmdk-q") { S.staff.cq = e.target.value; S.staff.ci = 0; cmdkRefresh(); }
   if (e.target.id === "deskq") { S.staff.q = e.target.value; refreshQueue(); }
   if (e.target.id === "stockq") { S.staff.stockQ = e.target.value; const l = $("#stocklist"); if (l) l.innerHTML = stockRows(); }
 });
 document.addEventListener("focusin", e => { if (e.target.id === "q") openSuggest(); });
+document.addEventListener("click", e => {
+  const opt = e.target.closest && e.target.closest("[data-cmd]");
+  if (opt) { cmdkRun(Number(opt.dataset.cmd)); return; }
+  if (e.target.matches && e.target.matches("[data-cmdkclose]")) cmdkClose();
+});
+document.addEventListener("mousemove", e => {
+  const opt = e.target.closest && e.target.closest("[data-cmd]");
+  if (opt && S.staff.cmdk && Number(opt.dataset.cmd) !== S.staff.ci) { S.staff.ci = Number(opt.dataset.cmd); document.querySelectorAll("#cmdk-list [role=option]").forEach((o, i) => o.setAttribute("aria-selected", String(i === S.staff.ci))); const q = $("#cmdk-q"); if (q) q.setAttribute("aria-activedescendant", "cmdk-" + S.staff.ci); }
+});
 /* Desk keyboard shortcuts, for the counter computer */
 document.addEventListener("keydown", e => {
-  if (S.mode !== "staff" || !S.staff.token || !S.staff.list || e.ctrlKey || e.metaKey || e.altKey) return;
+  if (S.mode !== "staff" || !S.staff.token || !S.staff.list) return;
+  const st = S.staff;
+  if ((e.ctrlKey || e.metaKey) && (e.key === "k" || e.key === "K")) { e.preventDefault(); if (st.cmdk) cmdkClose(); else cmdkOpen(); return; }
+  if (st.cmdk) { // the palette owns the keyboard while it's open
+    if (e.key === "Escape") { e.preventDefault(); cmdkClose(); }
+    else if (e.key === "ArrowDown" || e.key === "ArrowUp") { e.preventDefault(); const n = cmdkList.length; if (n) { st.ci = ((st.ci || 0) + (e.key === "ArrowDown" ? 1 : -1) + n) % n; cmdkRefresh(); } }
+    else if (e.key === "Enter") { e.preventDefault(); cmdkRun(st.ci || 0); }
+    else if (e.key === "Tab") { e.preventDefault(); const q = $("#cmdk-q"); if (q) q.focus(); }
+    return;
+  }
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
   const typing = /^(TEXTAREA|SELECT)$/.test(e.target.tagName) || (e.target.tagName === "INPUT" && !/^(checkbox|radio|button|submit)$/.test(e.target.type));
   if (e.key === "Escape") { if (S.staff.keys) S.staff.keys = false; else if (typing) { e.target.blur(); return; } else { S.staff.sel = null; S.staff.detail = null; } render(); return; }
   if (typing) return;
-  const tabs = ["review", "pack", "pay", "done", "requests", "stock", "supply"];
-  if (/^[1-7]$/.test(e.key)) { S.staff.tab = tabs[Number(e.key) - 1]; S.staff.status = ""; S.staff.sel = null; S.staff.detail = null; render(); if (S.staff.tab === "supply") loadSupply(); e.preventDefault(); return; }
+  if (/^[1-8]$/.test(e.key)) { goDesk(DESK_TABS[Number(e.key) - 1]); e.preventDefault(); return; }
   if (e.key === "/") { const q = $("#deskq") || $("#stockq"); if (q) { q.focus(); e.preventDefault(); } return; }
   if (e.key === "?") { S.staff.keys = !S.staff.keys; render(); return; }
   if (e.key === "r" || e.key === "R") { loadDesk(); return; }
-  if (["j", "k", "ArrowDown", "ArrowUp"].includes(e.key) && !["requests", "stock", "supply"].includes(S.staff.tab)) {
+  if (["j", "k", "ArrowDown", "ArrowUp"].includes(e.key) && !["overview", "requests", "stock", "supply"].includes(S.staff.tab)) {
     const shown = queueFilter(deskGroup()); if (!shown.length) return;
     const i = shown.findIndex(o => o.id === S.staff.sel), step = e.key === "j" || e.key === "ArrowDown" ? 1 : -1;
     const next = shown[i < 0 ? 0 : Math.min(shown.length - 1, Math.max(0, i + step))];
@@ -1816,7 +1982,10 @@ document.addEventListener("click", e => {
   if ("keys" in d) { S.staff.keys = !S.staff.keys; render(); return; }
   if ("deskback" in d) { S.staff.sel = null; S.staff.detail = null; render(); return; }
   if (d.dtab && "dstatus" in d) { S.staff.tab = d.dtab; S.staff.status = d.dstatus; S.staff.sel = null; S.staff.detail = null; render(); loadDesk(true); return; }
-  if (d.dtab === "supply") { S.staff.tab = "supply"; render(); loadSupply(); return; }
+  if ("cmdk" in d) { cmdkOpen(); return; }
+  if (d.openorder) { openOrder(d.openorder); return; }
+  if (d.dtab && "dstatus" in d && !d.dstatus) { goDesk(d.dtab, d.sv ? { sview: d.sv } : {}); return; }
+  if (d.dtab && !("dstatus" in d)) { goDesk(d.dtab); return; }
   if (d.dtab) { S.staff.tab = d.dtab; S.staff.status = ""; S.staff.sel = null; S.staff.detail = null; render(); loadDesk(true); return; }
   if (d.sel) { loadDeskOrder(d.sel); return; }
   if (d.act) { deskAction(d.act); return; }

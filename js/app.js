@@ -1032,7 +1032,8 @@ function vStaff() {
   const warn = { review: groups.review.some(o => waitMins(o) > 60), pack: d.orders.some(o => o.status === "paid" && waitMins(o) > 60), supply: count.supply > 0, requests: newMsgs > 0 };
   let n = 0;
   const navHtml = DESK_NAV.map(([label, items]) => `<p class="dk-nav-label">${label}</p>${items.map(([k, l, ic]) => { n++; return `<button type="button" class="dk-link" data-dtab="${k}"${tab === k ? ' aria-current="page"' : ""}>${icon(ic, "ic sm")}<span>${l}</span>${count[k] ? `<span class="count${warn[k] ? " warn" : ""}">${count[k]}${k === "stock" ? " out" : ""}</span>` : ""}<kbd aria-hidden="true">${n}</kbd></button>`; }).join("")}`).join("");
-  const [group, title, sub] = DESK_TITLES[tab] || DESK_TITLES.overview;
+  let [group, title, sub] = DESK_TITLES[tab] || DESK_TITLES.overview;
+  if (tab === "overview") { group = "Main dashboard"; title = `${greeting()}, ${esc(String(st.name || "").split(" ")[0] || "team")}.`; sub = overviewSummary(d, groups); }
   const body = tab === "overview" ? overviewPanel(d, groups, takings, paidToday, day)
     : tab === "supply" ? supplyPanel() : tab === "stock" ? stockPanel() : tab === "requests" ? requestsPanel(d)
     : `<div class="desk${st.sel ? " has-sel" : ""}">
@@ -1052,7 +1053,7 @@ function vStaff() {
       <p class="dk-sync" role="status"><span class="dot" aria-hidden="true"></span>Live · ${st.updated ? `updated ${st.updated.toLocaleTimeString("en-GB")}` : "connecting"}</p>
     </nav>
     <div class="dk-main">
-      <header class="dk-head"><p class="dk-eyebrow">${group}</p><h1 tabindex="-1" id="dk-title">${title}</h1>${sub ? `<p>${sub}</p>` : ""}</header>
+      <header class="dk-head${tab === "overview" ? " is-dash" : ""}"><div><p class="dk-eyebrow">${group}</p><h1 tabindex="-1" id="dk-title">${title}</h1>${sub ? `<p>${sub}</p>` : ""}</div>${tab === "overview" ? overviewActions(d, groups) : ""}</header>
       ${st.err ? alertBox(st.err) : ""}
       ${st.mail ? `<div class="notice ${/NOT sent/.test(st.mail) ? "bad" : "info"} small" role="status"><span>${esc(st.mail)}</span></div>` : ""}
       ${body}
@@ -1107,7 +1108,7 @@ const DESK_NAV = [
 ];
 const DESK_TABS = DESK_NAV.flatMap(([, items]) => items.map(i => i[0]));
 const DESK_TITLES = {
-  overview: ["Operations", "Overview", ""],
+  overview: ["Main dashboard", "Overview", ""],
   review: ["Operations", "To review", "Prescriptions waiting for a pharmacist's decision, oldest first."],
   pack: ["Operations", "Pack & deliver", "Paid orders to pack, and orders out with riders. 30-minute deliveries come first."],
   pay: ["Operations", "Awaiting payment", "Placed or approved orders the customer hasn't paid yet. One reminder goes out after 2 hours."],
@@ -1122,52 +1123,56 @@ function goDesk(tab, extra) {
   const h = $("#dk-title"); if (h) h.focus({ preventScroll: true });
 }
 function greeting() { const h = Number(new Date().toLocaleString("en-GB", { hour: "numeric", hour12: false, timeZone: CFG.site.timezone })); return h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening"; }
+/* The dashboard's opening line: what needs the dispensary now */
+function overviewSummary(d, groups) {
+  const toPack = d.orders.filter(o => o.status === "paid").length, onRoad = d.orders.filter(o => o.status === "out_for_delivery").length, now = groups.review.length + toPack;
+  const parts = [groups.review.length && `${groups.review.length} prescription${groups.review.length === 1 ? "" : "s"} to review`, toPack && `${toPack} to pack`].filter(Boolean);
+  return (now ? `${now} order${now === 1 ? " needs" : "s need"} you now: ${parts.join(" and ")}.` : "Nothing is waiting on the dispensary right now.") + (onRoad ? ` ${onRoad} on the road with riders.` : "");
+}
+function overviewActions(d, groups) {
+  const waiting = groups.review.concat(d.orders.filter(o => o.status === "paid")).sort((a, b) => waitFrom(a) - waitFrom(b)), next = waiting[0], short = shortCount(d);
+  return `<div class="dk-head-actions">${next ? `<button class="btn btn-primary" type="button" data-openorder="${esc(next.id)}" data-otab="${next.status === "paid" ? "pack" : "review"}">Open next order · <span class="mono">${esc(next.id)}</span></button>` : `<button class="btn btn-primary" type="button" data-dtab="pack" data-dstatus="">Go to Pack &amp; deliver</button>`}<button class="btn btn-ghost" type="button" data-dtab="supply" data-dstatus="" data-sv="short">Review shortages${short ? ` (${short})` : ""}</button></div>`;
+}
 function overviewPanel(d, groups, takings, paidToday, day) {
   const st = S.staff, sp = st.supply, today = day(Date.now());
   const toPack = d.orders.filter(o => o.status === "paid"), onRoad = d.orders.filter(o => o.status === "out_for_delivery");
   const delivered = d.orders.filter(o => o.status === "delivered" && day(o.createdAt) === today).length;
   const newMsgs = d.requests.filter(r => r.status === "new").length, short = shortCount(d);
   const openPos = sp ? sp.pos.filter(p => ["draft", "sent", "confirmed"].includes(p.status)).length : null;
-  const waiting = groups.review.concat(toPack).sort((a, b) => waitFrom(a) - waitFrom(b));
-  const next = waiting[0];
   const oldest = l => l.length ? `oldest ${waitText(Math.min(...l.map(waitFrom)))}` : "nothing waiting";
   const now = groups.review.length + toPack.length;
-  const summary = now ? `${now} order${now === 1 ? " needs" : "s need"} you now: ${[groups.review.length && `${groups.review.length} prescription${groups.review.length === 1 ? "" : "s"} to review`, toPack.length && `${toPack.length} to pack`].filter(Boolean).join(" and ")}.` : "Nothing is waiting on the dispensary right now.";
   const fact = (tab, status, label, value, note, hot) => `<li><button type="button" class="fact${hot ? " hot" : ""}" data-dtab="${tab}" data-dstatus="${status}"><span class="fact-label">${label}</span><b>${value}</b><span class="fact-note">${note}</span></button></li>`;
   const tile = (tab, status, label, value) => `<button type="button" class="flow-tile" data-dtab="${tab}" data-dstatus="${status}"><b>${value}</b><span>${label}</span></button>`;
-  const step = (i, tab, status, label, n, note) => `<li><button type="button" class="step" data-dtab="${tab}" data-dstatus="${status}"><span class="step-n" aria-hidden="true">${i}</span><span class="step-label">${label}</span><b>${n}</b><span class="fact-note">${note}</span></button></li>`;
-  return `<section class="ov-hero">
-      <div class="ov-intro">
-        <h2>${greeting()}, ${esc(String(st.name || "").split(" ")[0] || "team")}.</h2>
-        <p class="lead">${summary} ${onRoad.length ? `${onRoad.length} on the road with riders.` : ""}</p>
-        <div class="ov-actions">${next ? `<button class="btn btn-primary" type="button" data-openorder="${esc(next.id)}" data-otab="${next.status === "paid" ? "pack" : "review"}">Open next order · <span class="mono">${esc(next.id)}</span></button>` : `<button class="btn btn-primary" type="button" data-dtab="pack" data-dstatus="">Go to Pack &amp; deliver</button>`}<button class="btn btn-ghost" type="button" data-dtab="supply" data-dstatus="" data-sv="short">Review shortages${short ? ` (${short})` : ""}</button><button class="btn btn-ghost" type="button" data-cmdk>Search · Ctrl K</button></div>
-      </div>
-      <figure class="dk-flow">
-        <figcaption>How work reaches the dispensary and leaves it</figcaption>
+  const step = (i, tab, status, label, n, note, hot) => `<li><button type="button" class="step${hot ? " hot" : ""}${n ? " live" : ""}" data-dtab="${tab}" data-dstatus="${status}"><span class="step-n" aria-hidden="true">${i}</span><span class="step-label">${label}</span><b>${n}</b><span class="fact-note">${note}</span></button></li>`;
+  return `<section class="ov-field" aria-labelledby="pipe-h">
+      <div class="ov-field-head"><h2 id="pipe-h" class="h3">Order progress</h2><p class="small">Every order moves left to right. Select a stage to open it.</p></div>
+      <ol class="dk-steps">
+        ${step(1, "review", "", "Pharmacist review", groups.review.length, oldest(groups.review), groups.review.some(o => waitMins(o) > 60))}
+        ${step(2, "pay", "", "Customer pays", groups.pay.length, "awaiting payment", false)}
+        ${step(3, "pack", "paid", "Pack and check", toPack.length, oldest(toPack), toPack.some(o => waitMins(o) > 60))}
+        ${step(4, "pack", "out_for_delivery", "Deliver with code", onRoad.length, `${delivered} delivered today`, false)}
+      </ol>
+    </section>
+    <div class="ov-grid">
+      <section aria-labelledby="facts-h"><h2 id="facts-h" class="h3 ov-sub">Today at a glance</h2>
+        <ul class="dk-facts">
+          ${fact("review", "", "To review", groups.review.length, oldest(groups.review), groups.review.some(o => waitMins(o) > 60))}
+          ${fact("pack", "paid", "To pack", toPack.length, oldest(toPack), toPack.some(o => waitMins(o) > 60))}
+          ${fact("pack", "out_for_delivery", "On the road", onRoad.length, "with riders", false)}
+          ${fact("pay", "", "Awaiting payment", groups.pay.length, "reminder after 2 h", false)}
+          ${fact("supply", "", "Items short", short, short ? "low or out of stock" : "all in stock", short > 0)}
+          <li><button type="button" class="fact" data-dtab="done" data-dstatus=""><span class="fact-label">Takings today</span><b>${NGN(takings)}</b><span class="fact-note">${paidToday.length} paid · 7 days ${weekBars(d.orders, day)}</span></button></li>
+        </ul>
+      </section>
+      <figure class="dk-flow" aria-labelledby="flow-h">
+        <h2 id="flow-h" class="h3 ov-sub">How work flows</h2>
         <div class="flow-row">${tile("review", "", "Prescriptions", groups.review.length)}${tile("pack", "paid", "Paid orders", toPack.length)}${tile("supply", "", "Wholesaler orders", openPos === null ? "…" : openPos)}${tile("requests", "", "Messages", newMsgs)}</div>
         <svg class="flow-lines" viewBox="0 0 100 40" preserveAspectRatio="none" aria-hidden="true"><path d="M12.5 0 C12.5 22 50 18 50 40M37.5 0 C37.5 22 50 18 50 40M62.5 0 C62.5 22 50 18 50 40M87.5 0 C87.5 22 50 18 50 40"/></svg>
-        <div class="flow-core"><span>${esc(B.name || "Synako")} Dispensary</span><b>${now + onRoad.length}</b><span>orders in progress</span></div>
+        <div class="flow-core"><span>Dispensary</span><b>${now + onRoad.length}</b><span>orders in progress</span></div>
         <svg class="flow-lines" viewBox="0 0 100 40" preserveAspectRatio="none" aria-hidden="true"><path d="M50 0 C50 22 30 18 30 40M50 0 C50 22 70 18 70 40"/></svg>
         <div class="flow-row flow-out">${tile("pack", "out_for_delivery", "With riders", onRoad.length)}${tile("done", "", "Delivered today", delivered)}</div>
       </figure>
-    </section>
-    <ul class="dk-facts" aria-label="Today at a glance">
-      ${fact("review", "", "To review", groups.review.length, oldest(groups.review), groups.review.some(o => waitMins(o) > 60))}
-      ${fact("pack", "paid", "To pack", toPack.length, oldest(toPack), toPack.some(o => waitMins(o) > 60))}
-      ${fact("pack", "out_for_delivery", "On the road", onRoad.length, "with riders", false)}
-      ${fact("pay", "", "Awaiting payment", groups.pay.length, "reminder after 2 h", false)}
-      ${fact("supply", "", "Items short", short, short ? "low or out of stock" : "all in stock", short > 0)}
-      <li><button type="button" class="fact" data-dtab="done" data-dstatus=""><span class="fact-label">Takings today</span><b>${NGN(takings)}</b><span class="fact-note">${paidToday.length} paid · last 7 days ${weekBars(d.orders, day)}</span></button></li>
-    </ul>
-    <section class="ov-field" aria-labelledby="pipe-h">
-      <h2 id="pipe-h" class="h3">Order pipeline</h2>
-      <ol class="dk-steps">
-        ${step(1, "review", "", "Pharmacist review", groups.review.length, oldest(groups.review))}
-        ${step(2, "pay", "", "Customer pays", groups.pay.length, "awaiting payment")}
-        ${step(3, "pack", "paid", "Pack and check", toPack.length, oldest(toPack))}
-        ${step(4, "pack", "out_for_delivery", "Deliver with code", onRoad.length, `${delivered} delivered today`)}
-      </ol>
-    </section>`;
+    </div>`;
 }
 /* Command palette: Ctrl/⌘+K jumps to any order, section, product or action */
 let cmdkList = [];
@@ -1638,8 +1643,8 @@ function render(scroll) {
     view.innerHTML = rider ? vRider() : vStaff(); title = rider ? "Rider deliveries" : "Pharmacist Desk";
     typed.forEach(([id, v]) => { const el = document.getElementById(id); if (el && view.contains(el)) { if (el.type === "checkbox") el.checked = v; else if (el.type !== "password" || v) el.value = v; } });
     if (keep) { const el = document.getElementById(keep[0]); if (el) { el.focus(); try { el.setSelectionRange(keep[1], keep[2]); } catch (e) { /* not a text box */ } } }
-    $(".staff-title").textContent = rider ? "Deliveries" : "Pharmacist Desk";
-    $(".staff-head .eyebrow").textContent = rider ? "Synako riders" : "Synako Dispensary";
+    $(".staff-title").textContent = rider ? "Rider deliveries" : "Pharmacist Desk";
+    $(".staff-head .eyebrow").textContent = rider ? "Synako Pharmaceutical LTD · Riders" : "Synako Pharmaceutical LTD";
     if (rider) $("#staff-stats").innerHTML = "";
     $("#staff-signout").hidden = !(rider ? S.rider.token : S.staff.token);
     if (!rider && S.staff.token) deskTimer = setInterval(() => loadDesk(true), 10000);

@@ -1283,3 +1283,10 @@ kbd { display: inline-block; min-width: 1.6em; padding: .05rem .35rem; border: 1
 .ov-flowtop .dk-flow figcaption { display: none; }
 .ov-grid { grid-template-columns: minmax(0, 1fr); }
 @media (min-width: 1051px) { .ov-grid .dk-facts { grid-template-columns: repeat(6, minmax(0, 1fr)); } }
+/* Delivered: a quiet finished state rather than a big green highlight */
+.tag.done { display: inline-flex; align-items: center; gap: 6px; background: var(--surface-2); color: var(--ink-2); }
+.tag.done::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--ok); }
+#shell-staff .tag { align-self: flex-start; }
+#shell-staff .q.delivered { border-left-color: var(--dp-color-rule); }
+#shell-staff .steps.complete li.done::before { background: #cfe3d6; }
+#shell-staff .steps.complete li.done .dot { border-color: #b7d8c2; background: var(--dp-color-panel); color: var(--ok); }

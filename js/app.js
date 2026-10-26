@@ -776,7 +776,7 @@ function stageOf(o) {
   return m[o.status] != null ? m[o.status] : 1;
 }
 const statusTag = o => {
-  const cls = { delivered: "ok", paid: "ok", rejected: "bad", cancelled: "bad", info_needed: "warn", pending_review: "warn", awaiting_payment: "warn", approved_awaiting_payment: "warn" }[o.status] || "otc";
+  const cls = { delivered: "done", paid: "ok", rejected: "bad", cancelled: "bad", info_needed: "warn", pending_review: "warn", awaiting_payment: "warn", approved_awaiting_payment: "warn" }[o.status] || "otc";
   return `<span class="tag ${cls}">${esc(o.statusLabel || o.status)}</span>`;
 };
 const phoneFor = id => (S.mine.find(m => m.id === id) || {}).phone || "";
@@ -1093,7 +1093,7 @@ function progressSteps(o) {
     [["Paid", at(/^Payment received/)], ["Packed", at(/^Packed/)], ["On the road", at(/^Out for delivery/)], ["Delivered", at(/^Delivered/)]]);
   if (["rejected", "cancelled"].includes(o.status)) return `<p class="small"><span class="tag bad">${esc(o.statusLabel || o.status)}</span></p>`;
   const cur = steps.findIndex(x => !x[1]);
-  return `<ol class="steps">${steps.map(([l, t], i) => `<li class="${t ? "done" : i === cur ? "now" : ""}"><span class="dot" aria-hidden="true">${t ? "✓" : i + 1}</span><b>${l}</b><span class="small muted">${t ? stamp(t) : i === cur ? "Next" : ""}</span></li>`).join("")}</ol>`;
+  return `<ol class="steps${cur < 0 ? " complete" : ""}">${steps.map(([l, t], i) => `<li class="${t ? "done" : i === cur ? "now" : ""}"><span class="dot" aria-hidden="true">${t ? "✓" : i + 1}</span><b>${l}</b><span class="small muted">${t ? stamp(t) : i === cur ? "Next" : ""}</span></li>`).join("")}</ol>`;
 }
 /* ---------- Desk layout: sections, overview and the command palette ---------- */
 /* The desk's own typefaces (Host Grotesk for headings, Instrument Sans for text), loaded only for staff screens */

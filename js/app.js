@@ -1136,12 +1136,6 @@ function overviewPanel(d, groups, takings, paidToday, day) {
   const fact = (tab, status, label, value, note, hot) => `<li><button type="button" class="fact${hot ? " hot" : ""}" data-dtab="${tab}" data-dstatus="${status}"><span class="fact-label">${label}</span><b>${value}</b><span class="fact-note">${note}</span></button></li>`;
   const tile = (tab, status, label, value) => `<button type="button" class="flow-tile" data-dtab="${tab}" data-dstatus="${status}"><b>${value}</b><span>${label}</span></button>`;
   const step = (i, tab, status, label, n, note) => `<li><button type="button" class="step" data-dtab="${tab}" data-dstatus="${status}"><span class="step-n" aria-hidden="true">${i}</span><span class="step-label">${label}</span><b>${n}</b><span class="fact-note">${note}</span></button></li>`;
-  const attention = [
-    ...waiting.filter(o => waitMins(o) > 60).slice(0, 6).map(o => ({ html: `<b class="mono">${esc(o.id)}</b> ${o.status === "paid" ? "paid and not packed" : "prescription not reviewed"} for ${waitText(waitFrom(o))}`, btn: `<button type="button" class="linkbtn" data-openorder="${esc(o.id)}" data-otab="${o.status === "paid" ? "pack" : "review"}">Open</button>` })),
-    ...(sp ? sp.pos.filter(p => sp.overdue.includes(p.id)).map(p => ({ html: `<b class="mono">${esc(p.id)}</b> from ${esc(p.supplierName)} is late or unconfirmed`, btn: `<button type="button" class="linkbtn" data-dtab="supply" data-dstatus="" data-sv="pos">View</button>` })) : []),
-    ...(sp ? sp.shortages.filter(x => x.state === "out" && x.waiting && !x.onOrder.length).slice(0, 5).map(x => ({ html: `<b>${esc(x.name)}</b> is out of stock with ${x.waiting} customer${x.waiting === 1 ? "" : "s"} waiting`, btn: `<button type="button" class="linkbtn" data-dtab="supply" data-dstatus="" data-sv="short">Order</button>` })) : []),
-    ...(newMsgs ? [{ html: `${newMsgs} new message${newMsgs === 1 ? "" : "s"} or booking${newMsgs === 1 ? "" : "s"}`, btn: `<button type="button" class="linkbtn" data-dtab="requests" data-dstatus="">Read</button>` }] : [])
-  ];
   return `<section class="ov-hero">
       <div class="ov-intro">
         <h2>${greeting()}, ${esc(String(st.name || "").split(" ")[0] || "team")}.</h2>
@@ -1173,9 +1167,6 @@ function overviewPanel(d, groups, takings, paidToday, day) {
         ${step(3, "pack", "paid", "Pack and check", toPack.length, oldest(toPack))}
         ${step(4, "pack", "out_for_delivery", "Deliver with code", onRoad.length, `${delivered} delivered today`)}
       </ol>
-    </section>
-    <section class="dk-dark" aria-label="Needs attention">
-      <div><h2 class="h3">Needs attention</h2>${attention.length ? `<ul class="dk-rows">${attention.map(a => `<li><span>${a.html}</span>${a.btn}</li>`).join("")}</ul>` : `<p class="dk-quiet">All clear. Nothing is late, and no out-of-stock item has customers waiting.</p>`}</div>
     </section>`;
 }
 /* Command palette: Ctrl/⌘+K jumps to any order, section, product or action */

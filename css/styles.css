@@ -1632,3 +1632,9 @@ body:has(#shell-customer:not([hidden])) {
   body:has(#shell-customer:not([hidden])) { background: #fff; }
   #shell-customer .bfield { background: none; color: #000; }
 }
+
+/* Prices: bulk / wholesale offers in green, discounts in red (16.1 follow-up) */
+#shell-customer { --sale-green: #1e6b3a; --discount-red: #b3261e; }
+#shell-customer .pcard-bulk, #shell-customer .bulk-txt { color: var(--sale-green); }
+#shell-customer .pcard-bulk b, #shell-customer .bulk-txt b { color: inherit; }
+#shell-customer .was, #shell-customer .unit .save, #shell-customer .r.disc, #shell-customer .r.disc .num, #shell-customer .summary .r.ok.disc .num { color: var(--discount-red); }

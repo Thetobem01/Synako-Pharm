@@ -577,7 +577,7 @@ function vProduct() {
       <div>${tag(p)}</div>
       <h1>${esc(p.name)}</h1>
       <div class="brand">${esc(p.brand)} · <span class="muted" style="font-weight:400">${esc(p.pack)}</span></div>
-      <div>${p.was ? `<span class="muted num" style="text-decoration:line-through;margin-right:.5rem"><span class="sr">Was </span>${NGN(p.was)}</span>` : ""}<span class="price num">${NGN(p.price)}</span>${isBulk(p) ? ` <span class="muted small">· wholesale from ${NGN(Math.round(eachFrom(p)))} each</span>` : ""}</div>
+      <div>${p.was ? `<span class="was num" style="text-decoration:line-through;margin-right:.5rem"><span class="sr">Was </span>${NGN(p.was)}</span>` : ""}<span class="price num">${NGN(p.price)}</span>${isBulk(p) ? ` <span class="bulk-txt small">· wholesale from ${NGN(Math.round(eachFrom(p)))} each</span>` : ""}</div>
       ${rx ? `<div class="notice rx"><b>Prescription required</b><span>Add it to your basket, then upload your prescription at checkout. Our pharmacist checks it before you pay, and we only supply it if the prescription is valid.</span></div>`
         : p.age ? `<div class="notice rx"><b>${p.age}+ only</b><span>We confirm your date of birth at checkout, and our rider checks photo ID on delivery. Please drink responsibly.</span></div>`
         : med ? `<div class="notice info"><b>Over-the-counter</b><span>Our pharmacist may contact you before sending it if they need to check it's right for you.</span></div>` : ""}
@@ -666,7 +666,7 @@ function summary(cta) {
     ${q.lines.map(l => `<div class="r small"><span>${l.qty} × ${esc(l.name)}</span><span class="num">${NGN(l.total)}</span></div>`).join("")}
     ${S.rxRequest ? `<div class="r small"><span>Prescription items</span><span class="muted">Priced by pharmacist</span></div>` : ""}
     <div class="r"><span>Subtotal</span><span class="num">${NGN(q.subtotal)}</span></div>
-    ${q.discount ? `<div class="r ok"><span>Discount <span class="muted small">(${esc(q.promo.code)})</span></span><span class="num">−${NGN(q.discount)}</span></div>` : ""}
+    ${q.discount ? `<div class="r ok disc"><span>Discount <span class="muted small">(${esc(q.promo.code)})</span></span><span class="num">−${NGN(q.discount)}</span></div>` : ""}
     <div class="r"><span>Delivery <span class="muted small">(${esc(q.speedLabel)})</span></span><span class="num">${q.deliveryFee === 0 && (q.lines.length || S.rxRequest) ? "Free" : NGN(q.deliveryFee)}</span></div>
     ${q.freeOver && !q.freeDelivery && q.subtotal < q.freeOver && q.speed !== "states" ? `<p class="small muted">Add ${NGN(q.freeOver - q.subtotal)} more for free delivery${esc(sameDayWhere)}.</p>` : ""}
     <div class="r total"><span>Total</span><span class="num">${NGN(q.total)}${S.rxRequest ? "+" : ""}</span></div>
@@ -832,7 +832,7 @@ function vTrack() {
         <ol class="timeline">${st.map((s, i) => { const c = i < stage ? "done" : (i === stage && !bad && !final ? "now" : "next"); return `<li class="${c}"><span class="dot ${c}" aria-hidden="true">${i < stage ? "✓" : i + 1}</span><div><b>${s}</b>${c === "now" ? `<div class="small muted">In progress</div>` : ""}<span class="sr">${c === "done" ? " (done)" : c === "now" ? " (current step)" : ""}</span></div></li>`; }).join("")}</ol>
         <details class="facts"><summary>Order details</summary>
           <div class="small" style="display:grid;gap:.35rem;margin-top:.6rem">${o.items.map(i => `<div class="r"><span>${i.qty} × ${esc(i.name)}</span><span class="num">${NGN(i.total)}</span></div>`).join("")}
-          ${o.discount ? `<div class="r"><span>Discount${o.promo ? ` (${esc(o.promo.code)})` : ""}</span><span class="num">−${NGN(o.discount)}</span></div>` : ""}
+          ${o.discount ? `<div class="r disc"><span>Discount${o.promo ? ` (${esc(o.promo.code)})` : ""}</span><span class="num">−${NGN(o.discount)}</span></div>` : ""}
           <div class="r"><span>Delivery · ${esc(o.delivery.label)}</span><span class="num">${o.deliveryFee ? NGN(o.deliveryFee) : "Free"}</span></div><div class="r"><b>Total</b><b class="num">${NGN(o.total)}${o.priced ? "" : "+"}</b></div></div></details>
         <div class="order-actions"><button class="btn ${o.canPay ? "btn-secondary" : "btn-primary"}" type="button" data-receipt>${icon("download", "ic sm")} ${PAID(o.status) ? "Download receipt (PDF)" : "Download order summary (PDF)"}</button>${o.items.some(i => prod(i.id)) ? `<button class="btn btn-secondary" type="button" data-reorder>${icon("box", "ic sm")} Order these items again</button>` : ""}</div>
         <div><h3 style="margin-bottom:.5rem">Order record</h3><div class="audit">${o.history.slice().reverse().map(l => `<div><span>${stamp(l.t)}</span><b style="font-weight:500">${esc(l.m)}</b></div>`).join("")}</div></div>

@@ -1268,69 +1268,152 @@ async function poAction(act, extra, btn) {
 function supplyPanel() {
   const st = S.staff, sp = st.supply, view = st.sview || "short";
   if (!sp) return `<section class="panel supply"><p class="muted">${st.supplyErr ? esc(st.supplyErr) : "Loading supply…"}</p></section>`;
-  const toOrder = sp.shortages.filter(x => !x.onOrder.length).length, open = sp.pos.filter(p => ["draft", "sent", "confirmed"].includes(p.status));
-  const nav = [["short", `Shortages <span class="count${toOrder ? " warn" : ""}">${toOrder} to order</span>`], ["pos", `Purchase orders <span class="count${sp.overdue.length ? " warn" : ""}">${open.length} open${sp.overdue.length ? ` · ${sp.overdue.length} late` : ""}</span>`], ["suppliers", `Wholesalers <span class="count">${sp.suppliers.length}</span>`]];
-  return `<section class="supply">
-    <div class="seg" role="tablist" aria-label="Supply">${nav.map(([k, l]) => `<button type="button" role="tab" data-sview="${k}" aria-selected="${view === k}">${l}</button>`).join("")}</div>
-    ${view === "short" ? shortagesView(sp) : view === "pos" ? posView(sp) : suppliersView(sp)}
+  const toOrder = sp.shortages.filter(x => !x.onOrder.length), open = sp.pos.filter(p => ["draft", "sent", "confirmed"].includes(p.status));
+  const out = sp.shortages.filter(x => x.state === "out").length, low = sp.shortages.length - out;
+  const waiting = sp.shortages.reduce((t, x) => t + x.waiting, 0), late = sp.overdue.length;
+  const fact = (sv, f, label, value, note, hot) => `<li><button type="button" class="fact${hot ? " hot" : ""}" data-sview="${sv}"${f ? ` data-shf="${f}"` : ""}><span class="fact-label">${label}</span><b>${value}</b><span class="fact-note">${note}</span></button></li>`;
+  const tile = (sv, label, value, extra) => `<button type="button" class="flow-tile" data-sview="${sv}"${extra || ""}><b>${value}</b><span>${label}</span></button>`;
+  const busiest = sp.suppliers.map(w => ({ w, n: open.filter(p => p.supplier === w.id).length })).sort((a, b) => b.n - a.n || a.w.name.localeCompare(b.w.name)).slice(0, 4);
+  const nav = [["short", "Shortages", toOrder.length, toOrder.length > 0], ["pos", "Purchase orders", open.length, late > 0], ["suppliers", "Wholesalers", sp.suppliers.length, false]];
+  const step = (i, f, label, n, note, hot) => `<li><button type="button" class="step${hot ? " hot" : ""}${n ? " live" : ""}" data-sview="pos" data-pof="${f}"><span class="step-n" aria-hidden="true">${i}</span><span class="step-label">${label}</span><b>${n}</b><span class="fact-note">${note}</span></button></li>`;
+  const by = s => sp.pos.filter(p => p.status === s).length, recent = sp.pos.filter(p => p.status === "received" && Date.now() - Date.parse(p.receivedAt || p.createdAt) < 30 * 864e5).length;
+  return `<section class="supply" aria-label="Supply console">
+    <div class="sup-hero">
+      <ul class="dk-facts" aria-label="Supply figures">
+        ${fact("short", "open", "To order", toOrder.length, toOrder.length ? "short and not on order" : "nothing to order", toOrder.length > 0)}
+        ${fact("short", "out", "Out of stock", out, out ? "can't be ordered online" : "none", out > 0)}
+        ${fact("short", "low", "Running low", low, low ? "order before it runs out" : "none", false)}
+        ${fact("short", "", "Customers waiting", waiting, waiting ? "asked to be told when back" : "nobody waiting", waiting > 0)}
+        ${fact("pos", "", "Open orders", open.length, open.length ? "with wholesalers" : "none open", false)}
+        ${fact("pos", "late", "Late", late, late ? "past due or unconfirmed" : "all on time", late > 0)}
+      </ul>
+      <figure class="dk-flow" aria-labelledby="sflow-h">
+        <h2 id="sflow-h" class="h3 ov-sub">Supply chain</h2>
+        <div class="flow-row" style="grid-template-columns:repeat(${Math.max(1, busiest.length)},minmax(0,1fr))">${busiest.length ? busiest.map(({ w, n }) => tile("suppliers", esc(w.name.replace(/\s+(Pharmaceuticals?|LTD|Ltd|Limited)\b.*$/i, "")), n, ` title="${esc(w.name)}: ${n} open order${n === 1 ? "" : "s"}"`)).join("") : tile("suppliers", "Add a wholesaler", "+")}</div>
+        <svg class="flow-lines" viewBox="0 0 100 40" preserveAspectRatio="none" aria-hidden="true"><path d="${(busiest.length ? busiest : [0]).map((_, i, a) => { const x = (i + 0.5) * 100 / a.length; return `M${x} 0 C${x} 22 50 18 50 40`; }).join("")}"/></svg>
+        <div class="flow-core"><span>Synako stock</span><b>${sp.shortages.length}</b><span>item${sp.shortages.length === 1 ? "" : "s"} short · ${open.length} on order</span></div>
+        <svg class="flow-lines" viewBox="0 0 100 40" preserveAspectRatio="none" aria-hidden="true"><path d="M50 0 C50 22 30 18 30 40M50 0 C50 22 70 18 70 40"/></svg>
+        <div class="flow-row flow-out">${tile("short", "Customers waiting", waiting)}${tile("pos", "Received, 30 days", recent, ' data-pof="received"')}</div>
+        <figcaption class="sr">Wholesalers with open purchase orders feed Synako's stock; ${sp.shortages.length} items are short and ${waiting} customers are waiting.</figcaption>
+      </figure>
+    </div>
+    <section class="ov-field" aria-labelledby="popipe-h">
+      <div class="ov-field-head"><h2 id="popipe-h" class="h3">Purchase order pipeline</h2><p class="small">Each order moves left to right. Select a stage to see its orders.</p></div>
+      <ol class="dk-steps">
+        ${step(1, "draft", "Draft", by("draft"), "not sent yet", by("draft") > 0)}
+        ${step(2, "sent", "Sent to wholesaler", by("sent"), late ? `${late} late` : "awaiting reply", late > 0)}
+        ${step(3, "confirmed", "Confirmed", by("confirmed"), "on the way", false)}
+        ${step(4, "received", "Received", recent, "last 30 days · back in stock", false)}
+      </ol>
+    </section>
+    <div class="seg" role="tablist" aria-label="Supply views">${nav.map(([k, l, n, hot]) => `<button type="button" role="tab" id="sv-${k}" aria-controls="sv-panel" data-sview="${k}" aria-selected="${view === k}">${l} <span class="count${hot ? " warn" : ""}">${n}</span></button>`).join("")}</div>
+    <div id="sv-panel" role="tabpanel" aria-labelledby="sv-${view}">${view === "short" ? shortagesView(sp) : view === "pos" ? posView(sp) : suppliersView(sp)}</div>
   </section>`;
 }
+const SH_COLS = [["name", "Item"], ["state", "Status"], ["waiting", "Waiting"], ["sold7", "Sold 7 days"]];
 function shortagesView(sp) {
-  const st = S.staff, sel = st.shsel || {}, picked = sp.shortages.filter(x => sel[x.id]).length;
-  if (!sp.shortages.length) return `<div class="panel empty-state">${icon("check", "ic big")}<p><b>Nothing is short right now</b></p><p class="muted small">When staff mark items as running low or out of stock (in the Stock tab), they appear here to order.</p></div>`;
+  const st = S.staff, sel = st.shsel || {}, f = st.shf || "", q = norm(st.shq || ""), sort = st.shsort || { k: "", dir: 1 };
+  if (!sp.shortages.length) return `<div class="panel empty-state">${icon("check", "ic big")}<p><b>Nothing is short right now</b></p><p class="muted small">When staff mark items as running low or out of stock in the Stock section, they appear here to order.</p></div>`;
   const suggest = x => Math.max(10, Math.ceil((x.sold7 * 2 + x.waiting) / 5) * 5);
-  return `<div class="panel">
-    <div class="sup-head"><div><h2 class="h3">Shortages</h2><p class="small muted">Out of stock or running low. Most pressing first: customers waiting, then sales this week. Tick items, choose a wholesaler and create a purchase order.</p></div><button class="linkbtn" type="button" data-shall>Tick all not on order</button></div>
-    <div class="short-list">${sp.shortages.map(x => `<div class="short-row${x.onOrder.length ? " ordered" : ""}">
-      <label class="check"><input type="checkbox" id="sh-${esc(x.id)}" data-shsel="${esc(x.id)}" ${sel[x.id] ? "checked" : ""}><span><b>${esc(x.name)}</b> <span class="small muted">${esc(x.pack)}</span></span></label>
-      <span class="short-tags">${x.state === "out" ? `<span class="tag bad">Out of stock</span>` : `<span class="tag warn">Running low</span>`}${x.waiting ? `<span class="tag gen">${x.waiting} waiting</span>` : ""}${x.sold7 ? `<span class="small muted">${x.sold7} sold this week</span>` : ""}${x.onOrder.map(o => `<span class="small ok-text">On order: ${o.qty} · ${esc(o.po)} (${esc(o.status)})</span>`).join("")}</span>
-      <label class="short-qty"><span class="sr">Quantity of ${esc(x.name)}</span><input id="shq-${esc(x.id)}" type="number" min="1" step="1" inputmode="numeric" value="${suggest(x)}"></label>
-    </div>`).join("")}</div>
-    <div class="po-make">
-      ${sp.suppliers.length ? `<label for="po-sup">Wholesaler<select id="po-sup"><option value="">Choose…</option>${sp.suppliers.map(s => `<option value="${esc(s.id)}">${esc(s.name)}${s.leadDays ? ` · ${s.leadDays} day${s.leadDays === 1 ? "" : "s"}` : ""}</option>`).join("")}</select></label>
-      <label for="po-note">Note to the wholesaler<input id="po-note" placeholder="Optional, e.g. deliver before Friday"></label>
-      <button class="btn btn-primary" type="button" data-pocreate ${picked ? "" : "disabled"}>Create purchase order${picked ? ` (${picked} item${picked === 1 ? "" : "s"})` : ""}</button>`
+  const counts = { "": sp.shortages.length, open: sp.shortages.filter(x => !x.onOrder.length).length, out: sp.shortages.filter(x => x.state === "out").length, low: sp.shortages.filter(x => x.state === "low").length };
+  let rows = sp.shortages.filter(x => (!f || (f === "open" ? !x.onOrder.length : x.state === f)) && (!q || norm(x.name + " " + x.pack).includes(q)));
+  if (sort.k) rows = rows.slice().sort((a, b) => (sort.k === "name" ? a.name.localeCompare(b.name) : sort.k === "state" ? (a.state === "out" ? 0 : 1) - (b.state === "out" ? 0 : 1) : (a[sort.k] - b[sort.k])) * sort.dir);
+  const picked = sp.shortages.filter(x => sel[x.id]), allOn = rows.length && rows.every(x => sel[x.id]);
+  const chosen = st.poSup && sp.suppliers.some(w => w.id === st.poSup) ? st.poSup : "";
+  const lead = (sp.suppliers.find(w => w.id === chosen) || {}).leadDays;
+  const th = ([k, l]) => `<th scope="col" aria-sort="${sort.k === k ? (sort.dir > 0 ? "ascending" : "descending") : "none"}"><button type="button" class="th-sort" data-shsort="${k}">${l}<span aria-hidden="true">${sort.k === k ? (sort.dir > 0 ? " ↑" : " ↓") : ""}</span></button></th>`;
+  return `<div class="panel dtable-wrap">
+    <div class="dt-tools">
+      <div class="chips" role="group" aria-label="Filter shortages">${[["", "All"], ["open", "Not on order"], ["out", "Out of stock"], ["low", "Running low"]].map(([k, l]) => `<button type="button" class="chip" data-shf="${k}" aria-pressed="${f === k}">${l} <span class="count">${counts[k]}</span></button>`).join("")}</div>
+      <label class="dt-search"><span class="sr">Search shortages</span>${icon("search", "ic sm")}<input id="shq" type="search" placeholder="Search items" value="${esc(st.shq || "")}" autocomplete="off"></label>
+    </div>
+    <table class="dtable">
+      <caption class="sr">Items short, ${rows.length} shown. Tick items, choose a wholesaler and create a purchase order.</caption>
+      <thead><tr><th scope="col" class="c-check"><input type="checkbox" id="sh-all" ${allOn ? "checked" : ""} aria-label="Select all shown items"></th>${SH_COLS.map(th).join("")}<th scope="col">On order</th><th scope="col" class="c-num">Order qty</th></tr></thead>
+      <tbody>${rows.length ? rows.map(x => `<tr class="${sel[x.id] ? "on" : ""}${x.onOrder.length ? " ordered" : ""}">
+        <td class="c-check"><input type="checkbox" id="sh-${esc(x.id)}" data-shsel="${esc(x.id)}" ${sel[x.id] ? "checked" : ""} aria-label="Select ${esc(x.name)}"></td>
+        <td data-label="Item"><label for="sh-${esc(x.id)}"><b>${esc(x.name)}</b> <span class="muted small">${esc(x.pack)}</span></label></td>
+        <td data-label="Status">${x.state === "out" ? `<span class="tag bad">Out of stock</span>` : `<span class="tag warn">Running low</span>`}</td>
+        <td data-label="Waiting" class="c-num">${x.waiting || "–"}</td>
+        <td data-label="Sold 7 days" class="c-num">${x.sold7 || "–"}</td>
+        <td data-label="On order">${x.onOrder.length ? x.onOrder.map(o => `<span class="small ok-text">${o.qty} · ${esc(o.po)} <span class="muted">(${esc(o.status)})</span></span>`).join("<br>") : `<span class="muted small">Not ordered</span>`}</td>
+        <td data-label="Order qty" class="c-num"><input class="qty-in" id="shq-${esc(x.id)}" type="number" min="1" step="1" inputmode="numeric" value="${suggest(x)}" aria-label="Quantity of ${esc(x.name)} to order"></td>
+      </tr>`).join("") : `<tr><td colspan="7" class="muted small">No items match. <button class="linkbtn" type="button" data-shf="">Show all</button></td></tr>`}</tbody>
+    </table>
+    <div class="po-bar${picked.length ? " live" : ""}" role="region" aria-label="New purchase order">
+      <p class="po-bar-count"><b>${picked.length}</b> item${picked.length === 1 ? "" : "s"} selected</p>
+      ${sp.suppliers.length ? `<label for="po-sup"><span>Wholesaler</span><select id="po-sup"><option value="">Choose…</option>${sp.suppliers.map(w => `<option value="${esc(w.id)}"${w.id === chosen ? " selected" : ""}>${esc(w.name)}${w.leadDays ? ` · ${w.leadDays} day${w.leadDays === 1 ? "" : "s"}` : ""}</option>`).join("")}</select></label>
+      <label for="po-note"><span>Note${lead ? ` · due about ${new Date(Date.now() + lead * 864e5).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}` : ""}</span><input id="po-note" placeholder="Optional, e.g. deliver before Friday"></label>
+      <button class="btn btn-primary" type="button" data-pocreate ${picked.length ? "" : "disabled"}>Create purchase order</button>`
       : `<p class="small">Add your wholesalers first. <button class="linkbtn" type="button" data-supedit="">Add a wholesaler</button></p>`}
-    </div></div>`;
+    </div>
+  </div>`;
+}
+const PO_TAG = { draft: "gen", sent: "warn", confirmed: "otc", received: "ok", cancelled: "bad" };
+function poCsv() {
+  const pos = ((S.staff.supply || {}).pos || []), q = v => `"${String(v == null ? "" : v).replace(/"/g, '""')}"`;
+  const rows = [["PO", "Wholesaler", "Status", "Created", "Expected", "Item", "Pack", "Quantity"]].concat(pos.flatMap(p => p.lines.map(l => [p.id, p.supplierName, p.status, p.createdAt.slice(0, 10), p.expected || "", l.name, l.pack, l.qty])));
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([rows.map(r => r.map(q).join(",")).join("\n")], { type: "text/csv" }));
+  a.download = `synako-purchase-orders-${new Date().toISOString().slice(0, 10)}.csv`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
 function posView(sp) {
-  const st = S.staff, late = new Set(sp.overdue);
-  if (!sp.pos.length) return `<div class="panel empty-state">${icon("box", "ic big")}<p><b>No purchase orders yet</b></p><p class="muted small">Create one from the Shortages list.</p></div>`;
-  const tagCls = { draft: "gen", sent: "warn", confirmed: "otc", received: "ok", cancelled: "bad" };
-  return `<div class="po-list">${sp.pos.map(po => {
+  const st = S.staff, late = new Set(sp.overdue), f = st.pof || "";
+  if (!sp.pos.length) return `<div class="panel empty-state">${icon("box", "ic big")}<p><b>No purchase orders yet</b></p><p class="muted small">Create one from the Shortages view.</p><button class="btn btn-primary btn-sm" type="button" data-sview="short">Go to shortages</button></div>`;
+  const keep = p => !f || (f === "open" ? ["draft", "sent", "confirmed"].includes(p.status) : f === "late" ? late.has(p.id) : p.status === f);
+  const list = sp.pos.filter(keep);
+  const chips = [["", "All"], ["open", "Open"], ["late", "Late"], ["draft", "Draft"], ["sent", "Sent"], ["confirmed", "Confirmed"], ["received", "Received"], ["cancelled", "Cancelled"]];
+  return `<div class="dt-tools"><div class="chips" role="group" aria-label="Filter purchase orders">${chips.map(([k, l]) => `<button type="button" class="chip" data-pof="${k}" aria-pressed="${f === k}">${l} <span class="count">${sp.pos.filter(p => !k || (k === "open" ? ["draft", "sent", "confirmed"].includes(p.status) : k === "late" ? late.has(p.id) : p.status === k)).length}</span></button>`).join("")}</div>
+    <button class="btn btn-ghost btn-sm" type="button" data-pocsv>${icon("download", "ic sm")} Download (CSV)</button></div>
+    <div class="po-list">${list.length ? list.map(po => {
     const sup = sp.suppliers.find(x => x.id === po.supplier) || {}, isOpen = st.openPo === po.id, closed = ["received", "cancelled"].includes(po.status);
+    const units = po.lines.reduce((t, l) => t + l.qty, 0);
     return `<article class="panel po${late.has(po.id) ? " late" : ""}">
-      <button type="button" class="po-top" data-poopen="${esc(po.id)}" aria-expanded="${isOpen}"><b class="mono">${esc(po.id)}</b><span>${esc(po.supplierName)}</span><span class="tag ${tagCls[po.status]}">${esc(po.status)}</span>${late.has(po.id) ? `<span class="tag bad">Late</span>` : ""}<span class="small muted">${po.lines.length} item${po.lines.length === 1 ? "" : "s"} · ${stamp(po.createdAt)}${po.expected ? ` · due ${esc(po.expected)}` : ""}</span></button>
-      ${isOpen ? `<div class="po-body">
-        <ul class="po-lines">${po.lines.map(l => `<li>${l.qty} × ${esc(l.name)} <span class="muted small">${esc(l.pack)}</span></li>`).join("")}</ul>
+      <button type="button" class="po-top" data-poopen="${esc(po.id)}" aria-expanded="${isOpen}" aria-controls="po-${esc(po.id)}"><b class="mono">${esc(po.id)}</b><span class="po-sup">${esc(po.supplierName)}</span><span class="tag ${PO_TAG[po.status]}">${esc(po.status)}</span>${late.has(po.id) ? `<span class="tag bad">Late</span>` : ""}<span class="small muted po-meta">${po.lines.length} line${po.lines.length === 1 ? "" : "s"} · ${units} units · ${stamp(po.createdAt)}${po.expected ? ` · due ${esc(po.expected)}` : ""}</span><span class="po-caret" aria-hidden="true">${isOpen ? "−" : "+"}</span></button>
+      ${isOpen ? `<div class="po-body" id="po-${esc(po.id)}">
+        <table class="dtable compact"><caption class="sr">Lines on ${esc(po.id)}</caption><thead><tr><th scope="col">Item</th><th scope="col">Pack</th><th scope="col" class="c-num">Quantity</th></tr></thead>
+          <tbody>${po.lines.map(l => `<tr><td data-label="Item">${esc(l.name)}</td><td data-label="Pack" class="muted">${esc(l.pack)}</td><td data-label="Quantity" class="c-num"><b>${l.qty}</b></td></tr>`).join("")}</tbody></table>
         ${po.note ? `<p class="small"><b>Note:</b> ${esc(po.note)}</p>` : ""}
-        ${closed ? "" : `<div class="po-actions">
+        ${closed ? "" : `<div class="po-actions" role="group" aria-label="Send ${esc(po.id)}">
           ${sup.email ? `<button class="btn btn-sm btn-primary" type="button" data-posend="email">${icon("chat", "ic sm")} Email to ${esc(sup.name)}</button>` : ""}
           ${sup.whatsapp || sup.phone ? `<button class="btn btn-sm ${sup.email ? "btn-ghost" : "btn-primary"}" type="button" data-posend="whatsapp">${icon("chat", "ic sm")} Send on WhatsApp</button>` : ""}
           ${sup.phone ? `<a class="btn btn-sm btn-ghost" href="tel:${esc(sup.phone)}">${icon("phone", "ic sm")} Call</a>` : ""}
           <button class="btn btn-sm btn-ghost" type="button" data-posend="copy">Copy order text</button>
         </div>
-        <div class="po-actions">
+        <div class="po-actions" role="group" aria-label="Update ${esc(po.id)}">
           ${["draft", "sent"].includes(po.status) ? `<button class="btn btn-sm btn-ghost" type="button" data-poact="confirmed">Wholesaler confirmed</button>` : ""}
           <button class="btn btn-sm btn-success" type="button" data-poact="received">${icon("check", "ic sm")} Received: back in stock</button>
-          <button class="btn btn-sm btn-ghost" type="button" data-poact="cancel">Cancel</button>
+          <button class="btn btn-sm btn-ghost" type="button" data-poact="cancel">Cancel order</button>
         </div>
         <div class="po-date"><label for="po-date">Expected delivery<input id="po-date" type="date" value="${esc(po.expected || "")}"></label><button class="btn btn-sm btn-ghost" type="button" data-podate>Save date</button></div>`}
-        <div class="audit">${po.history.slice().reverse().map(h => `<div><span>${stamp(h.t)}</span><b style="font-weight:500">${esc(h.m)}</b></div>`).join("")}</div>
+        <details class="po-log"><summary>Order record (${po.history.length})</summary><div class="audit">${po.history.slice().reverse().map(h => `<div><span>${stamp(h.t)}</span><b style="font-weight:500">${esc(h.m)}</b></div>`).join("")}</div></details>
       </div>` : ""}
-    </article>`; }).join("")}</div>`;
+    </article>`; }).join("") : `<p class="muted small">No purchase orders match. <button class="linkbtn" type="button" data-pof="">Show all</button></p>`}</div>`;
 }
 function suppliersView(sp) {
   const st = S.staff, ed = st.editSup, cur = ed && ed !== "new" ? sp.suppliers.find(x => x.id === ed) || {} : {};
-  const form = ed ? `<form class="f panel" id="supform" novalidate><h2 class="h3">${ed === "new" ? "Add a wholesaler" : "Edit wholesaler"}</h2>
+  const open = id => sp.pos.filter(p => p.supplier === id && ["draft", "sent", "confirmed"].includes(p.status)).length;
+  const initials = n => String(n).replace(/[^A-Za-z& ]/g, "").split(/\s+/).filter(w => w && !/^(ltd|limited|pharmaceuticals?)$/i.test(w)).slice(0, 2).map(w => w[0]).join("").toUpperCase() || "W";
+  const form = ed ? `<form class="f panel sup-form" id="supform" novalidate><h3>${ed === "new" ? "Add a wholesaler" : `Edit ${esc(cur.name || "wholesaler")}`}</h3>
       <div class="row2"><label for="sup-name">Business name<input id="sup-name" required value="${esc(cur.name || "")}"></label><label for="sup-contact">Contact person<input id="sup-contact" value="${esc(cur.contact || "")}"></label></div>
       <div class="row2"><label for="sup-phone">Phone<input id="sup-phone" type="tel" value="${esc(cur.phone || "")}"></label><label for="sup-wa">WhatsApp<span class="hint">If different from the phone.</span><input id="sup-wa" type="tel" value="${esc(cur.whatsapp || "")}"></label></div>
       <div class="row2"><label for="sup-email">Email<span class="hint">Orders can be emailed once your order emails work.</span><input id="sup-email" type="email" value="${esc(cur.email || "")}"></label><label for="sup-lead">Usual delivery time (days)<input id="sup-lead" type="number" min="0" max="60" value="${esc(cur.leadDays || "")}"></label></div>
       <label for="sup-notes">Notes<span class="hint">What they stock, payment terms, minimum order…</span><textarea id="sup-notes" rows="2">${esc(cur.notes || "")}</textarea></label>
-      <div class="actions"><button class="btn btn-primary" type="submit">Save</button><button class="btn btn-ghost" type="button" data-supcancel>Cancel</button></div></form>` : "";
-  return `${form}<div class="panel"><div class="sup-head"><div><h2 class="h3">Wholesalers</h2><p class="small muted">The suppliers you buy from. Purchase orders go to them by email or WhatsApp.</p></div>${ed ? "" : `<button class="btn btn-primary btn-sm" type="button" data-supedit="">Add a wholesaler</button>`}</div>
-    ${sp.suppliers.length ? `<div class="sup-list">${sp.suppliers.map(x => `<div class="sup-row"><div><b>${esc(x.name)}</b>${x.contact ? ` <span class="small muted">· ${esc(x.contact)}</span>` : ""}<div class="small">${[x.phone && `<a href="tel:${esc(x.phone)}">${esc(x.phone)}</a>`, x.whatsapp && `WhatsApp ${esc(x.whatsapp)}`, x.email && esc(x.email), x.leadDays && `${x.leadDays} day${x.leadDays === 1 ? "" : "s"} delivery`].filter(Boolean).join(" · ")}</div>${x.notes ? `<div class="small muted">${esc(x.notes)}</div>` : ""}</div>
-      <div class="sup-btns"><button class="linkbtn" type="button" data-supedit="${esc(x.id)}">Edit</button><button class="linkbtn" type="button" data-supdel="${esc(x.id)}">Remove</button></div></div>`).join("")}</div>` : `<p class="muted small">No wholesalers yet.</p>`}</div>`;
+      <div class="actions"><button class="btn btn-primary" type="submit">Save wholesaler</button><button class="btn btn-ghost" type="button" data-supcancel>Cancel</button></div></form>` : "";
+  return `${form}<div class="dt-tools"><p class="small muted">${sp.suppliers.length} wholesaler${sp.suppliers.length === 1 ? "" : "s"}. Purchase orders reach them by email or WhatsApp.</p>${ed ? "" : `<button class="btn btn-primary btn-sm" type="button" data-supedit="">${icon("plus", "ic sm")} Add a wholesaler</button>`}</div>
+    ${sp.suppliers.length ? `<ul class="sup-cards">${sp.suppliers.map(x => { const wa = waTo(x.whatsapp || x.phone, `Hello ${x.contact || x.name}, this is ${B.name}.`); const n = open(x.id); return `<li class="panel sup-card">
+      <div class="sup-card-top"><span class="sup-mark" aria-hidden="true">${esc(initials(x.name))}</span><div><h3>${esc(x.name)}</h3>${x.contact ? `<p class="small muted">${esc(x.contact)}</p>` : ""}</div></div>
+      <dl class="sup-facts"><div><dt>Delivery</dt><dd>${x.leadDays ? `${x.leadDays} day${x.leadDays === 1 ? "" : "s"}` : "–"}</dd></div><div><dt>Open orders</dt><dd>${n}</dd></div><div><dt>Phone</dt><dd>${x.phone ? `<a href="tel:${esc(x.phone)}">${esc(x.phone)}</a>` : "–"}</dd></div></dl>
+      ${x.email ? `<p class="small sup-mail">${esc(x.email)}</p>` : `<p class="small muted sup-mail">No email yet</p>`}
+      ${x.notes ? `<p class="small muted">${esc(x.notes)}</p>` : ""}
+      <div class="sup-card-actions">
+        <button class="btn btn-primary btn-sm" type="button" data-orderfrom="${esc(x.id)}">Order from</button>
+        ${x.phone ? `<a class="btn btn-ghost btn-sm" href="tel:${esc(x.phone)}" aria-label="Call ${esc(x.name)}">${icon("phone", "ic sm")} Call</a>` : ""}
+        ${wa ? `<a class="btn btn-ghost btn-sm" href="${esc(wa)}" target="_blank" rel="noopener" aria-label="WhatsApp ${esc(x.name)}">${icon("chat", "ic sm")} WhatsApp</a>` : ""}
+        ${x.email ? `<a class="btn btn-ghost btn-sm" href="mailto:${esc(x.email)}" aria-label="Email ${esc(x.name)}">Email</a>` : ""}
+      </div>
+      <div class="sup-card-foot"><button class="linkbtn" type="button" data-supedit="${esc(x.id)}">Edit</button><button class="linkbtn" type="button" data-supdel="${esc(x.id)}">Remove</button></div>
+    </li>`; }).join("")}</ul>` : `<div class="panel empty-state"><p><b>No wholesalers yet</b></p><button class="btn btn-primary btn-sm" type="button" data-supedit="">Add your first wholesaler</button></div>`}`;
 }
 /* Desk order list: search, delivery and status filters, and sorting (most urgent first by default) */
 const SPEEDS = [["express", "30-minute"], ["sameday", "Same-day"], ["nextday", "Next-day"], ["states", "Other states"]];
@@ -1789,6 +1872,7 @@ document.addEventListener("input", e => {
   if (e.target.id === "q") { clearTimeout(sgTimer); sgTimer = setTimeout(openSuggest, 60); }
   if (e.target.id === "em") showEmailFix();
   if (e.target.id === "cmdk-q") { S.staff.cq = e.target.value; S.staff.ci = 0; cmdkRefresh(); }
+  if (e.target.id === "shq") { S.staff.shq = e.target.value; render(); }
   if (e.target.id === "deskq") { S.staff.q = e.target.value; refreshQueue(); }
   if (e.target.id === "stockq") { S.staff.stockQ = e.target.value; const l = $("#stocklist"); if (l) l.innerHTML = stockRows(); }
 });
@@ -1955,7 +2039,14 @@ document.addEventListener("click", e => {
   if (d.emfix) { const i = $("#em"); i.value = d.emfix; showEmailFix(); i.focus(); return; }
   if (d.stock) { setStock(d.stock, !!d.out, t); return; }
   if (d.low) { setLowStock(d.low, !!d.on, t); return; }
-  if (d.sview) { S.staff.sview = d.sview; S.staff.editSup = null; render(); return; }
+  if (d.sview || "shf" in d || "pof" in d) { // supply views, filters and pipeline stages
+    const st = S.staff; if (d.sview) { st.sview = d.sview; st.editSup = null; }
+    if ("shf" in d) st.shf = d.shf; if ("pof" in d) st.pof = d.pof;
+    render(); if (d.sview && t.closest(".sup-hero, .ov-field")) { const p = $("#sv-panel"); if (p) p.scrollIntoView({ block: "start", behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" }); } return;
+  }
+  if (d.shsort) { const st = S.staff, cur = st.shsort || {}; st.shsort = { k: d.shsort, dir: cur.k === d.shsort ? -cur.dir : (d.shsort === "name" || d.shsort === "state" ? 1 : -1) }; render(); const b = document.querySelector(`[data-shsort="${d.shsort}"]`); if (b) b.focus(); return; }
+  if ("pocsv" in d) { poCsv(); return; }
+  if (d.orderfrom) { const st = S.staff; st.poSup = d.orderfrom; st.sview = "short"; st.shf = "open"; render(); toast(`Tick the items to order from ${((st.supply.suppliers || []).find(w => w.id === d.orderfrom) || {}).name}.`); return; }
   if ("pocreate" in d) { createPO(t); return; }
   if (d.poopen) { S.staff.openPo = S.staff.openPo === d.poopen ? null : d.poopen; render(); return; }
   if (d.posend) { poAction(d.posend === "copy" ? null : "send", { via: d.posend }, t); return; }
@@ -2005,6 +2096,8 @@ document.addEventListener("keydown", e => {
 document.addEventListener("change", async e => {
   const t = e.target;
   if (t.id === "sort") { S.sort = t.value; render(); return; }
+  if (t.id === "sh-all") { const st = S.staff, sel = st.shsel || (st.shsel = {}), q = norm(st.shq || ""), f = st.shf || ""; (st.supply.shortages || []).filter(x => (!f || (f === "open" ? !x.onOrder.length : x.state === f)) && (!q || norm(x.name + " " + x.pack).includes(q))).forEach(x => { sel[x.id] = t.checked; }); render(); return; }
+  if (t.id === "po-sup") { S.staff.poSup = t.value; render(); return; }
   if (t.dataset && t.dataset.shsel) { const sel = S.staff.shsel || (S.staff.shsel = {}); sel[t.dataset.shsel] = t.checked; render(); return; }
   if (t.dataset && t.dataset.pack) {
     const id = t.dataset.pack, n = Number(t.dataset.n), p = S.staff.packed || (S.staff.packed = {}), l = p[id] || (p[id] = []);

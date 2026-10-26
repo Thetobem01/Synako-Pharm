@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import { handle, only, send, body, query, fail, requireStaff, requireRider, db, site, STATUS, emailReady, paystackReady, smsReady, riderReady, sendEmail, mailFrom, limit, outOfStock, baseUrl,
   log, notifyCustomer, checkDeliveryCode, remindUnpaid } from "../_lib/core.js";
+import { lowStock, setLow, notifySupply, suppliers, saveSupplier, deleteSupplier, purchaseOrders, createPO, updatePO, shortages, overdue, supplyDigest } from "../_lib/supply.js";
 /* Pharmacist Desk. GET: recent orders and requests, plus site details still missing.
    POST: mark a message, booking or quote request as handled (or back to new), stock, test email, payment reminders.
    Riders: GET ?view=rider lists deliveries; POST rider-take / rider-delivered.
@@ -13,13 +14,28 @@ export default handle(async (req, res) => {
   if (req.method === "GET" && q.task === "reminders") { // Vercel cron sends "Authorization: Bearer <CRON_SECRET>"
     const secret = process.env.CRON_SECRET || "", got = String(req.headers.authorization || "").replace(/^Bearer\s+/i, "");
     if (!secret || got.length !== secret.length || !crypto.timingSafeEqual(Buffer.from(got), Buffer.from(secret))) throw fail(401, "Not allowed.");
-    return send(res, 200, await remindUnpaid());
+    const reminders = await remindUnpaid();
+    return send(res, 200, Object.assign(reminders, { supply: await supplyDigest() }));
   }
   if (req.method === "GET" && q.view === "rider") { requireRider(req); return send(res, 200, { deliveries: await deliveries() }); }
   const b = req.method === "POST" ? await body(req) : {};
   if (b.action === "rider-take" || b.action === "rider-delivered") { requireRider(req); return send(res, 200, await riderAction(req, b)); }
   requireStaff(req);
+  if (req.method === "GET" && q.view === "supply") return send(res, 200, await supplyView());
   if (req.method === "POST") {
+    const by = String(b.by || "Staff").trim().slice(0, 60);
+    if (b.action === "supplier-save") { await saveSupplier(b.supplier || {}); return send(res, 200, await supplyView()); }
+    if (b.action === "supplier-delete") { await deleteSupplier(String(b.id || "")); return send(res, 200, await supplyView()); }
+    if (b.action === "po-create") { const po = await createPO(b, by); return send(res, 201, Object.assign(await supplyView(), { po })); }
+    if (b.action === "po-update") { const po = await updatePO(b, by, tellWaitingCustomers); return send(res, 200, Object.assign(await supplyView(), { po })); }
+    if (b.action === "supply-digest") return send(res, 200, await supplyDigest(DEV && b.now ? Number(b.now) : Date.now()));
+    if (b.action === "stock-low") { // "running low": an early warning for the supply manager; customers can still order
+      const p = site().P.find(x => x.id === String(b.id));
+      if (!p) throw fail(404, "Product not found.");
+      const low = await setLow(p.id, !!b.low);
+      if (b.low) await notifySupply(`Running low: ${p.name}`, [`${by} marked ${p.name} (${p.pack}) as running low.`, "Add it to a purchase order from the Supply tab."], `running low: ${p.name}. Marked by ${by}.`);
+      return send(res, 200, { low });
+    }
     if (b.action === "reminders") { // "Send payment reminders now" on the desk
       const now = DEV && b.now ? Number(b.now) : Date.now();
       return send(res, 200, await remindUnpaid(now));
@@ -30,6 +46,7 @@ export default handle(async (req, res) => {
       const out = await outOfStock();
       if (b.out) out.add(p.id); else out.delete(p.id);
       await db.set("stock:out", [...out]);
+      if (b.out) { await setLow(p.id, false); await notifySupply(`Out of stock: ${p.name}`, [`${String(b.by || "Staff").slice(0, 60)} marked ${p.name} (${p.pack}) as out of stock. Customers can't order it until it's back.`, "Add it to a purchase order from the Supply tab."], `OUT OF STOCK: ${p.name}.`); }
       let told = 0;
       if (!b.out) told = await tellWaitingCustomers(p, String(b.by || "Staff").slice(0, 60));
       return send(res, 200, { out: [...out], told });
@@ -51,6 +68,8 @@ export default handle(async (req, res) => {
   }
   // While the desk is open, payment reminders go out at most every 15 minutes (the daily scheduled job covers the rest)
   try { if (await db.once("job:remind", 900)) await remindUnpaid(); } catch (e) { console.error("Reminders failed", e); }
+  // The supply manager's daily summary goes out with the first desk refresh of the day (and from the daily scheduled job)
+  try { if (await db.once("job:digest:" + new Date().toISOString().slice(0, 10), 90000)) await supplyDigest(); } catch (e) { console.error("Supply summary failed", e); }
   const ids = await db.latest("orders", 200);
   const orders = (await Promise.all(ids.map(id => db.get("order:" + id)))).filter(Boolean).map(o => ({
     id: o.id, createdAt: o.createdAt, status: o.status, statusLabel: STATUS[o.status], rx: o.rx, rxRequest: o.rxRequest,
@@ -72,7 +91,8 @@ export default handle(async (req, res) => {
   if (!riderReady()) setup.push("RIDER_PASSWORD for the rider page (/rider)");
   if (!process.env.CRON_SECRET) setup.push("CRON_SECRET so payment reminders also go out when the desk is closed");
   else if (!process.env.STAFF_EMAIL) setup.push("STAFF_EMAIL for new-order alerts");
-  send(res, 200, { orders, requests, missing, setup, sms: smsReady(), out: [...await outOfStock()], serverTime: new Date().toISOString() });
+  const low = await lowStock();
+  send(res, 200, { orders, requests, missing, setup, sms: smsReady(), low: [...low], out: [...await outOfStock()], serverTime: new Date().toISOString() });
 });
 
 /* When a product is back, email everyone who asked to be told by email; phone-only requests stay on the desk to call */
@@ -118,4 +138,9 @@ async function riderAction(req, b) {
     await notifyCustomer(o, "delivered");
   }
   return { deliveries: await deliveries() };
+}
+
+async function supplyView() {
+  const [list, sups, pos] = await Promise.all([shortages(), suppliers(), purchaseOrders(100)]);
+  return { shortages: list, suppliers: sups, pos, overdue: overdue(pos).map(p => p.id), email: emailReady(), sms: smsReady() };
 }

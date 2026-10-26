@@ -107,6 +107,7 @@ const ICONS = {
   share: '<circle cx="18" cy="5" r="2.5"/><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="19" r="2.5"/><path d="M8.2 10.8l7.6-4.4M8.2 13.2l7.6 4.4"/>',
   print: '<path d="M6 9V3h12v6M6 18H4a1 1 0 0 1-1-1v-6a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v6a1 1 0 0 1-1 1h-2"/><rect x="6" y="14" width="12" height="7"/>',
   phone: '<path d="M5 3h4l2 5-2.5 1.5a11 11 0 0 0 6 6L16 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 5a2 2 0 0 1 2-2"/>',
+  search: '<circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/>',
   pin: '<path d="M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/>',
   download: '<path d="M12 3v12M7 10l5 5 5-5M4 21h16"/>'
 };
@@ -124,7 +125,7 @@ const S = {
   cart: store.get("synako.cart", []).filter(l => l && prod(l.id)).map(l => ({ id: l.id, q: l.q, u: l.u || "1" })), rxRequest: false, step: 1, form: {}, busy: false, error: "",
   mine: store.get("synako.orders", []), seen: store.get("synako.seen", []).filter(id => prod(id)), trackId: null, track: null, trackErr: "",
   rider: { token: store.sget("synako.rider"), name: store.get("synako.riderName", ""), list: null, err: "" },
-  staff: { token: store.sget("synako.staff"), name: store.sget("synako.staffName"), list: null, sel: null, detail: null, file: null, tab: "review", err: "", updated: null }
+  staff: { token: store.sget("synako.staff"), name: store.sget("synako.staffName"), list: null, sel: null, detail: null, file: null, tab: "overview", err: "", updated: null }
 };
 const saveCart = () => store.set("synako.cart", S.cart);
 const saveMine = () => store.set("synako.orders", S.mine.slice(0, 20));
@@ -775,7 +776,7 @@ function stageOf(o) {
   return m[o.status] != null ? m[o.status] : 1;
 }
 const statusTag = o => {
-  const cls = { delivered: "ok", paid: "ok", rejected: "bad", cancelled: "bad", info_needed: "warn", pending_review: "warn", awaiting_payment: "warn", approved_awaiting_payment: "warn" }[o.status] || "otc";
+  const cls = { delivered: "done", paid: "ok", rejected: "bad", cancelled: "bad", info_needed: "warn", pending_review: "warn", awaiting_payment: "warn", approved_awaiting_payment: "warn" }[o.status] || "otc";
   return `<span class="tag ${cls}">${esc(o.statusLabel || o.status)}</span>`;
 };
 const phoneFor = id => (S.mine.find(m => m.id === id) || {}).phone || "";
@@ -980,6 +981,7 @@ async function loadDesk(silent) {
       if (news.length) { toast(news.join(" · ")); chime(); }
     }
     if (st.sel && !silent) await loadDeskOrder(st.sel, true);
+    if (st.tab === "supply" || (st.tab === "overview" && !st.supply)) await loadSupply(true);
   } catch (e) { if (e.status === 401) signOut(); else st.err = e.message; }
   if (S.mode === "staff") render();
 }
@@ -1005,7 +1007,7 @@ async function loadDeskOrder(id, quiet) {
   catch (e) { if (e.status === 401) return signOut(); st.err = e.message; }
   if (S.mode === "staff") render();
 }
-function signOut() { S.staff = { token: "", name: S.staff.name, list: null, sel: null, detail: null, file: null, tab: "review", err: "" }; store.sset("synako.staff", ""); render(); }
+function signOut() { S.staff = { token: "", name: S.staff.name, list: null, sel: null, detail: null, file: null, tab: "overview", err: "" }; store.sset("synako.staff", ""); render(); }
 function vStaff() {
   const st = S.staff;
   if (!st.token) return `<div class="wrap desk-login"><form class="f panel" id="staffform" novalidate>
@@ -1018,39 +1020,56 @@ function vStaff() {
   const d = st.list;
   if (!d) return `<div class="wrap"><p class="muted" style="padding:2rem 0">Loading the desk…</p></div>`;
   const groups = deskGroups(d);
-  const tabs = [["review", "To review"], ["pack", "To pack & deliver"], ["pay", "Awaiting payment"], ["done", "Completed"], ["requests", "Messages & bookings"], ["stock", "Stock"]];
   if (d.out) applyStock(d.out);
-  const list = ["requests", "stock"].includes(st.tab) ? null : groups[st.tab];
+  const tab = st.tab || "overview";
+  const list = groups[tab] || null;
   const day = t => new Date(t).toLocaleDateString("en-CA", { timeZone: CFG.site.timezone }), today = day(Date.now());
   const paidToday = d.orders.filter(o => PAID(o.status) && day(o.createdAt) === today);
   const takings = paidToday.reduce((t, o) => t + (Number(o.total) || 0), 0);
-  const toPack = d.orders.filter(o => o.status === "paid"), onRoad = d.orders.filter(o => o.status === "out_for_delivery");
-  const oldest = l => l.length ? `<small>oldest ${waitText(Math.min(...l.map(waitFrom)))}</small>` : "";
-  const stat = (tab, status, n, label, extra, hot) => `<button type="button" class="stat${hot ? " hot" : ""}" data-dtab="${tab}" data-dstatus="${status}"><b>${n}</b><span>${label}${extra}</span></button>`;
-  $("#staff-stats").innerHTML = stat("review", "", groups.review.length, "To review", oldest(groups.review), groups.review.some(o => waitMins(o) > 60))
-    + stat("pack", "paid", toPack.length, "To pack", oldest(toPack), toPack.some(o => waitMins(o) > 60))
-    + stat("pack", "out_for_delivery", onRoad.length, "On the road", "", false)
-    + stat("pay", "", groups.pay.length, "Awaiting payment", "", false)
-    + `<button type="button" class="stat money" data-dtab="done" data-dstatus="" title="Paid orders placed today, and the last 7 days"><b>${NGN(takings)}</b><span>Today · ${paidToday.length} paid</span>${weekBars(d.orders, day)}</button>`;
-  return `<div class="desk-top">
-      <div class="desk-tabs" role="tablist" aria-label="Desk sections">${tabs.map(([k, l]) => `<button type="button" role="tab" data-dtab="${k}" aria-selected="${st.tab === k}">${l}${k === "requests" ? ` <span class="count">${d.requests.filter(r => r.status === "new").length}</span>` : k === "stock" ? ` <span class="count">${P.filter(p => p.out).length} out</span>` : ` <span class="count">${groups[k].length}</span>`}</button>`).join("")}</div>
-      <div class="desk-tools"><button class="linkbtn" type="button" data-sound aria-pressed="${soundOn()}">${soundOn() ? "🔔 Sound on" : "🔕 Sound off"}</button><button class="linkbtn" type="button" data-keys>⌨ Shortcuts</button><button class="linkbtn" type="button" data-csv>${icon("download", "ic sm")} Download orders (CSV)</button><button class="linkbtn" type="button" data-testmail>${icon("chat", "ic sm")} Send test email</button><button class="linkbtn" type="button" data-remind>${icon("card", "ic sm")} Send payment reminders now</button><a class="linkbtn" href="/rider" data-link>${icon("truck", "ic sm")} Rider page</a><p class="small muted" role="status">Updates every 10 seconds${st.updated ? ` · last ${st.updated.toLocaleTimeString("en-GB")}` : ""}</p></div></div>
-    ${st.err ? alertBox(st.err) : ""}
-    ${st.mail ? `<div class="notice ${/NOT sent/.test(st.mail) ? "bad" : "info"} small" role="status"><span>${esc(st.mail)}</span></div>` : ""}
-    ${d.missing && d.missing.length ? (store.get("synako.hideMissing", 0) > Date.now()
-      ? `<p class="small muted">${d.missing.length} licence details to add later · <button class="linkbtn" type="button" data-missing="show">Show</button></p>`
-      : `<details class="setup"><summary><b>${d.missing.length} licence details to add</b> · the shop works without them; they're left off the Licences page and receipts until added</summary><p class="small">Still to add: ${d.missing.map(esc).join(", ")}. Send them to whoever looks after the website (they go in <code>js/config.js</code>).</p><button class="linkbtn" type="button" data-missing="hide">Hide this for 30 days</button></details>`) : ""}
-    ${d.setup && d.setup.length ? `<details class="setup"><summary><b>${d.setup.length} hosting setting${d.setup.length === 1 ? "" : "s"} to add</b> · in Vercel, Settings → Environment Variables</summary><p class="small">${d.setup.map(esc).join(", ")}. See the README for what each one does.</p></details>` : ""}
-    ${st.tab === "stock" ? stockPanel() : st.tab === "requests" ? `<div class="requests">${d.requests.length ? d.requests.slice().sort((a, b) => (a.status === "done") - (b.status === "done")).map(r => `<article class="panel req${r.status === "done" ? " done" : ""}"><div class="top"><b>${{ appointment: "Consultation booking", message: "Message", careers: "Careers interest", trade: "Wholesale quote request", restock: "Back-in-stock request" }[r.type]}</b><span class="small muted">${stamp(r.createdAt)}</span></div>
-        <div class="small"><b>${esc(r.name)}</b> · ${r.phone ? `<a href="tel:${esc(r.phone)}">${esc(r.phone)}</a>` : ""} ${esc(r.email || "")}</div>
-        ${r.type === "appointment" ? `<div class="small">Wants: <b>${esc(r.date)} at ${esc(PR.fmt12(r.time || "00:00"))}</b></div>` : ""}${r.topic ? `<div class="small">${esc(r.topic)}</div>` : ""}${r.role ? `<div class="small">${esc(r.role)} ${r.pcn ? `· PCN ${esc(r.pcn)}` : ""}</div>` : ""}${r.business ? `<div class="small"><b>${esc(r.business)}</b>${r.bizType ? ` · ${esc(r.bizType)}` : ""}${r.state ? ` · ${esc(r.state)}` : ""}${r.pcn && !r.role ? ` · Licence ${esc(r.pcn)}` : ""}</div>` : ""}
-        ${r.message ? `<p class="small" style="white-space:pre-line">${esc(r.message)}</p>` : ""}
-        <div class="req-foot">${r.status === "done" ? `<span class="tag ok">Handled${r.handledBy ? ` by ${esc(r.handledBy)}` : ""}</span><button class="linkbtn" type="button" data-req="${esc(r.id)}" data-st="new">Mark as new</button>` : `<button class="btn btn-secondary btn-sm" type="button" data-req="${esc(r.id)}" data-st="done">${icon("check", "ic sm")} Mark as handled</button>`}</div></article>`).join("") : `<p class="muted">No messages or bookings yet.</p>`}</div>`
+  $("#staff-stats").innerHTML = `<button type="button" class="cmdk-btn" data-cmdk aria-keyshortcuts="Control+K Meta+K" aria-haspopup="dialog">${icon("search", "ic sm")}<span>Search orders, products and actions</span><kbd>Ctrl K</kbd></button>`;
+  const newMsgs = d.requests.filter(r => r.status === "new").length;
+  const count = { review: groups.review.length, pack: groups.pack.length, pay: groups.pay.length, requests: newMsgs, stock: P.filter(p => p.out).length, supply: shortCount(d) };
+  const warn = { review: groups.review.some(o => waitMins(o) > 60), pack: d.orders.some(o => o.status === "paid" && waitMins(o) > 60), supply: count.supply > 0, requests: newMsgs > 0 };
+  let n = 0;
+  const navHtml = DESK_NAV.map(([label, items]) => `<p class="dk-nav-label">${label}</p>${items.map(([k, l, ic]) => { n++; return `<button type="button" class="dk-link" data-dtab="${k}"${tab === k ? ' aria-current="page"' : ""}>${icon(ic, "ic sm")}<span>${l}</span>${count[k] ? `<span class="count${warn[k] ? " warn" : ""}">${count[k]}${k === "stock" ? " out" : ""}</span>` : ""}<kbd aria-hidden="true">${n}</kbd></button>`; }).join("")}`).join("");
+  let [group, title, sub] = DESK_TITLES[tab] || DESK_TITLES.overview;
+  if (tab === "overview") { group = "Main dashboard"; title = `${greeting()}, ${esc(String(st.name || "").split(/\s+/).filter(w => w && !/^(pharm|dr|mr|mrs|ms|miss|prof|pst|chief)\.?$/i.test(w))[0] || "team")}.`; sub = overviewSummary(d, groups); }
+  const ov = tab === "overview" ? overviewPanel(d, groups, takings, paidToday, day) : null;
+  const head = `<header class="dk-head${tab === "overview" ? " is-dash" : ""}"><div><p class="dk-eyebrow">${group}</p><h1 tabindex="-1" id="dk-title">${title}</h1>${sub ? `<p>${sub}</p>` : ""}</div>${tab === "overview" ? overviewActions(d, groups) : ""}</header>`;
+  const body = ov ? ov.rest
+    : tab === "supply" ? supplyPanel() : tab === "stock" ? stockPanel() : tab === "requests" ? requestsPanel(d)
     : `<div class="desk${st.sel ? " has-sel" : ""}">
       <div class="queue-wrap">${queueTools(list)}<nav class="queue" id="queue" aria-label="Orders">${queueRows(list)}</nav></div>
       <section class="panel" aria-live="polite">${deskDetail()}</section>
-    </div>`}
-    ${st.keys ? keysHelp() : ""}`;
+    </div>`;
+  return `<div class="dk">
+    <nav class="dk-nav" aria-label="Desk sections">${navHtml}
+      <div class="dk-tools" aria-label="Tools"><p class="dk-nav-label">Tools</p>
+        <button class="dk-tool" type="button" data-remind>${icon("card", "ic sm")} Send payment reminders</button>
+        <button class="dk-tool" type="button" data-csv>${icon("download", "ic sm")} Download orders (CSV)</button>
+        <button class="dk-tool" type="button" data-testmail>${icon("chat", "ic sm")} Send test email</button>
+        <a class="dk-tool" href="/rider" data-link>${icon("truck", "ic sm")} Rider page</a>
+        <button class="dk-tool" type="button" data-sound aria-pressed="${soundOn()}">${soundOn() ? "🔔 Sound on" : "🔕 Sound off"}</button>
+        <button class="dk-tool" type="button" data-keys>⌨ Keyboard shortcuts</button>
+      </div>
+      <p class="dk-sync" role="status"><span class="dot" aria-hidden="true"></span>Live · ${st.updated ? `updated ${st.updated.toLocaleTimeString("en-GB")}` : "connecting"}</p>
+    </nav>
+    <div class="dk-main">
+      ${ov ? `<div class="ov-hero2">${head}${ov.flow}</div>` : head}
+      ${st.err ? alertBox(st.err) : ""}
+      ${st.mail ? `<div class="notice ${/NOT sent/.test(st.mail) ? "bad" : "info"} small" role="status"><span>${esc(st.mail)}</span></div>` : ""}
+      ${body}
+      ${ov ? ov.progress : ""}
+    </div>
+  </div>
+  ${st.keys ? keysHelp() : ""}${st.cmdk ? cmdkView() : ""}`;
+}
+function requestsPanel(d) {
+  return `<div class="requests">${d.requests.length ? d.requests.slice().sort((a, b) => (a.status === "done") - (b.status === "done")).map(r => `<article class="panel req${r.status === "done" ? " done" : ""}"><div class="top"><b>${{ appointment: "Consultation booking", message: "Message", careers: "Careers interest", trade: "Wholesale quote request", restock: "Back-in-stock request" }[r.type]}</b><span class="small muted">${stamp(r.createdAt)}</span></div>
+        <div class="small"><b>${esc(r.name)}</b> · ${r.phone ? `<a href="tel:${esc(r.phone)}">${esc(r.phone)}</a>` : ""} ${esc(r.email || "")}</div>
+        ${r.type === "appointment" ? `<div class="small">Wants: <b>${esc(r.date)} at ${esc(PR.fmt12(r.time || "00:00"))}</b></div>` : ""}${r.topic ? `<div class="small">${esc(r.topic)}</div>` : ""}${r.role ? `<div class="small">${esc(r.role)} ${r.pcn ? `· PCN ${esc(r.pcn)}` : ""}</div>` : ""}${r.business ? `<div class="small"><b>${esc(r.business)}</b>${r.bizType ? ` · ${esc(r.bizType)}` : ""}${r.state ? ` · ${esc(r.state)}` : ""}${r.pcn && !r.role ? ` · Licence ${esc(r.pcn)}` : ""}</div>` : ""}
+        ${r.message ? `<p class="small" style="white-space:pre-line">${esc(r.message)}</p>` : ""}
+        <div class="req-foot">${r.status === "done" ? `<span class="tag ok">Handled${r.handledBy ? ` by ${esc(r.handledBy)}` : ""}</span><button class="linkbtn" type="button" data-req="${esc(r.id)}" data-st="new">Mark as new</button>` : `<button class="btn btn-secondary btn-sm" type="button" data-req="${esc(r.id)}" data-st="done">${icon("check", "ic sm")} Mark as handled</button>`}</div></article>`).join("") : `<p class="muted">No messages or bookings yet.</p>`}</div>`;
 }
 /* How long an order has been waiting on us: prescriptions since they arrived, paid orders since payment */
 const waitFrom = o => Date.parse(o.status === "paid" && o.paidAt ? o.paidAt : o.createdAt) || Date.now();
@@ -1066,7 +1085,7 @@ function weekBars(orders, day) {
 const soundOn = () => store.get("synako.sound", true) !== false;
 function keysHelp() {
   return `<div class="keys-help" role="dialog" aria-label="Keyboard shortcuts"><div class="panel"><div class="top"><h2 class="h3">Keyboard shortcuts</h2><button class="iconbtn" type="button" data-keys aria-label="Close">✕</button></div>
-    <dl class="kv"><dt><kbd>1</kbd>–<kbd>6</kbd></dt><dd>Switch section</dd><dt><kbd>/</kbd></dt><dd>Search orders</dd><dt><kbd>J</kbd> <kbd>K</kbd> or <kbd>↓</kbd> <kbd>↑</kbd></dt><dd>Next / previous order</dd><dt><kbd>Esc</kbd></dt><dd>Close the order, or this box</dd><dt><kbd>R</kbd></dt><dd>Refresh now</dd><dt><kbd>?</kbd></dt><dd>Show or hide these shortcuts</dd></dl></div></div>`;
+    <dl class="kv"><dt><kbd>Ctrl</kbd> <kbd>K</kbd></dt><dd>Search orders, products and actions</dd><dt><kbd>1</kbd>–<kbd>8</kbd></dt><dd>Go to a section (the numbers in the sidebar)</dd><dt><kbd>/</kbd></dt><dd>Search orders</dd><dt><kbd>J</kbd> <kbd>K</kbd> or <kbd>↓</kbd> <kbd>↑</kbd></dt><dd>Next / previous order</dd><dt><kbd>Esc</kbd></dt><dd>Close the order, or this box</dd><dt><kbd>R</kbd></dt><dd>Refresh now</dd><dt><kbd>?</kbd></dt><dd>Show or hide these shortcuts</dd></dl></div></div>`;
 }
 /* Order progress at a glance, from its record */
 function progressSteps(o) {
@@ -1075,7 +1094,328 @@ function progressSteps(o) {
     [["Paid", at(/^Payment received/)], ["Packed", at(/^Packed/)], ["On the road", at(/^Out for delivery/)], ["Delivered", at(/^Delivered/)]]);
   if (["rejected", "cancelled"].includes(o.status)) return `<p class="small"><span class="tag bad">${esc(o.statusLabel || o.status)}</span></p>`;
   const cur = steps.findIndex(x => !x[1]);
-  return `<ol class="steps">${steps.map(([l, t], i) => `<li class="${t ? "done" : i === cur ? "now" : ""}"><span class="dot" aria-hidden="true">${t ? "✓" : i + 1}</span><b>${l}</b><span class="small muted">${t ? stamp(t) : i === cur ? "Next" : ""}</span></li>`).join("")}</ol>`;
+  return `<ol class="steps${cur < 0 ? " complete" : ""}">${steps.map(([l, t], i) => `<li class="${t ? "done" : i === cur ? "now" : ""}"><span class="dot" aria-hidden="true">${t ? "✓" : i + 1}</span><b>${l}</b><span class="small muted">${t ? stamp(t) : i === cur ? "Next" : ""}</span></li>`).join("")}</ol>`;
+}
+/* ---------- Desk layout: sections, overview and the command palette ---------- */
+/* The desk's own typefaces (Host Grotesk for headings, Instrument Sans for text), loaded only for staff screens */
+function deskFonts() {
+  if (deskFonts.done) return; deskFonts.done = true;
+  const l = document.createElement("link"); l.rel = "stylesheet";
+  l.href = "https://fonts.googleapis.com/css2?family=Host+Grotesk:wght@500;600;700;800&family=Instrument+Sans:wght@400;500;600;700&display=swap";
+  document.head.appendChild(l);
+}
+const DESK_NAV = [
+  ["Operations", [["overview", "Overview", "pulse"], ["review", "To review", "rx"], ["pack", "Pack & deliver", "box"], ["pay", "Awaiting payment", "card"], ["done", "Completed", "check"]]],
+  ["Customers", [["requests", "Messages & bookings", "chat"]]],
+  ["Inventory", [["stock", "Stock", "layers"], ["supply", "Supply", "truck"]]]
+];
+const DESK_TABS = DESK_NAV.flatMap(([, items]) => items.map(i => i[0]));
+const DESK_TITLES = {
+  overview: ["Main dashboard", "Overview", ""],
+  review: ["Operations", "To review", "Prescriptions waiting for a pharmacist's decision, oldest first."],
+  pack: ["Operations", "Pack & deliver", "Paid orders to pack, and orders out with riders. 30-minute deliveries come first."],
+  pay: ["Operations", "Awaiting payment", "Placed or approved orders the customer hasn't paid yet. One reminder goes out after 2 hours."],
+  done: ["Operations", "Completed", "Delivered, cancelled and not-approved orders."],
+  requests: ["Customers", "Messages & bookings", "Messages, consultations, wholesale quotes and back-in-stock requests."],
+  stock: ["Inventory", "Stock", "Mark products running low or out of stock. Out-of-stock items can't be ordered online."],
+  supply: ["Inventory", "Supply", "Shortages, purchase orders to wholesalers, and your wholesaler list."]
+};
+function goDesk(tab, extra) {
+  const st = S.staff; st.tab = tab; st.sel = null; st.detail = null; st.status = ""; Object.assign(st, extra || {});
+  render(); if (tab === "supply" || tab === "overview") loadSupply(true);
+  const h = $("#dk-title"); if (h) h.focus({ preventScroll: true });
+}
+function greeting() { const h = Number(new Date().toLocaleString("en-GB", { hour: "numeric", hour12: false, timeZone: CFG.site.timezone })); return h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening"; }
+/* The dashboard's opening line: what needs the dispensary now */
+function overviewSummary(d, groups) {
+  const toPack = d.orders.filter(o => o.status === "paid").length, onRoad = d.orders.filter(o => o.status === "out_for_delivery").length, now = groups.review.length + toPack;
+  const parts = [groups.review.length && `${groups.review.length} prescription${groups.review.length === 1 ? "" : "s"} to review`, toPack && `${toPack} to pack`].filter(Boolean);
+  return (now ? `${now} order${now === 1 ? " needs" : "s need"} you now: ${parts.join(" and ")}.` : "Nothing is waiting on the dispensary right now.") + (onRoad ? ` ${onRoad} on the road with riders.` : "");
+}
+function overviewActions(d, groups) {
+  const waiting = groups.review.concat(d.orders.filter(o => o.status === "paid")).sort((a, b) => waitFrom(a) - waitFrom(b)), next = waiting[0], short = shortCount(d);
+  return `<div class="dk-head-actions">${next ? `<button class="btn btn-primary" type="button" data-openorder="${esc(next.id)}" data-otab="${next.status === "paid" ? "pack" : "review"}">Open next order · <span class="mono">${esc(next.id)}</span></button>` : `<button class="btn btn-primary" type="button" data-dtab="pack" data-dstatus="">Go to Pack &amp; deliver</button>`}<button class="btn btn-ghost" type="button" data-dtab="supply" data-dstatus="" data-sv="short">Review shortages${short ? ` (${short})` : ""}</button></div>`;
+}
+function overviewPanel(d, groups, takings, paidToday, day) {
+  const st = S.staff, sp = st.supply, today = day(Date.now());
+  const toPack = d.orders.filter(o => o.status === "paid"), onRoad = d.orders.filter(o => o.status === "out_for_delivery");
+  const delivered = d.orders.filter(o => o.status === "delivered" && day(o.createdAt) === today).length;
+  const newMsgs = d.requests.filter(r => r.status === "new").length, short = shortCount(d);
+  const openPos = sp ? sp.pos.filter(p => ["draft", "sent", "confirmed"].includes(p.status)).length : null;
+  const oldest = l => l.length ? `oldest ${waitText(Math.min(...l.map(waitFrom)))}` : "nothing waiting";
+  const now = groups.review.length + toPack.length;
+  const fact = (tab, status, label, value, note, hot) => `<li><button type="button" class="fact${hot ? " hot" : ""}" data-dtab="${tab}" data-dstatus="${status}"><span class="fact-label">${label}</span><b>${value}</b><span class="fact-note">${note}</span></button></li>`;
+  const tile = (tab, status, label, value) => `<button type="button" class="flow-tile" data-dtab="${tab}" data-dstatus="${status}"><b>${value}</b><span>${label}</span></button>`;
+  const step = (i, tab, status, label, n, note, hot) => `<li><button type="button" class="step${hot ? " hot" : ""}${n ? " live" : ""}" data-dtab="${tab}" data-dstatus="${status}"><span class="step-n" aria-hidden="true">${i}</span><span class="step-label">${label}</span><b>${n}</b><span class="fact-note">${note}</span></button></li>`;
+  const progress = `<section class="ov-field ov-top" aria-labelledby="pipe-h">
+      <div class="ov-field-head"><h2 id="pipe-h" class="h3">Order progress</h2><p class="small">Every order moves left to right. Select a stage to open it.</p></div>
+      <ol class="dk-steps">
+        ${step(1, "review", "", "Pharmacist review", groups.review.length, oldest(groups.review), groups.review.some(o => waitMins(o) > 60))}
+        ${step(2, "pay", "", "Customer pays", groups.pay.length, "awaiting payment", false)}
+        ${step(3, "pack", "paid", "Pack and check", toPack.length, oldest(toPack), toPack.some(o => waitMins(o) > 60))}
+        ${step(4, "pack", "out_for_delivery", "Deliver with code", onRoad.length, `${delivered} delivered today`, false)}
+      </ol>
+    </section>`;
+  const rest = `<div class="ov-grid">
+      <section aria-labelledby="facts-h"><h2 id="facts-h" class="h3 ov-sub">Today at a glance</h2>
+        <ul class="dk-facts">
+          ${fact("review", "", "To review", groups.review.length, oldest(groups.review), groups.review.some(o => waitMins(o) > 60))}
+          ${fact("pack", "paid", "To pack", toPack.length, oldest(toPack), toPack.some(o => waitMins(o) > 60))}
+          ${fact("pack", "out_for_delivery", "On the road", onRoad.length, "with riders", false)}
+          ${fact("pay", "", "Awaiting payment", groups.pay.length, "reminder after 2 h", false)}
+          ${fact("supply", "", "Items short", short, short ? "low or out of stock" : "all in stock", short > 0)}
+          <li><button type="button" class="fact" data-dtab="done" data-dstatus=""><span class="fact-label">Takings today</span><b>${NGN(takings)}</b><span class="fact-note">${paidToday.length} paid · 7 days ${weekBars(d.orders, day)}</span></button></li>
+        </ul>
+      </section>
+
+    </div>`;
+  const flow = `<section class="ov-flowtop" aria-label="How work flows"><figure class="dk-flow" aria-labelledby="flow-h">
+        <h2 id="flow-h" class="h3 ov-sub">How work flows</h2>
+        <div class="flow-row">${tile("review", "", "Prescriptions", groups.review.length)}${tile("pack", "paid", "Paid orders", toPack.length)}${tile("supply", "", "Wholesaler orders", openPos === null ? "…" : openPos)}${tile("requests", "", "Messages", newMsgs)}</div>
+        <svg class="flow-lines" viewBox="0 0 100 40" preserveAspectRatio="none" aria-hidden="true"><path d="M12.5 0 C12.5 22 50 18 50 40M37.5 0 C37.5 22 50 18 50 40M62.5 0 C62.5 22 50 18 50 40M87.5 0 C87.5 22 50 18 50 40"/></svg>
+        <div class="flow-core"><span>Dispensary</span><b>${now + onRoad.length}</b><span>orders in progress</span></div>
+        <svg class="flow-lines" viewBox="0 0 100 40" preserveAspectRatio="none" aria-hidden="true"><path d="M50 0 C50 22 30 18 30 40M50 0 C50 22 70 18 70 40"/></svg>
+        <div class="flow-row flow-out">${tile("pack", "out_for_delivery", "With riders", onRoad.length)}${tile("done", "", "Delivered today", delivered)}</div>
+      </figure></section>`;
+  return { flow, progress, rest };
+}
+/* Command palette: Ctrl/⌘+K jumps to any order, section, product or action */
+let cmdkList = [];
+function cmdkItems(q) {
+  const st = S.staff, d = st.list, nq = norm(q || "");
+  const sections = DESK_NAV.flatMap(([g, items]) => items.map(([k, l]) => ({ kind: "Section", label: l, sub: g, run: () => goDesk(k) })));
+  const actions = [
+    { kind: "Action", label: "Send payment reminders now", run: () => { const b = document.querySelector("[data-remind]"); if (b) sendReminders(b); } },
+    { kind: "Action", label: "Create a purchase order", sub: "Supply · Shortages", run: () => goDesk("supply", { sview: "short" }) },
+    { kind: "Action", label: "Add a wholesaler", sub: "Supply · Wholesalers", run: () => goDesk("supply", { sview: "suppliers", editSup: "new" }) },
+    { kind: "Action", label: "Download orders (CSV)", run: () => downloadCsv() },
+    { kind: "Action", label: "Send test email", run: () => { const b = document.querySelector("[data-testmail]"); if (b) testEmail(b); } },
+    { kind: "Action", label: soundOn() ? "Turn the new-order sound off" : "Turn the new-order sound on", run: () => { store.set("synako.sound", !soundOn()); render(); } },
+    { kind: "Action", label: "Keyboard shortcuts", run: () => { st.keys = true; render(); } },
+    { kind: "Page", label: "Rider page", sub: "/rider", run: () => go("/rider") },
+    { kind: "Page", label: "Back to the shop", sub: "/", run: () => go("/") }
+  ];
+  const orders = (d ? d.orders : []).map(o => ({ kind: "Order", label: `${o.id} · ${o.customer}`, sub: `${o.statusLabel}${o.city ? ` · ${o.city}` : ""}`, key: [o.id, o.customer, o.phone, o.city, o.items.join(" ")].join(" "), run: () => openOrder(o.id) }));
+  const products = nq.length >= 2 ? P.filter(p => norm([p.name, p.generic, p.brand].join(" ")).includes(nq)).slice(0, 6).map(p => ({ kind: "Stock", label: p.name, sub: p.out ? "Out of stock" : (d && (d.low || []).includes(p.id)) ? "Running low" : "In stock", run: () => goDesk("stock", { stockQ: p.name }) })) : [];
+  const all = nq ? sections.concat(actions, orders, products).filter(i => norm([i.label, i.sub, i.key].join(" ")).includes(nq) || i.kind === "Stock") : sections.concat(actions.slice(0, 3), orders.slice(0, 5));
+  return all.slice(0, 14);
+}
+function cmdkOptions() {
+  const st = S.staff; cmdkList = cmdkItems(st.cq);
+  if (st.ci >= cmdkList.length) st.ci = Math.max(0, cmdkList.length - 1);
+  return cmdkList.length ? cmdkList.map((it, i) => `<li role="option" id="cmdk-${i}" data-cmd="${i}" aria-selected="${i === (st.ci || 0)}"><span class="cmdk-kind">${it.kind}</span><span class="cmdk-label">${esc(it.label)}</span>${it.sub ? `<span class="cmdk-sub">${esc(it.sub)}</span>` : ""}</li>`).join("") : `<li class="cmdk-empty" role="presentation">No matches. Try an order number, a name, a product or an action.</li>`;
+}
+function cmdkView() {
+  const st = S.staff;
+  return `<div class="cmdk" data-cmdkclose><div class="cmdk-box" role="dialog" aria-modal="true" aria-label="Search the desk">
+    <div class="cmdk-input">${icon("search", "ic sm")}<input id="cmdk-q" role="combobox" aria-expanded="true" aria-controls="cmdk-list" aria-autocomplete="list" aria-activedescendant="cmdk-${st.ci || 0}" autocomplete="off" spellcheck="false" placeholder="Search orders, products and actions" value="${esc(st.cq || "")}"></div>
+    <ul id="cmdk-list" role="listbox" aria-label="Results">${cmdkOptions()}</ul>
+    <p class="cmdk-hint"><kbd>↑</kbd><kbd>↓</kbd> move · <kbd>Enter</kbd> open · <kbd>Esc</kbd> close</p></div></div>`;
+}
+function cmdkOpen() { const st = S.staff; st.cmdk = true; st.cq = ""; st.ci = 0; st.cmdkFrom = document.activeElement; render(); const q = $("#cmdk-q"); if (q) q.focus(); }
+function cmdkClose() { const st = S.staff; st.cmdk = false; render(); const f = st.cmdkFrom; if (f && document.contains(f)) f.focus(); else { const b = $(".cmdk-btn"); if (b) b.focus(); } }
+function cmdkRefresh() { const l = $("#cmdk-list"), q = $("#cmdk-q"); if (l) l.innerHTML = cmdkOptions(); if (q) q.setAttribute("aria-activedescendant", "cmdk-" + (S.staff.ci || 0)); const a = $("#cmdk-" + (S.staff.ci || 0)); if (a) a.scrollIntoView({ block: "nearest" }); }
+function cmdkRun(i) { const it = cmdkList[i]; if (!it) return; S.staff.cmdk = false; it.run(); if (S.staff.cmdk === false && S.mode === "staff") render(); }
+function openOrder(id) {
+  const o = (S.staff.list ? S.staff.list.orders : []).find(x => x.id === id); if (!o) return;
+  const g = deskGroups(S.staff.list), tab = Object.keys(g).find(k => g[k].some(x => x.id === id)) || "done";
+  S.staff.tab = tab; S.staff.status = ""; S.staff.q = ""; loadDeskOrder(id);
+  setTimeout(() => { const b = document.querySelector(`[data-sel="${id}"]`); if (b) b.scrollIntoView({ block: "nearest" }); }, 0);
+}
+/* ---------- Supply: shortages, purchase orders to wholesalers, suppliers ---------- */
+const shortCount = d => new Set([...(d.out || []), ...(d.low || []), ...P.filter(p => p.outInData).map(p => p.id)]).size;
+async function loadSupply(silent) {
+  const st = S.staff; if (!st.token) return;
+  try { st.supply = DEMO ? { shortages: [], suppliers: [], pos: [], overdue: [], email: false, sms: false } : await call("staff/orders?view=supply", { token: st.token }); st.supplyErr = ""; }
+  catch (e) { if (e.status === 401) return signOut(); st.supplyErr = e.message; }
+  if (S.mode === "staff" && ["supply", "overview"].includes(st.tab)) render();
+}
+async function supplyPost(body, btn) {
+  if (btn) btn.disabled = true;
+  try { const r = await call("staff/orders", { method: "POST", body: Object.assign({ by: S.staff.name }, body), token: S.staff.token }); if (r.shortages) S.staff.supply = r; return r; }
+  catch (e) { if (e.status === 401) signOut(); else toast(e.message); return null; }
+  finally { if (btn) btn.disabled = false; }
+}
+async function setLowStock(id, low, btn) {
+  const r = await supplyPost({ action: "stock-low", id, low }, btn);
+  if (r) { S.staff.list.low = r.low; toast(low ? `${prod(id).name} marked running low. The supply manager has been told.` : `${prod(id).name} is no longer marked low.`); render(); }
+}
+async function supplierCall(body, btn, msg, close) {
+  const r = await supplyPost(body, btn);
+  if (r) { if (close) S.staff.editSup = null; toast(msg); render.fresh = true; render(); }
+}
+async function createPO(btn) {
+  const st = S.staff, sh = (st.supply || {}).shortages || [], sel = st.shsel || {};
+  const lines = sh.filter(x => sel[x.id]).map(x => ({ id: x.id, qty: Number(($("#shq-" + x.id) || {}).value || 0) }));
+  const supplier = ($("#po-sup") || {}).value || "";
+  if (!lines.length) return toast("Tick the items to order.");
+  if (!supplier) return toast("Choose a wholesaler.");
+  const r = await supplyPost({ action: "po-create", supplier, lines, note: ($("#po-note") || {}).value || "" }, btn);
+  if (r) { st.shsel = {}; st.sview = "pos"; st.openPo = r.po.id; toast(`Purchase order ${r.po.id} created. Send it to ${r.po.supplierName} next.`); render.fresh = true; render(); }
+}
+function poText(po) {
+  return [`Purchase order ${po.id} from ${B.companyName || B.name}`, ...po.lines.map(l => `• ${l.qty} × ${l.name}${l.pack ? ` (${l.pack})` : ""}`), po.note ? `Note: ${po.note}` : "",
+    `Deliver to: ${[B.address, B.city, B.state].filter(has).join(", ")}`, `Contact: ${[B.phone, B.email].filter(has).join(" · ")}`, "Please confirm availability, price and delivery date. Thank you."].filter(Boolean).join("\n");
+}
+async function poAction(act, extra, btn) {
+  const st = S.staff, po = ((st.supply || {}).pos || []).find(x => x.id === st.openPo); if (!po) return;
+  const sup = ((st.supply || {}).suppliers || []).find(x => x.id === po.supplier) || {};
+  if (extra.via === "copy") { try { await navigator.clipboard.writeText(poText(po)); toast("Order copied. Paste it into a message to the wholesaler."); } catch (e) { toast("Couldn't copy on this device."); } return; }
+  if (extra.via === "whatsapp") { const link = waTo(sup.whatsapp || sup.phone, poText(po)); if (!link) return toast("Add a WhatsApp or phone number for this wholesaler first."); window.open(link, "_blank", "noopener"); }
+  const r = await supplyPost(Object.assign({ action: "po-update", id: po.id, po: act }, extra), btn);
+  if (r) toast({ send: extra.via === "email" ? `Emailed to ${sup.email}.` : "Marked as sent.", confirmed: "Marked as confirmed.", received: "Received. The items are back in stock.", cancel: "Purchase order cancelled.", "": "Delivery date saved." }[act] || "Saved.");
+  if (r && act === "received") await loadDesk(true);
+  render();
+}
+function supplyPanel() {
+  const st = S.staff, sp = st.supply, view = st.sview || "short";
+  if (!sp) return `<section class="panel supply"><p class="muted">${st.supplyErr ? esc(st.supplyErr) : "Loading supply…"}</p></section>`;
+  const toOrder = sp.shortages.filter(x => !x.onOrder.length), open = sp.pos.filter(p => ["draft", "sent", "confirmed"].includes(p.status));
+  const out = sp.shortages.filter(x => x.state === "out").length, low = sp.shortages.length - out;
+  const waiting = sp.shortages.reduce((t, x) => t + x.waiting, 0), late = sp.overdue.length;
+  const fact = (sv, f, label, value, note, hot) => `<li><button type="button" class="fact${hot ? " hot" : ""}" data-sview="${sv}"${f ? ` data-shf="${f}"` : ""}><span class="fact-label">${label}</span><b>${value}</b><span class="fact-note">${note}</span></button></li>`;
+  const tile = (sv, label, value, extra) => `<button type="button" class="flow-tile" data-sview="${sv}"${extra || ""}><b>${value}</b><span>${label}</span></button>`;
+  const busiest = sp.suppliers.map(w => ({ w, n: open.filter(p => p.supplier === w.id).length })).sort((a, b) => b.n - a.n || a.w.name.localeCompare(b.w.name)).slice(0, 4);
+  const nav = [["short", "Shortages", toOrder.length, toOrder.length > 0], ["pos", "Purchase orders", open.length, late > 0], ["suppliers", "Wholesalers", sp.suppliers.length, false]];
+  const step = (i, f, label, n, note, hot) => `<li><button type="button" class="step${hot ? " hot" : ""}${n ? " live" : ""}" data-sview="pos" data-pof="${f}"><span class="step-n" aria-hidden="true">${i}</span><span class="step-label">${label}</span><b>${n}</b><span class="fact-note">${note}</span></button></li>`;
+  const by = s => sp.pos.filter(p => p.status === s).length, recent = sp.pos.filter(p => p.status === "received" && Date.now() - Date.parse(p.receivedAt || p.createdAt) < 30 * 864e5).length;
+  return `<section class="supply" aria-label="Supply console">
+    <div class="sup-hero">
+      <ul class="dk-facts" aria-label="Supply figures">
+        ${fact("short", "open", "To order", toOrder.length, toOrder.length ? "short and not on order" : "nothing to order", toOrder.length > 0)}
+        ${fact("short", "out", "Out of stock", out, out ? "can't be ordered online" : "none", out > 0)}
+        ${fact("short", "low", "Running low", low, low ? "order before it runs out" : "none", false)}
+        ${fact("short", "", "Customers waiting", waiting, waiting ? "asked to be told when back" : "nobody waiting", waiting > 0)}
+        ${fact("pos", "", "Open orders", open.length, open.length ? "with wholesalers" : "none open", false)}
+        ${fact("pos", "late", "Late", late, late ? "past due or unconfirmed" : "all on time", late > 0)}
+      </ul>
+      <figure class="dk-flow" aria-labelledby="sflow-h">
+        <h2 id="sflow-h" class="h3 ov-sub">Supply chain</h2>
+        <div class="flow-row" style="grid-template-columns:repeat(${Math.max(1, busiest.length)},minmax(0,1fr))">${busiest.length ? busiest.map(({ w, n }) => tile("suppliers", esc(w.name.replace(/\s+(Pharmaceuticals?|LTD|Ltd|Limited)\b.*$/i, "")), n, ` title="${esc(w.name)}: ${n} open order${n === 1 ? "" : "s"}"`)).join("") : tile("suppliers", "Add a wholesaler", "+")}</div>
+        <svg class="flow-lines" viewBox="0 0 100 40" preserveAspectRatio="none" aria-hidden="true"><path d="${(busiest.length ? busiest : [0]).map((_, i, a) => { const x = (i + 0.5) * 100 / a.length; return `M${x} 0 C${x} 22 50 18 50 40`; }).join("")}"/></svg>
+        <div class="flow-core"><span>Synako stock</span><b>${sp.shortages.length}</b><span>item${sp.shortages.length === 1 ? "" : "s"} short · ${open.length} on order</span></div>
+        <svg class="flow-lines" viewBox="0 0 100 40" preserveAspectRatio="none" aria-hidden="true"><path d="M50 0 C50 22 30 18 30 40M50 0 C50 22 70 18 70 40"/></svg>
+        <div class="flow-row flow-out">${tile("short", "Customers waiting", waiting)}${tile("pos", "Received, 30 days", recent, ' data-pof="received"')}</div>
+        <figcaption class="sr">Wholesalers with open purchase orders feed Synako's stock; ${sp.shortages.length} items are short and ${waiting} customers are waiting.</figcaption>
+      </figure>
+    </div>
+    <section class="ov-field" aria-labelledby="popipe-h">
+      <div class="ov-field-head"><h2 id="popipe-h" class="h3">Purchase order pipeline</h2><p class="small">Each order moves left to right. Select a stage to see its orders.</p></div>
+      <ol class="dk-steps">
+        ${step(1, "draft", "Draft", by("draft"), "not sent yet", by("draft") > 0)}
+        ${step(2, "sent", "Sent to wholesaler", by("sent"), late ? `${late} late` : "awaiting reply", late > 0)}
+        ${step(3, "confirmed", "Confirmed", by("confirmed"), "on the way", false)}
+        ${step(4, "received", "Received", recent, "last 30 days · back in stock", false)}
+      </ol>
+    </section>
+    <div class="seg" role="tablist" aria-label="Supply views">${nav.map(([k, l, n, hot]) => `<button type="button" role="tab" id="sv-${k}" aria-controls="sv-panel" data-sview="${k}" aria-selected="${view === k}">${l} <span class="count${hot ? " warn" : ""}">${n}</span></button>`).join("")}</div>
+    <div id="sv-panel" role="tabpanel" aria-labelledby="sv-${view}">${view === "short" ? shortagesView(sp) : view === "pos" ? posView(sp) : suppliersView(sp)}</div>
+  </section>`;
+}
+const SH_COLS = [["name", "Item"], ["state", "Status"], ["waiting", "Waiting"], ["sold7", "Sold 7 days"]];
+function shortagesView(sp) {
+  const st = S.staff, sel = st.shsel || {}, f = st.shf || "", q = norm(st.shq || ""), sort = st.shsort || { k: "", dir: 1 };
+  if (!sp.shortages.length) return `<div class="panel empty-state">${icon("check", "ic big")}<p><b>Nothing is short right now</b></p><p class="muted small">When staff mark items as running low or out of stock in the Stock section, they appear here to order.</p></div>`;
+  const suggest = x => Math.max(10, Math.ceil((x.sold7 * 2 + x.waiting) / 5) * 5);
+  const counts = { "": sp.shortages.length, open: sp.shortages.filter(x => !x.onOrder.length).length, out: sp.shortages.filter(x => x.state === "out").length, low: sp.shortages.filter(x => x.state === "low").length };
+  let rows = sp.shortages.filter(x => (!f || (f === "open" ? !x.onOrder.length : x.state === f)) && (!q || norm(x.name + " " + x.pack).includes(q)));
+  if (sort.k) rows = rows.slice().sort((a, b) => (sort.k === "name" ? a.name.localeCompare(b.name) : sort.k === "state" ? (a.state === "out" ? 0 : 1) - (b.state === "out" ? 0 : 1) : (a[sort.k] - b[sort.k])) * sort.dir);
+  const picked = sp.shortages.filter(x => sel[x.id]), allOn = rows.length && rows.every(x => sel[x.id]);
+  const chosen = st.poSup && sp.suppliers.some(w => w.id === st.poSup) ? st.poSup : "";
+  const lead = (sp.suppliers.find(w => w.id === chosen) || {}).leadDays;
+  const th = ([k, l]) => `<th scope="col" aria-sort="${sort.k === k ? (sort.dir > 0 ? "ascending" : "descending") : "none"}"><button type="button" class="th-sort" data-shsort="${k}">${l}<span aria-hidden="true">${sort.k === k ? (sort.dir > 0 ? " ↑" : " ↓") : ""}</span></button></th>`;
+  return `<div class="panel dtable-wrap">
+    <div class="dt-tools">
+      <div class="chips" role="group" aria-label="Filter shortages">${[["", "All"], ["open", "Not on order"], ["out", "Out of stock"], ["low", "Running low"]].map(([k, l]) => `<button type="button" class="chip" data-shf="${k}" aria-pressed="${f === k}">${l} <span class="count">${counts[k]}</span></button>`).join("")}</div>
+      <label class="dt-search"><span class="sr">Search shortages</span>${icon("search", "ic sm")}<input id="shq" type="search" placeholder="Search items" value="${esc(st.shq || "")}" autocomplete="off"></label>
+    </div>
+    <table class="dtable">
+      <caption class="sr">Items short, ${rows.length} shown. Tick items, choose a wholesaler and create a purchase order.</caption>
+      <thead><tr><th scope="col" class="c-check"><input type="checkbox" id="sh-all" ${allOn ? "checked" : ""} aria-label="Select all shown items"></th>${SH_COLS.map(th).join("")}<th scope="col">On order</th><th scope="col" class="c-num">Order qty</th></tr></thead>
+      <tbody>${rows.length ? rows.map(x => `<tr class="${sel[x.id] ? "on" : ""}${x.onOrder.length ? " ordered" : ""}">
+        <td class="c-check"><input type="checkbox" id="sh-${esc(x.id)}" data-shsel="${esc(x.id)}" ${sel[x.id] ? "checked" : ""} aria-label="Select ${esc(x.name)}"></td>
+        <td data-label="Item"><label for="sh-${esc(x.id)}"><b>${esc(x.name)}</b> <span class="muted small">${esc(x.pack)}</span></label></td>
+        <td data-label="Status">${x.state === "out" ? `<span class="tag bad">Out of stock</span>` : `<span class="tag warn">Running low</span>`}</td>
+        <td data-label="Waiting" class="c-num">${x.waiting || "–"}</td>
+        <td data-label="Sold 7 days" class="c-num">${x.sold7 || "–"}</td>
+        <td data-label="On order">${x.onOrder.length ? x.onOrder.map(o => `<span class="small ok-text">${o.qty} · ${esc(o.po)} <span class="muted">(${esc(o.status)})</span></span>`).join("<br>") : `<span class="muted small">Not ordered</span>`}</td>
+        <td data-label="Order qty" class="c-num"><input class="qty-in" id="shq-${esc(x.id)}" type="number" min="1" step="1" inputmode="numeric" value="${suggest(x)}" aria-label="Quantity of ${esc(x.name)} to order"></td>
+      </tr>`).join("") : `<tr><td colspan="7" class="muted small">No items match. <button class="linkbtn" type="button" data-shf="">Show all</button></td></tr>`}</tbody>
+    </table>
+    <div class="po-bar${picked.length ? " live" : ""}" role="region" aria-label="New purchase order">
+      <p class="po-bar-count"><b>${picked.length}</b> item${picked.length === 1 ? "" : "s"} selected</p>
+      ${sp.suppliers.length ? `<label for="po-sup"><span>Wholesaler</span><select id="po-sup"><option value="">Choose…</option>${sp.suppliers.map(w => `<option value="${esc(w.id)}"${w.id === chosen ? " selected" : ""}>${esc(w.name)}${w.leadDays ? ` · ${w.leadDays} day${w.leadDays === 1 ? "" : "s"}` : ""}</option>`).join("")}</select></label>
+      <label for="po-note"><span>Note${lead ? ` · due about ${new Date(Date.now() + lead * 864e5).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}` : ""}</span><input id="po-note" placeholder="Optional, e.g. deliver before Friday"></label>
+      <button class="btn btn-primary" type="button" data-pocreate ${picked.length ? "" : "disabled"}>Create purchase order</button>`
+      : `<p class="small">Add your wholesalers first. <button class="linkbtn" type="button" data-supedit="">Add a wholesaler</button></p>`}
+    </div>
+  </div>`;
+}
+const PO_TAG = { draft: "gen", sent: "warn", confirmed: "otc", received: "ok", cancelled: "bad" };
+function poCsv() {
+  const pos = ((S.staff.supply || {}).pos || []), q = v => `"${String(v == null ? "" : v).replace(/"/g, '""')}"`;
+  const rows = [["PO", "Wholesaler", "Status", "Created", "Expected", "Item", "Pack", "Quantity"]].concat(pos.flatMap(p => p.lines.map(l => [p.id, p.supplierName, p.status, p.createdAt.slice(0, 10), p.expected || "", l.name, l.pack, l.qty])));
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([rows.map(r => r.map(q).join(",")).join("\n")], { type: "text/csv" }));
+  a.download = `synako-purchase-orders-${new Date().toISOString().slice(0, 10)}.csv`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+function posView(sp) {
+  const st = S.staff, late = new Set(sp.overdue), f = st.pof || "";
+  if (!sp.pos.length) return `<div class="panel empty-state">${icon("box", "ic big")}<p><b>No purchase orders yet</b></p><p class="muted small">Create one from the Shortages view.</p><button class="btn btn-primary btn-sm" type="button" data-sview="short">Go to shortages</button></div>`;
+  const keep = p => !f || (f === "open" ? ["draft", "sent", "confirmed"].includes(p.status) : f === "late" ? late.has(p.id) : p.status === f);
+  const list = sp.pos.filter(keep);
+  const chips = [["", "All"], ["open", "Open"], ["late", "Late"], ["draft", "Draft"], ["sent", "Sent"], ["confirmed", "Confirmed"], ["received", "Received"], ["cancelled", "Cancelled"]];
+  return `<div class="dt-tools"><div class="chips" role="group" aria-label="Filter purchase orders">${chips.map(([k, l]) => `<button type="button" class="chip" data-pof="${k}" aria-pressed="${f === k}">${l} <span class="count">${sp.pos.filter(p => !k || (k === "open" ? ["draft", "sent", "confirmed"].includes(p.status) : k === "late" ? late.has(p.id) : p.status === k)).length}</span></button>`).join("")}</div>
+    <button class="btn btn-ghost btn-sm" type="button" data-pocsv>${icon("download", "ic sm")} Download (CSV)</button></div>
+    <div class="po-list">${list.length ? list.map(po => {
+    const sup = sp.suppliers.find(x => x.id === po.supplier) || {}, isOpen = st.openPo === po.id, closed = ["received", "cancelled"].includes(po.status);
+    const units = po.lines.reduce((t, l) => t + l.qty, 0);
+    return `<article class="panel po${late.has(po.id) ? " late" : ""}">
+      <button type="button" class="po-top" data-poopen="${esc(po.id)}" aria-expanded="${isOpen}" aria-controls="po-${esc(po.id)}"><b class="mono">${esc(po.id)}</b><span class="po-sup">${esc(po.supplierName)}</span><span class="tag ${PO_TAG[po.status]}">${esc(po.status)}</span>${late.has(po.id) ? `<span class="tag bad">Late</span>` : ""}<span class="small muted po-meta">${po.lines.length} line${po.lines.length === 1 ? "" : "s"} · ${units} units · ${stamp(po.createdAt)}${po.expected ? ` · due ${esc(po.expected)}` : ""}</span><span class="po-caret" aria-hidden="true">${isOpen ? "−" : "+"}</span></button>
+      ${isOpen ? `<div class="po-body" id="po-${esc(po.id)}">
+        <table class="dtable compact"><caption class="sr">Lines on ${esc(po.id)}</caption><thead><tr><th scope="col">Item</th><th scope="col">Pack</th><th scope="col" class="c-num">Quantity</th></tr></thead>
+          <tbody>${po.lines.map(l => `<tr><td data-label="Item">${esc(l.name)}</td><td data-label="Pack" class="muted">${esc(l.pack)}</td><td data-label="Quantity" class="c-num"><b>${l.qty}</b></td></tr>`).join("")}</tbody></table>
+        ${po.note ? `<p class="small"><b>Note:</b> ${esc(po.note)}</p>` : ""}
+        ${closed ? "" : `<div class="po-actions" role="group" aria-label="Send ${esc(po.id)}">
+          ${sup.email ? `<button class="btn btn-sm btn-primary" type="button" data-posend="email">${icon("chat", "ic sm")} Email to ${esc(sup.name)}</button>` : ""}
+          ${sup.whatsapp || sup.phone ? `<button class="btn btn-sm ${sup.email ? "btn-ghost" : "btn-primary"}" type="button" data-posend="whatsapp">${icon("chat", "ic sm")} Send on WhatsApp</button>` : ""}
+          ${sup.phone ? `<a class="btn btn-sm btn-ghost" href="tel:${esc(sup.phone)}">${icon("phone", "ic sm")} Call</a>` : ""}
+          <button class="btn btn-sm btn-ghost" type="button" data-posend="copy">Copy order text</button>
+        </div>
+        <div class="po-actions" role="group" aria-label="Update ${esc(po.id)}">
+          ${["draft", "sent"].includes(po.status) ? `<button class="btn btn-sm btn-ghost" type="button" data-poact="confirmed">Wholesaler confirmed</button>` : ""}
+          <button class="btn btn-sm btn-success" type="button" data-poact="received">${icon("check", "ic sm")} Received: back in stock</button>
+          <button class="btn btn-sm btn-ghost" type="button" data-poact="cancel">Cancel order</button>
+        </div>
+        <div class="po-date"><label for="po-date">Expected delivery<input id="po-date" type="date" value="${esc(po.expected || "")}"></label><button class="btn btn-sm btn-ghost" type="button" data-podate>Save date</button></div>`}
+        <details class="po-log"><summary>Order record (${po.history.length})</summary><div class="audit">${po.history.slice().reverse().map(h => `<div><span>${stamp(h.t)}</span><b style="font-weight:500">${esc(h.m)}</b></div>`).join("")}</div></details>
+      </div>` : ""}
+    </article>`; }).join("") : `<p class="muted small">No purchase orders match. <button class="linkbtn" type="button" data-pof="">Show all</button></p>`}</div>`;
+}
+function suppliersView(sp) {
+  const st = S.staff, ed = st.editSup, cur = ed && ed !== "new" ? sp.suppliers.find(x => x.id === ed) || {} : {};
+  const open = id => sp.pos.filter(p => p.supplier === id && ["draft", "sent", "confirmed"].includes(p.status)).length;
+  const initials = n => String(n).replace(/[^A-Za-z& ]/g, "").split(/\s+/).filter(w => w && !/^(ltd|limited|pharmaceuticals?)$/i.test(w)).slice(0, 2).map(w => w[0]).join("").toUpperCase() || "W";
+  const form = ed ? `<form class="f panel sup-form" id="supform" novalidate><h3>${ed === "new" ? "Add a wholesaler" : `Edit ${esc(cur.name || "wholesaler")}`}</h3>
+      <div class="row2"><label for="sup-name">Business name<input id="sup-name" required value="${esc(cur.name || "")}"></label><label for="sup-contact">Contact person<input id="sup-contact" value="${esc(cur.contact || "")}"></label></div>
+      <div class="row2"><label for="sup-phone">Phone<input id="sup-phone" type="tel" value="${esc(cur.phone || "")}"></label><label for="sup-wa">WhatsApp<span class="hint">If different from the phone.</span><input id="sup-wa" type="tel" value="${esc(cur.whatsapp || "")}"></label></div>
+      <div class="row2"><label for="sup-email">Email<span class="hint">Orders can be emailed once your order emails work.</span><input id="sup-email" type="email" value="${esc(cur.email || "")}"></label><label for="sup-lead">Usual delivery time (days)<input id="sup-lead" type="number" min="0" max="60" value="${esc(cur.leadDays || "")}"></label></div>
+      <label for="sup-notes">Notes<span class="hint">What they stock, payment terms, minimum order…</span><textarea id="sup-notes" rows="2">${esc(cur.notes || "")}</textarea></label>
+      <div class="actions"><button class="btn btn-primary" type="submit">Save wholesaler</button><button class="btn btn-ghost" type="button" data-supcancel>Cancel</button></div></form>` : "";
+  return `${form}<div class="dt-tools"><p class="small muted">${sp.suppliers.length} wholesaler${sp.suppliers.length === 1 ? "" : "s"}. Purchase orders reach them by email or WhatsApp.</p>${ed ? "" : `<button class="btn btn-primary btn-sm" type="button" data-supedit="">${icon("plus", "ic sm")} Add a wholesaler</button>`}</div>
+    ${sp.suppliers.length ? `<ul class="sup-cards">${sp.suppliers.map(x => { const wa = waTo(x.whatsapp || x.phone, `Hello ${x.contact || x.name}, this is ${B.name}.`); const n = open(x.id); return `<li class="panel sup-card">
+      <div class="sup-card-top"><span class="sup-mark" aria-hidden="true">${esc(initials(x.name))}</span><div><h3>${esc(x.name)}</h3>${x.contact ? `<p class="small muted">${esc(x.contact)}</p>` : ""}</div></div>
+      <dl class="sup-facts"><div><dt>Delivery</dt><dd>${x.leadDays ? `${x.leadDays} day${x.leadDays === 1 ? "" : "s"}` : "–"}</dd></div><div><dt>Open orders</dt><dd>${n}</dd></div><div><dt>Phone</dt><dd>${x.phone ? `<a href="tel:${esc(x.phone)}">${esc(x.phone)}</a>` : "–"}</dd></div></dl>
+      ${x.email ? `<p class="small sup-mail">${esc(x.email)}</p>` : `<p class="small muted sup-mail">No email yet</p>`}
+      ${x.notes ? `<p class="small muted">${esc(x.notes)}</p>` : ""}
+      <div class="sup-card-actions">
+        <button class="btn btn-primary btn-sm" type="button" data-orderfrom="${esc(x.id)}">Order from</button>
+        ${x.phone ? `<a class="btn btn-ghost btn-sm" href="tel:${esc(x.phone)}" aria-label="Call ${esc(x.name)}">${icon("phone", "ic sm")} Call</a>` : ""}
+        ${wa ? `<a class="btn btn-ghost btn-sm" href="${esc(wa)}" target="_blank" rel="noopener" aria-label="WhatsApp ${esc(x.name)}">${icon("chat", "ic sm")} WhatsApp</a>` : ""}
+        ${x.email ? `<a class="btn btn-ghost btn-sm" href="mailto:${esc(x.email)}" aria-label="Email ${esc(x.name)}">Email</a>` : ""}
+      </div>
+      <div class="sup-card-foot"><button class="linkbtn" type="button" data-supedit="${esc(x.id)}">Edit</button><button class="linkbtn" type="button" data-supdel="${esc(x.id)}">Remove</button></div>
+    </li>`; }).join("")}</ul>` : `<div class="panel empty-state"><p><b>No wholesalers yet</b></p><button class="btn btn-primary btn-sm" type="button" data-supedit="">Add your first wholesaler</button></div>`}`;
 }
 /* Desk order list: search, delivery and status filters, and sorting (most urgent first by default) */
 const SPEEDS = [["express", "30-minute"], ["sameday", "Same-day"], ["nextday", "Next-day"], ["states", "Other states"]];
@@ -1258,6 +1598,7 @@ function deskDetail() {
 function renderShell() {
   document.documentElement.lang = CFG.site.locale || "en";
   const yr = $("#year"); if (yr) yr.textContent = new Date().getFullYear();
+  const syr = $("#staff-year"); if (syr) syr.textContent = new Date().getFullYear();
   orgLd();
   const hours = () => { const el = $("#topbar-hours"); if (el) el.innerHTML = openStatus(); };
   hours(); clearInterval(renderShell.t); renderShell.t = setInterval(hours, 60000);
@@ -1381,6 +1722,7 @@ function render(scroll) {
   clearInterval(deskTimer); clearInterval(trackTimer); clearInterval(riderTimer);
   let title;
   if (staff) {
+    deskFonts();
     // The desk and rider page refresh themselves; keep whatever staff were typing (notes, codes, searches) and where the cursor was
     const view = $("#staff-view"), a = document.activeElement;
     const typed = render.fresh ? [] : [...view.querySelectorAll("input[id], textarea[id], select[id]")].map(el => [el.id, el.type === "checkbox" ? el.checked : el.value]);
@@ -1389,8 +1731,8 @@ function render(scroll) {
     view.innerHTML = rider ? vRider() : vStaff(); title = rider ? "Rider deliveries" : "Pharmacist Desk";
     typed.forEach(([id, v]) => { const el = document.getElementById(id); if (el && view.contains(el)) { if (el.type === "checkbox") el.checked = v; else if (el.type !== "password" || v) el.value = v; } });
     if (keep) { const el = document.getElementById(keep[0]); if (el) { el.focus(); try { el.setSelectionRange(keep[1], keep[2]); } catch (e) { /* not a text box */ } } }
-    $(".staff-title").textContent = rider ? "Deliveries" : "Pharmacist Desk";
-    $(".staff-head .eyebrow").textContent = rider ? "Synako riders" : "Synako Dispensary";
+    $(".staff-title").textContent = rider ? "Rider deliveries" : "Pharmacist Desk";
+    $(".staff-head .eyebrow").textContent = rider ? "Synako Pharmaceutical LTD · Riders" : "Synako Pharmaceutical LTD";
     if (rider) $("#staff-stats").innerHTML = "";
     $("#staff-signout").hidden = !(rider ? S.rider.token : S.staff.token);
     if (!rider && S.staff.token) deskTimer = setInterval(() => loadDesk(true), 10000);
@@ -1531,22 +1873,42 @@ let sgTimer;
 document.addEventListener("input", e => {
   if (e.target.id === "q") { clearTimeout(sgTimer); sgTimer = setTimeout(openSuggest, 60); }
   if (e.target.id === "em") showEmailFix();
+  if (e.target.id === "cmdk-q") { S.staff.cq = e.target.value; S.staff.ci = 0; cmdkRefresh(); }
+  if (e.target.id === "shq") { S.staff.shq = e.target.value; render(); }
   if (e.target.id === "deskq") { S.staff.q = e.target.value; refreshQueue(); }
   if (e.target.id === "stockq") { S.staff.stockQ = e.target.value; const l = $("#stocklist"); if (l) l.innerHTML = stockRows(); }
 });
 document.addEventListener("focusin", e => { if (e.target.id === "q") openSuggest(); });
+document.addEventListener("click", e => {
+  const opt = e.target.closest && e.target.closest("[data-cmd]");
+  if (opt) { cmdkRun(Number(opt.dataset.cmd)); return; }
+  if (e.target.matches && e.target.matches("[data-cmdkclose]")) cmdkClose();
+});
+document.addEventListener("mousemove", e => {
+  const opt = e.target.closest && e.target.closest("[data-cmd]");
+  if (opt && S.staff.cmdk && Number(opt.dataset.cmd) !== S.staff.ci) { S.staff.ci = Number(opt.dataset.cmd); document.querySelectorAll("#cmdk-list [role=option]").forEach((o, i) => o.setAttribute("aria-selected", String(i === S.staff.ci))); const q = $("#cmdk-q"); if (q) q.setAttribute("aria-activedescendant", "cmdk-" + S.staff.ci); }
+});
 /* Desk keyboard shortcuts, for the counter computer */
 document.addEventListener("keydown", e => {
-  if (S.mode !== "staff" || !S.staff.token || !S.staff.list || e.ctrlKey || e.metaKey || e.altKey) return;
+  if (S.mode !== "staff" || !S.staff.token || !S.staff.list) return;
+  const st = S.staff;
+  if ((e.ctrlKey || e.metaKey) && (e.key === "k" || e.key === "K")) { e.preventDefault(); if (st.cmdk) cmdkClose(); else cmdkOpen(); return; }
+  if (st.cmdk) { // the palette owns the keyboard while it's open
+    if (e.key === "Escape") { e.preventDefault(); cmdkClose(); }
+    else if (e.key === "ArrowDown" || e.key === "ArrowUp") { e.preventDefault(); const n = cmdkList.length; if (n) { st.ci = ((st.ci || 0) + (e.key === "ArrowDown" ? 1 : -1) + n) % n; cmdkRefresh(); } }
+    else if (e.key === "Enter") { e.preventDefault(); cmdkRun(st.ci || 0); }
+    else if (e.key === "Tab") { e.preventDefault(); const q = $("#cmdk-q"); if (q) q.focus(); }
+    return;
+  }
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
   const typing = /^(TEXTAREA|SELECT)$/.test(e.target.tagName) || (e.target.tagName === "INPUT" && !/^(checkbox|radio|button|submit)$/.test(e.target.type));
   if (e.key === "Escape") { if (S.staff.keys) S.staff.keys = false; else if (typing) { e.target.blur(); return; } else { S.staff.sel = null; S.staff.detail = null; } render(); return; }
   if (typing) return;
-  const tabs = ["review", "pack", "pay", "done", "requests", "stock"];
-  if (/^[1-6]$/.test(e.key)) { S.staff.tab = tabs[Number(e.key) - 1]; S.staff.status = ""; S.staff.sel = null; S.staff.detail = null; render(); e.preventDefault(); return; }
+  if (/^[1-8]$/.test(e.key)) { goDesk(DESK_TABS[Number(e.key) - 1]); e.preventDefault(); return; }
   if (e.key === "/") { const q = $("#deskq") || $("#stockq"); if (q) { q.focus(); e.preventDefault(); } return; }
   if (e.key === "?") { S.staff.keys = !S.staff.keys; render(); return; }
   if (e.key === "r" || e.key === "R") { loadDesk(); return; }
-  if (["j", "k", "ArrowDown", "ArrowUp"].includes(e.key) && !["requests", "stock"].includes(S.staff.tab)) {
+  if (["j", "k", "ArrowDown", "ArrowUp"].includes(e.key) && !["overview", "requests", "stock", "supply"].includes(S.staff.tab)) {
     const shown = queueFilter(deskGroup()); if (!shown.length) return;
     const i = shown.findIndex(o => o.id === S.staff.sel), step = e.key === "j" || e.key === "ArrowDown" ? 1 : -1;
     const next = shown[i < 0 ? 0 : Math.min(shown.length - 1, Math.max(0, i + step))];
@@ -1604,10 +1966,11 @@ function reorder() {
 function stockRows() {
   const q = norm(S.staff.stockQ || "");
   const list = P.filter(p => !q || norm([p.name, p.generic, p.brand, cat(p.cat).name].join(" ")).includes(q))
-    .sort((a, b) => (b.out - a.out) || a.name.localeCompare(b.name)).slice(0, 80);
+    .sort((a, b) => (b.out - a.out) || ((S.staff.list.low || []).includes(b.id) - (S.staff.list.low || []).includes(a.id)) || a.name.localeCompare(b.name)).slice(0, 80);
   const waiting = id => (S.staff.list.requests || []).filter(r => r.type === "restock" && r.product === id && r.status === "new").length;
-  return list.length ? list.map(p => `<div class="stock-row${p.out ? " out" : ""}"><span><b>${esc(p.name)}</b><span class="small muted">${esc(p.pack)} · ${esc(dept(p.dept).short)}${waiting(p.id) ? ` · <b>${waiting(p.id)} waiting</b>` : ""}</span></span>
-    ${p.outInData ? `<span class="small muted">Out in js/data.js</span>` : `<button class="btn btn-sm ${p.out ? "btn-primary" : "btn-ghost"}" type="button" data-stock="${esc(p.id)}" data-out="${p.out ? "" : "1"}">${p.out ? "Mark back in stock" : "Mark out of stock"}</button>`}</div>`).join("")
+  const low = new Set(S.staff.list.low || []);
+  return list.length ? list.map(p => `<div class="stock-row${p.out ? " out" : low.has(p.id) ? " low" : ""}"><span><b>${esc(p.name)}</b>${!p.out && low.has(p.id) ? ` <span class="tag warn">Running low</span>` : ""}<span class="small muted">${esc(p.pack)} · ${esc(dept(p.dept).short)}${waiting(p.id) ? ` · <b>${waiting(p.id)} waiting</b>` : ""}</span></span>
+    ${p.outInData ? `<span class="small muted">Out in js/data.js</span>` : `<span class="stock-btns">${p.out ? "" : `<button class="btn btn-sm btn-ghost" type="button" data-low="${esc(p.id)}" data-on="${low.has(p.id) ? "" : "1"}">${low.has(p.id) ? "Not low" : "Running low"}</button>`}<button class="btn btn-sm ${p.out ? "btn-primary" : "btn-ghost"}" type="button" data-stock="${esc(p.id)}" data-out="${p.out ? "" : "1"}">${p.out ? "Mark back in stock" : "Mark out of stock"}</button></span>`}</div>`).join("")
     : `<p class="muted small">No products match.</p>`;
 }
 function stockPanel() {
@@ -1677,13 +2040,30 @@ document.addEventListener("click", e => {
   if ("promoRemove" in d) { S.form.promo = ""; render(); return; }
   if (d.emfix) { const i = $("#em"); i.value = d.emfix; showEmailFix(); i.focus(); return; }
   if (d.stock) { setStock(d.stock, !!d.out, t); return; }
+  if (d.low) { setLowStock(d.low, !!d.on, t); return; }
+  if (d.sview || "shf" in d || "pof" in d) { // supply views, filters and pipeline stages
+    const st = S.staff; if (d.sview) { st.sview = d.sview; st.editSup = null; }
+    if ("shf" in d) st.shf = d.shf; if ("pof" in d) st.pof = d.pof;
+    render(); if (d.sview && t.closest(".sup-hero, .ov-field")) { const p = $("#sv-panel"); if (p) p.scrollIntoView({ block: "start", behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" }); } return;
+  }
+  if (d.shsort) { const st = S.staff, cur = st.shsort || {}; st.shsort = { k: d.shsort, dir: cur.k === d.shsort ? -cur.dir : (d.shsort === "name" || d.shsort === "state" ? 1 : -1) }; render(); const b = document.querySelector(`[data-shsort="${d.shsort}"]`); if (b) b.focus(); return; }
+  if ("pocsv" in d) { poCsv(); return; }
+  if (d.orderfrom) { const st = S.staff; st.poSup = d.orderfrom; st.sview = "short"; st.shf = "open"; render(); toast(`Tick the items to order from ${((st.supply.suppliers || []).find(w => w.id === d.orderfrom) || {}).name}.`); return; }
+  if ("pocreate" in d) { createPO(t); return; }
+  if (d.poopen) { S.staff.openPo = S.staff.openPo === d.poopen ? null : d.poopen; render(); return; }
+  if (d.posend) { poAction(d.posend === "copy" ? null : "send", { via: d.posend }, t); return; }
+  if (d.poact) { if (d.poact !== "cancel" || confirm("Cancel this purchase order?")) poAction(d.poact, {}, t); return; }
+  if ("podate" in d) { poAction("", { expected: ($("#po-date") || {}).value || "" }, t); return; }
+  if (d.supedit !== undefined) { S.staff.editSup = d.supedit || "new"; S.staff.sview = "suppliers"; render.fresh = true; render(); const f = $("#sup-name"); if (f) f.focus(); return; }
+  if (d.supdel) { if (confirm("Remove this wholesaler from your list?")) supplierCall({ action: "supplier-delete", id: d.supdel }, t, "Wholesaler removed."); return; }
+  if ("supcancel" in d) { S.staff.editSup = null; render(); return; }
+  if ("shall" in d) { const sh = (S.staff.supply || {}).shortages || []; const sel = S.staff.shsel || (S.staff.shsel = {}); const all = sh.filter(x => !x.onOrder.length).every(x => sel[x.id]); sh.filter(x => !x.onOrder.length).forEach(x => { sel[x.id] = !all; }); render(); return; }
   if (d.age === "yes") { S.age18 = true; store.set("synako.age18", true); render(); return; }
   if ("rxreq" in d) { S.rxRequest = true; S.step = 1; go("/checkout"); toast("Prescription request started."); return; }
   if ("rxreqRemove" in d) { S.rxRequest = false; render(); return; }
   if ("clear" in d) { S.q = ""; $("#q").value = ""; render(); return; }
   if (d.step) { saveForm(); S.step = Number(d.step); S.error = ""; render(true); return; }
   if (d.pay) { startPayment(d.pay); return; }
-  if (d.missing) { store.set("synako.hideMissing", d.missing === "hide" ? Date.now() + 30 * 864e5 : 0); render(); return; }
   if (d.rtake) { riderTake(d.rtake, t); return; }
   if ("remind" in d) { sendReminders(t); return; }
   if ("qclear" in d) { Object.assign(S.staff, { q: "", speed: "", status: "" }); render(); return; }
@@ -1691,6 +2071,10 @@ document.addEventListener("click", e => {
   if ("keys" in d) { S.staff.keys = !S.staff.keys; render(); return; }
   if ("deskback" in d) { S.staff.sel = null; S.staff.detail = null; render(); return; }
   if (d.dtab && "dstatus" in d) { S.staff.tab = d.dtab; S.staff.status = d.dstatus; S.staff.sel = null; S.staff.detail = null; render(); loadDesk(true); return; }
+  if ("cmdk" in d) { cmdkOpen(); return; }
+  if (d.openorder) { openOrder(d.openorder); return; }
+  if (d.dtab && "dstatus" in d && !d.dstatus) { goDesk(d.dtab, d.sv ? { sview: d.sv } : {}); return; }
+  if (d.dtab && !("dstatus" in d)) { goDesk(d.dtab); return; }
   if (d.dtab) { S.staff.tab = d.dtab; S.staff.status = ""; S.staff.sel = null; S.staff.detail = null; render(); loadDesk(true); return; }
   if (d.sel) { loadDeskOrder(d.sel); return; }
   if (d.act) { deskAction(d.act); return; }
@@ -1714,6 +2098,9 @@ document.addEventListener("keydown", e => {
 document.addEventListener("change", async e => {
   const t = e.target;
   if (t.id === "sort") { S.sort = t.value; render(); return; }
+  if (t.id === "sh-all") { const st = S.staff, sel = st.shsel || (st.shsel = {}), q = norm(st.shq || ""), f = st.shf || ""; (st.supply.shortages || []).filter(x => (!f || (f === "open" ? !x.onOrder.length : x.state === f)) && (!q || norm(x.name + " " + x.pack).includes(q))).forEach(x => { sel[x.id] = t.checked; }); render(); return; }
+  if (t.id === "po-sup") { S.staff.poSup = t.value; render(); return; }
+  if (t.dataset && t.dataset.shsel) { const sel = S.staff.shsel || (S.staff.shsel = {}); sel[t.dataset.shsel] = t.checked; render(); return; }
   if (t.dataset && t.dataset.pack) {
     const id = t.dataset.pack, n = Number(t.dataset.n), p = S.staff.packed || (S.staff.packed = {}), l = p[id] || (p[id] = []);
     if (t.checked && !l.includes(n)) l.push(n); else if (!t.checked) p[id] = l.filter(x => x !== n);
@@ -1776,6 +2163,12 @@ document.addEventListener("submit", async e => {
     S.staff.name = f.sname.value.trim(); store.sset("synako.staffName", S.staff.name);
     try { const { token } = await api.staffLogin(f.spw.value); S.staff.token = token; S.staff.err = ""; store.sset("synako.staff", token); render.fresh = true; render(); loadDesk(); }
     catch (er) { S.staff.err = er.message; render(); }
+    return;
+  }
+  if (f.id === "supform") {
+    if (!f.reportValidity()) return;
+    const v = id => (f.querySelector("#" + id) || {}).value || "";
+    await supplierCall({ action: "supplier-save", supplier: { id: S.staff.editSup === "new" ? "" : S.staff.editSup, name: v("sup-name"), contact: v("sup-contact"), phone: v("sup-phone"), whatsapp: v("sup-wa"), email: v("sup-email"), leadDays: v("sup-lead"), notes: v("sup-notes") } }, f.querySelector("[type=submit]"), "Wholesaler saved.", true);
     return;
   }
   if (f.id === "riderform") {

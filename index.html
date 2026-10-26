@@ -193,14 +193,25 @@
   <header class="staff-head">
     <div class="wrap staff-head-inner">
       <div class="staff-brand">
-        <a href="/" data-link class="staff-logo" aria-label="Back to the Synako store"><img src="assets/logo@2x.png" alt="" width="94" height="40"></a>
-        <div><p class="eyebrow">Synako Dispensary</p><p class="staff-title">Pharmacist Desk</p></div>
+        <a href="/" data-link class="staff-logo" aria-label="Synako Pharmacy home"><img src="assets/logo@2x.png" alt="" width="94" height="40"></a>
+        <span class="staff-divider" aria-hidden="true"></span>
+        <div class="staff-name"><p class="staff-title">Pharmacist Desk</p><p class="eyebrow">Synako Pharmaceutical LTD</p></div>
       </div>
-      <div class="staff-stats" id="staff-stats" aria-label="Summary"></div>
-      <div class="staff-actions"><a class="btn btn-on-dark" href="/" data-link>Back to store</a><button class="btn btn-on-dark" type="button" id="staff-signout" hidden>Sign out</button></div>
+      <div class="staff-stats" id="staff-stats" aria-label="Search"></div>
+      <div class="staff-actions">
+        <a class="btn btn-on-dark" href="/" data-link title="Back to store"><svg class="ic sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9l1.5-5h13L20 9M4 9v11h16V9M4 9h16M9 20v-6h6v6"/></svg><span>Back to store</span></a>
+        <button class="btn btn-on-dark" type="button" id="staff-signout" title="Sign out" hidden><svg class="ic sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3M10 17l5-5-5-5M15 12H4"/></svg><span>Sign out</span></button>
+      </div>
     </div>
   </header>
   <main id="staff-view" class="wrap" tabindex="-1"></main>
+  <footer class="staff-foot">
+    <div class="wrap staff-foot-inner">
+      <p>For authorised Synako Pharmaceutical LTD staff only. Every action is recorded with your name and the time.</p>
+      <nav aria-label="Legal"><a href="/terms" data-link>Terms &amp; conditions</a><a href="/privacy" data-link>Privacy notice</a><a href="/cookies" data-link>Cookies</a></nav>
+      <p>© <span id="staff-year">2026</span> Synako Pharmaceutical LTD</p>
+    </div>
+  </footer>
 </div>
 
 <div class="toast" id="toast" role="status" aria-live="polite"></div>

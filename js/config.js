@@ -68,6 +68,21 @@
       remindUnpaidAfterHours: 2,  // one reminder (email, and SMS if set up) to finish paying; 0 = no reminders
       cancelUnpaidAfterHours: 48  // unpaid orders are cancelled after this long, keeping the desk tidy; 0 = never
     },
+    supply: {
+      // Wholesalers you buy from regularly. They appear under Supply → Wholesalers on the Pharmacist Desk
+      // until staff first save a change there (after that, the desk's list is used). Example:
+      // { name: "Example Pharma Distributors Ltd", contact: "Mr Ade", phone: "0803 000 0000", whatsapp: "", email: "orders@example.com", leadDays: 3, notes: "Antibiotics, analgesics" }
+      suppliers: [
+        { name: "Tuyil Pharmaceuticals LTD", contact: "Tuyil Pharma", phone: "0807 876 5654", whatsapp: "0807 876 5654", email: "tuyilpharma@gmail.com", leadDays: 5, notes: "Usually delivers in 4–5 working days." },
+        { name: "Emzor Pharmaceutical LTD", contact: "Emzor Pharma", phone: "0807 876 5609", whatsapp: "0807 876 5609", email: "emzorpharma@gmail.com", leadDays: 5, notes: "Company and branded products. Usually delivers in 4–5 working days." },
+        { name: "Apacco Pharmaceuticals LTD", contact: "Apacco Pharma", phone: "0807 876 5644", whatsapp: "0807 876 5644", email: "apaccopharma@gmail.com", leadDays: 5, notes: "Company and branded products. Usually delivers in 4–5 working days." },
+        { name: "M & B", contact: "Maryer & Barker", phone: "0807 876 5651", whatsapp: "0807 876 5651", email: "mayerbarker@gmail.com", leadDays: 5, notes: "Company and branded products. Usually delivers in 4–5 working days." },
+        { name: "Vitabiotics", contact: "VitaBio", phone: "0807 876 5657", whatsapp: "0807 876 5657", email: "vitabio@gmail.com", leadDays: 5, notes: "Company and branded products. Usually delivers in 4–5 working days." },
+        { name: "Therapeutic Pharmaceuticals LTD", contact: "Therapeutic Pharma", phone: "0807 876 5611", whatsapp: "0807 876 5611", email: "therapeuticpharma@gmail.com", leadDays: 5, notes: "Branded products. Usually delivers in 4–5 working days." },
+        // Email left empty: the list gave Emzor's address (emzorpharma@gmail.com) for this company too
+        { name: "Unique Global LTD (UG LTD)", contact: "Unique Pharma", phone: "0807 876 5606", whatsapp: "0807 876 5606", email: "", leadDays: 5, notes: "Branded products. Usually delivers in 4–5 working days. Email address to confirm." }
+      ]
+    },
     sms: {
       // Texts to customers, sent only once TERMII_API_KEY is added in the hosting settings (each text costs a few naira).
       // Remove any you don't want: paid (with the delivery code), approve, info, reject, dispatched, delivered, reminder

@@ -96,6 +96,10 @@ The Pharmacist Desk lists any hosting settings that are still missing.
 - **Pause online orders** (public holiday, stock count, no riders): write the reason in `orders.paused` in `js/config.js` and redeploy. Customers can still browse, and checkout shows your message and your phone number. Set it back to `""` to reopen.
 - **Search:** the search box suggests products, departments and popular searches as customers type, and understands common brand names (Panadol, Flagyl, Buscopan, Vicks and more). Add local names to `SYNONYMS` in `js/data.js`.
 - **Finding the desk:** go to `/pharmacist` (or `/desk`), or use **Pharmacist Desk · staff sign-in** at the bottom of every page or under *Staff* in the menu. Once signed in, a **Desk** button appears in the shop header on that device.
+- **Layout:** the desk has a sidebar of sections (Overview, To review, Pack & deliver, Awaiting payment, Completed, Messages & bookings, Stock, Supply) and tools.
+  - **Overview** is the main dashboard and opens first. **Order progress** (review, payment, packing, delivery) sits at the top. Below it, the heading greets you and says what needs you now, with **Open next order** and **Review shortages** beside it, then **Today at a glance**, plus a diagram of how work flows in and out (prescriptions, paid orders, wholesaler orders and messages coming in; riders and deliveries going out).
+  - It also has a strip of today's figures, and the four-step order pipeline.
+  - **Ctrl K** (⌘K on a Mac) opens a search box that jumps to any order, section, product or action.
 - **At a glance:** the figures at the top of the desk are buttons. Tap *To pack* to see only paid orders waiting to be packed, *On the road* for orders with riders, and so on. Prescriptions and paid orders show how long they've been waiting (amber after 30 minutes, red after an hour), and the takings figure has a small chart of the last 7 days.
 - **On each order:** a progress bar (placed, approved, paid, packed, on the road, delivered, with times), and for paid orders a **packing checklist**. *Mark as packed* stays off until every item is ticked. On phones an open order fills the screen, with **← All orders** to go back.
 - **Counter computer:** keyboard shortcuts (press `?` on the desk): `1`–`6` switch sections, `/` searches, `J`/`K` or the arrow keys move between orders, `Esc` closes, `R` refreshes. **Sound on/off** switches the new-order chime.
@@ -141,6 +145,19 @@ The Pharmacist Desk lists any hosting settings that are still missing.
   - every 15 minutes while the Pharmacist Desk is open
   - once a day at 10:00 (Lagos time) through Vercel's scheduled jobs, which need **CRON_SECRET** (any long random text) in the hosting settings
   - any time you press **Send payment reminders now** on the desk
+
+## Supply: shortages, wholesalers and purchase orders
+
+The **Supply** tab on the Pharmacist Desk (shortcut `7`) is for whoever buys stock.
+
+- **Running low and out of stock:** in the **Stock** tab, staff mark items as **Running low**, an early warning that customers don't see, or **Out of stock**, which stops online orders. Either one alerts the supply manager.
+- **Supply console:** the Supply section opens with supply figures (to order, out of stock, running low, customers waiting, open and late orders), a supply-chain diagram showing your wholesalers feeding Synako's stock, and a purchase-order pipeline (Draft → Sent → Confirmed → Received). Select any figure or stage to jump straight to that list.
+- **Shortages:** everything running low or out of stock, most pressing first. Each item shows customers waiting for it, items sold this week and anything already on order, with a suggested quantity. Tick items, choose a wholesaler and press **Create purchase order**.
+- **Working the shortage list:** it's a table you can sort by item, status, customers waiting or sales this week. Filter it by *Not on order*, *Out of stock* or *Running low*, or search it. Tick rows, or tick the header box for all of them, and a dark order bar stays at the bottom of the screen with the wholesaler, note and **Create purchase order**.
+- **Purchase orders:** filter them by status (open, late, draft, sent, confirmed, received or cancelled) and **Download (CSV)** for your records. Each one goes to the wholesaler by **email**, **WhatsApp** (opens with the order typed out) or **Copy order text**, and moves from *sent* to *wholesaler confirmed* to **Received**. Pressing Received puts the items back in stock and emails customers who asked to be told. An expected delivery date is filled in from the wholesaler's usual delivery time and can be changed. Orders past their date, or unconfirmed after 2 days, are flagged **Late**.
+- **Wholesalers:** shown as cards with delivery time, open orders and **Call**, **WhatsApp** and **Email** buttons. **Order from** opens the shortage list with that wholesaler already chosen. You can also add, edit or remove the suppliers you buy from (name, contact person, phone, WhatsApp, email, usual delivery days, notes). A starter list can also go in `supply.suppliers` in `js/config.js`.
+- **Alerts for the supply manager:** set **SUPPLY_EMAIL** and/or **SUPPLY_SMS** in the hosting settings. Without them, alerts go to `STAFF_EMAIL` / `STAFF_SMS`. There's an alert whenever something is marked running low or out of stock, plus a **daily supply summary** listing what to order and any late purchase orders. The summary goes out with the first desk refresh of the day and with the daily scheduled job.
+- **Ordering online from wholesalers:** purchase orders go by email or WhatsApp, because most Nigerian wholesalers don't offer an ordering link for websites. If one of yours does, it can be connected to send purchase orders automatically.
 
 ## Keep an eye on it
 

@@ -1016,7 +1016,7 @@ kbd { display: inline-block; min-width: 1.6em; padding: .05rem .35rem; border: 1
 .step b { font: 700 1.6rem/1 var(--dp-display); letter-spacing: -0.03em; }
 
 /* Needs attention: the dark field */
-.dk-dark { display: grid; grid-template-columns: 1.45fr 1fr; gap: 32px; padding: 28px; border-radius: var(--dp-radius-panel); background: var(--dp-color-field); color: var(--dp-color-on-field); }
+.dk-dark { display: grid; grid-template-columns: 1fr; gap: 32px; padding: 28px; border-radius: var(--dp-radius-panel); background: var(--dp-color-field); color: var(--dp-color-on-field); }
 .dk-dark h2 { margin-bottom: 12px; color: var(--dp-color-on-field); }
 .dk-rows { list-style: none; margin: 0; padding: 0; border-top: 1px solid #2f3540; }
 .dk-rows li { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 11px 0; border-bottom: 1px solid #2f3540; color: var(--dp-color-on-field-secondary); font-size: var(--dp-typography-small); }

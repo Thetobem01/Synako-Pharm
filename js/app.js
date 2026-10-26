@@ -1142,8 +1142,6 @@ function overviewPanel(d, groups, takings, paidToday, day) {
     ...(sp ? sp.shortages.filter(x => x.state === "out" && x.waiting && !x.onOrder.length).slice(0, 5).map(x => ({ html: `<b>${esc(x.name)}</b> is out of stock with ${x.waiting} customer${x.waiting === 1 ? "" : "s"} waiting`, btn: `<button type="button" class="linkbtn" data-dtab="supply" data-dstatus="" data-sv="short">Order</button>` })) : []),
     ...(newMsgs ? [{ html: `${newMsgs} new message${newMsgs === 1 ? "" : "s"} or booking${newMsgs === 1 ? "" : "s"}`, btn: `<button type="button" class="linkbtn" data-dtab="requests" data-dstatus="">Read</button>` }] : [])
   ];
-  const hidden = store.get("synako.hideMissing", 0) > Date.now();
-  const setup = [...(d.setup || []).map(x => ({ t: x, k: "Hosting setting" })), ...(hidden ? [] : (d.missing || []).map(x => ({ t: x, k: "Licence detail" })))];
   return `<section class="ov-hero">
       <div class="ov-intro">
         <h2>${greeting()}, ${esc(String(st.name || "").split(" ")[0] || "team")}.</h2>
@@ -1176,9 +1174,8 @@ function overviewPanel(d, groups, takings, paidToday, day) {
         ${step(4, "pack", "out_for_delivery", "Deliver with code", onRoad.length, `${delivered} delivered today`)}
       </ol>
     </section>
-    <section class="dk-dark" aria-label="Needs attention and setup">
+    <section class="dk-dark" aria-label="Needs attention">
       <div><h2 class="h3">Needs attention</h2>${attention.length ? `<ul class="dk-rows">${attention.map(a => `<li><span>${a.html}</span>${a.btn}</li>`).join("")}</ul>` : `<p class="dk-quiet">All clear. Nothing is late, and no out-of-stock item has customers waiting.</p>`}</div>
-      <div><h2 class="h3">Setup</h2>${setup.length ? `<ul class="dk-rows">${setup.map(x => `<li><span><span class="dk-k">${x.k}</span> ${esc(x.t)}</span></li>`).join("")}</ul>${(d.missing || []).length ? `<button class="linkbtn" type="button" data-missing="${hidden ? "show" : "hide"}">${hidden ? "Show licence details to add" : "Hide licence details for 30 days"}</button>` : ""}` : `<p class="dk-quiet">Everything is set up.</p>`}</div>
     </section>`;
 }
 /* Command palette: Ctrl/⌘+K jumps to any order, section, product or action */
@@ -1974,7 +1971,6 @@ document.addEventListener("click", e => {
   if ("clear" in d) { S.q = ""; $("#q").value = ""; render(); return; }
   if (d.step) { saveForm(); S.step = Number(d.step); S.error = ""; render(true); return; }
   if (d.pay) { startPayment(d.pay); return; }
-  if (d.missing) { store.set("synako.hideMissing", d.missing === "hide" ? Date.now() + 30 * 864e5 : 0); render(); return; }
   if (d.rtake) { riderTake(d.rtake, t); return; }
   if ("remind" in d) { sendReminders(t); return; }
   if ("qclear" in d) { Object.assign(S.staff, { q: "", speed: "", status: "" }); render(); return; }

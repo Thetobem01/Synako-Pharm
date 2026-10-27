@@ -1501,7 +1501,7 @@ async function loadRider(silent) {
   const r = S.rider; if (!r.token) return;
   try {
     const was = r.list ? r.list.filter(d => d.status === "packed").length : null;
-    const d = await api.riderList(r.token); r.list = d.deliveries; r.err = "";
+    const d = await api.riderList(r.token); r.list = d.deliveries; r.err = ""; r.at = Date.now();
     const now = r.list.filter(x => x.status === "packed").length;
     if (was !== null && now > was) { toast(`${now - was} new deliver${now - was === 1 ? "y" : "ies"} ready to collect`); chime(); }
   } catch (e) { if (e.status === 401) return riderSignOut(); r.err = e.message; }
@@ -1514,21 +1514,43 @@ async function riderTake(id, btn) {
   catch (e) { if (e.status === 401) riderSignOut(); else { toast(e.message); loadRider(true); } btn.disabled = false; }
 }
 const mapLink = d => "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent([d.addr, d.landmark, d.city, d.state, "Nigeria"].filter(has).join(", "));
+const hhmm = t => new Date(t).toLocaleTimeString(CFG.site.locale, { hour: "2-digit", minute: "2-digit", timeZone: CFG.site.timezone });
+const mins = t => Math.max(0, Math.round((Date.now() - Date.parse(t)) / 6e4));
+const dur = m => m < 1 ? "just now" : m < 60 ? `${m} min` : `${Math.floor(m / 60)} h ${m % 60 ? `${m % 60} min` : ""}`.trim();
+/* When the customer expects it, in rider words */
+const promise = d => d.speedId === "express" ? `Within ${D.expressMinutes} min of leaving` : d.speedId === "sameday" ? "Today" : d.speedId === "nextday" ? "By the next working day" : d.speedId === "states" ? "2–4 working days (courier)" : (d.speed || "");
+function rideTime(d) {
+  if (d.status === "packed") { const t = d.packedAt || d.paidAt || d.createdAt; return t ? `<span class="ride-time">${icon("clock", "ic sm")} Ready ${mins(t) < 1 ? "just now" : `for ${dur(mins(t))}`}</span>` : ""; }
+  if (!d.outAt) return "";
+  const m = mins(d.outAt), late = d.speedId === "express" && m > D.expressMinutes;
+  return `<span class="ride-time${late ? " late" : ""}">${icon("clock", "ic sm")} ${m < 1 ? "Just left" : `Out ${dur(m)}`}${late ? " · running late" : ""}</span>`;
+}
 function rideCard(d, mine) {
   const first = String(d.name || "").split(" ")[0];
   const wa = waTo(d.phone, `Hello ${first}, this is ${S.rider.name || "your rider"} from ${B.name}. I'm ${d.status === "packed" ? "about to leave" : "on my way"} with your order ${d.id}.${d.hasCode ? " Please have your delivery code ready." : ""}`);
   const speedName = (SPEEDS.find(x => x[0] === d.speedId) || [, ""])[1];
-  return `<article class="panel ride${d.speedId === "express" ? " urgent" : ""}">
-    <div class="top"><b class="mono">${esc(d.id)}</b><span>${speedName ? `<span class="tag ${d.speedId === "express" ? "bad" : d.speedId === "sameday" ? "warn" : "gen"}">${esc(speedName)}</span>` : ""}${d.idCheck ? ` <span class="tag age">Check ID 18+</span>` : ""}</span></div>
-    <div><b>${esc(d.name)}</b> <span class="small muted">· ${d.items} item${d.items === 1 ? "" : "s"} · paid, nothing to collect</span></div>
-    <div class="small">${esc([d.addr, d.city, d.state].filter(has).join(", "))}${has(d.landmark) ? `<br><span class="muted">Landmark: ${esc(d.landmark)}</span>` : ""}</div>
-    ${has(d.note) ? `<div class="small"><b>Customer note:</b> ${esc(d.note)}</div>` : ""}
+  return `<article class="panel ride${d.speedId === "express" ? " urgent" : ""}" aria-label="Order ${esc(d.id)}">
+    <header class="ride-top"><div class="ride-id"><b class="mono">${esc(d.id)}</b>${speedName ? `<span class="tag ${d.speedId === "express" ? "bad" : d.speedId === "sameday" ? "warn" : "gen"}">${esc(speedName)}</span>` : ""}</div>${rideTime(d)}</header>
+    <dl class="ride-kv">
+      <dt>Customer</dt><dd><b>${esc(d.name)}</b>${has(d.phone) ? `<a class="ride-tel" href="tel:${esc(d.phone)}">${esc(d.phone)}</a>` : ""}</dd>
+      <dt>Address</dt><dd>${esc([d.addr, d.city, d.state].filter(has).join(", "))}${has(d.landmark) ? `<span class="muted">Near ${esc(d.landmark)}</span>` : ""}</dd>
+      <dt>Parcel</dt><dd>${d.items} item${d.items === 1 ? "" : "s"} in a sealed bag · <b class="ok-ink">paid</b>, collect no money</dd>
+      <dt>Expected</dt><dd>${esc(promise(d))}</dd>
+      ${has(d.note) ? `<dt>Note</dt><dd class="ride-note">“${esc(d.note)}”</dd>` : ""}
+    </dl>
+    ${d.idCheck ? `<p class="ride-flag">${icon("shield", "ic sm")}<span><b>Check photo ID (18+).</b> Contains alcohol. Don't hand it over without ID.</span></p>` : ""}
     <div class="ride-links"><a class="btn btn-ghost btn-sm" href="tel:${esc(d.phone)}">${icon("phone", "ic sm")} Call</a>${wa ? `<a class="btn btn-ghost btn-sm" href="${esc(wa)}" target="_blank" rel="noopener">${icon("chat", "ic sm")} WhatsApp</a>` : ""}<a class="btn btn-ghost btn-sm" href="${esc(mapLink(d))}" target="_blank" rel="noopener">${icon("pin", "ic sm")} Directions</a></div>
-    ${d.status === "packed" ? `<button class="btn btn-primary" type="button" data-rtake="${esc(d.id)}">${icon("truck", "ic sm")} Start this delivery</button>`
-      : mine ? `<form class="ride-done" data-rdone="${esc(d.id)}" novalidate><label for="rcode-${esc(d.id)}">Customer's delivery code</label><div class="row"><input id="rcode-${esc(d.id)}" class="rcode mono" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" autocomplete="off" placeholder="0000" required><button class="btn btn-success" type="submit">${icon("check", "ic sm")} Delivered</button></div>${d.hasCode ? "" : `<p class="small muted">This order was paid before delivery codes started: enter 0000.</p>`}</form>`
+    ${d.status === "packed" ? `<button class="btn btn-primary" type="button" data-rtake="${esc(d.id)}">${icon("truck", "ic sm")} Start this delivery</button><p class="small muted">The customer gets a message that you're on the way.</p>`
+      : mine ? `<form class="ride-done" data-rdone="${esc(d.id)}" novalidate><label for="rcode-${esc(d.id)}">Customer's 4-digit delivery code</label><div class="row"><input id="rcode-${esc(d.id)}" class="rcode mono" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" autocomplete="off" placeholder="0000" required><button class="btn btn-success" type="submit">${icon("check", "ic sm")} Delivered</button></div><p class="small muted">${d.hasCode ? "It's in their SMS, email and order page. Hand over the bag only once the code is accepted." : "This order was paid before delivery codes started: enter 0000."}</p></form>`
       : `<p class="small muted">With ${esc(d.rider || "another rider")}.</p>`}
   </article>`;
 }
+const RIDE_STEPS = [
+  ["Collect", "Tap <b>Start this delivery</b> when you pick up the sealed bag. The customer is told you're coming."],
+  ["Reach the customer", "Use Directions, and Call or WhatsApp if you can't find the address."],
+  ["Check", "Ask for the 4-digit delivery code. For 18+ orders, also check photo ID."],
+  ["Confirm", "Enter the code and tap <b>Delivered</b>. Never open the bag or collect money: every order is paid."]
+];
 function vRider() {
   const r = S.rider;
   if (!r.token) return `<div class="wrap desk-login"><form class="f panel" id="riderform" novalidate>
@@ -1542,13 +1564,31 @@ function vRider() {
   const mine = r.list.filter(d => d.status === "out_for_delivery" && d.rider === r.name).sort(by);
   const ready = r.list.filter(d => d.status === "packed").sort(by);
   const others = r.list.filter(d => d.status === "out_for_delivery" && d.rider !== r.name).sort(by);
-  const sec = (title, list, isMine, empty) => `<section class="ride-sec"><h2 class="h3">${title} <span class="count">${list.length}</span></h2>${list.length ? list.map(d => rideCard(d, isMine)).join("") : `<p class="muted small">${empty}</p>`}</section>`;
+  const done = r.list.filter(d => d.status === "delivered").sort((a, b) => Date.parse(b.deliveredAt) - Date.parse(a.deliveredAt));
+  const myDone = done.filter(d => d.rider === r.name);
+  const lateN = mine.filter(d => d.speedId === "express" && d.outAt && mins(d.outAt) > D.expressMinutes).length;
+  const urgentReady = ready.filter(d => d.speedId === "express").length;
+  const next = mine.length ? `You have ${mine.length} deliver${mine.length === 1 ? "y" : "ies"} on the road${lateN ? `, ${lateN} running late` : ""}.${ready.length ? ` ${ready.length} more ready to collect.` : ""}`
+    : ready.length ? `${ready.length} order${ready.length === 1 ? " is" : "s are"} ready to collect${urgentReady ? `. Take the ${D.expressMinutes}-minute one${urgentReady === 1 ? "" : "s"} first` : ""}.`
+    : "Nothing waiting right now. You'll hear a chime when an order is packed.";
+  const fact = (label, n, note, hot) => `<li class="fact${hot ? " hot" : ""}"><span class="fact-label">${label}</span><b>${n}</b><span class="fact-note">${note}</span></li>`;
+  const sec = (title, list, isMine, empty) => `<section class="ride-sec"><h2 class="h3">${title} <span class="count">${list.length}</span></h2>${list.length ? list.map(d => rideCard(d, isMine)).join("") : `<p class="muted small ride-empty">${empty}</p>`}</section>`;
+  const today = new Date().toLocaleDateString(CFG.site.locale, { weekday: "long", day: "numeric", month: "long", timeZone: CFG.site.timezone });
   return `<div class="wrap rider">
-    <p class="small muted" role="status">Signed in as <b>${esc(r.name)}</b> · updates every 20 seconds</p>
+    <header class="ride-head"><div><p class="fact-label">${esc(today)}</p><h1 class="h2">Hello, ${esc(String(r.name).split(" ")[0])}</h1><p class="ride-next" role="status">${esc(next)}</p></div>
+      <button class="btn btn-ghost btn-sm" type="button" data-rrefresh title="Refresh now">${icon("clock", "ic sm")} ${r.at ? `Updated ${hhmm(r.at)}` : "Refresh"}</button></header>
+    <ul class="ride-facts" aria-label="Today at a glance">
+      ${fact("With you", mine.length, lateN ? `${lateN} running late` : "on the road", lateN > 0)}
+      ${fact("Ready", ready.length, urgentReady ? `${urgentReady} × ${D.expressMinutes}-min` : "to collect", urgentReady > 0)}
+      ${fact("Delivered", myDone.length, `by you today${done.length > myDone.length ? ` · ${done.length} in all` : ""}`)}
+    </ul>
     ${r.err ? alertBox(r.err) : ""}
-    ${sec("On the road with you", mine, true, "Nothing yet. Start a delivery below.")}
-    ${sec("Ready to collect", ready, false, "No packed orders waiting. You'll hear a chime when one is ready.")}
+    ${sec("On the road with you", mine, true, ready.length ? "Nothing yet. Start one of the deliveries below." : "Nothing on the road with you.")}
+    ${sec("Ready to collect", ready, false, "No packed orders waiting. This page checks every 20 seconds.")}
     ${others.length ? `<details class="ride-sec"><summary class="h4">Out with other riders (${others.length})</summary>${others.map(d => rideCard(d, false)).join("")}</details>` : ""}
+    ${done.length ? `<details class="ride-sec"><summary class="h4">Delivered today (${done.length})</summary><ol class="ride-log">${done.map(d => `<li><span class="mono">${esc(d.id)}</span><span>${esc(d.name)}${has(d.city) ? `, ${esc(d.city)}` : ""}</span><span class="small muted">${d.deliveredAt ? hhmm(d.deliveredAt) : ""}${d.outAt && d.deliveredAt ? ` · ${dur(Math.max(1, Math.round((Date.parse(d.deliveredAt) - Date.parse(d.outAt)) / 6e4)))} on the road` : ""}${d.rider && d.rider !== r.name ? ` · ${esc(d.rider)}` : ""}</span></li>`).join("")}</ol></details>` : ""}
+    <details class="ride-sec ride-help"${myDone.length || mine.length ? "" : " open"}><summary class="h4">How a delivery works</summary><ol class="ride-steps">${RIDE_STEPS.map(([h, t]) => `<li><b>${h}</b><span>${t}</span></li>`).join("")}</ol>
+      <p class="small muted">Problem at the door (wrong address, customer not in, no ID)? Keep the bag and call the pharmacy${has(B.phone) ? ` on <a href="tel:${esc(B.phone)}">${esc(B.phone)}</a>` : ""}.</p></details>
   </div>`;
 }
 function deskDetail() {
@@ -2075,6 +2115,7 @@ document.addEventListener("click", e => {
   if (d.step) { saveForm(); S.step = Number(d.step); S.error = ""; render(true); return; }
   if (d.pay) { startPayment(d.pay); return; }
   if (d.rtake) { riderTake(d.rtake, t); return; }
+  if ("rrefresh" in d) { loadRider(); return; }
   if ("remind" in d) { sendReminders(t); return; }
   if ("qclear" in d) { Object.assign(S.staff, { q: "", speed: "", status: "" }); render(); return; }
   if ("sound" in d) { store.set("synako.sound", !soundOn()); if (soundOn()) chime(); render(); return; }

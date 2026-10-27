@@ -242,7 +242,8 @@ async function payOrder(id, phone) {
 /* ---------- Router ---------- */
 const PAGES = ["about", "contact", "faq", "delivery", "returns", "privacy", "terms", "licences", "cookies", "careers", "wholesale"];
 function parse(path) {
-  const seg = path.replace(/^\/+|\/+$/g, "").split("/").filter(Boolean);
+  // Case-insensitive, so "/Rider" typed on a phone still opens the rider page
+  const seg = path.replace(/^\/+|\/+$/g, "").toLowerCase().split("/").filter(Boolean);
   const r = { view: "home" };
   if (!seg.length || seg[0] === "index.html") return r;
   const [a, b] = seg;

@@ -108,15 +108,24 @@ async function tellWaitingCustomers(p, by) {
   return told;
 }
 
-/* What a rider needs at the door: who, where, how to reach them. No medicine names (the bag is sealed) and no health details. */
+/* What a rider needs at the door: who, where, how to reach them. No medicine names (the bag is sealed) and no health details.
+   Today's delivered orders come back as a short record (no address or phone) so riders can see their day. */
+const lagosDay = t => new Date(t).toLocaleDateString("en-CA", { timeZone: "Africa/Lagos" });
+const when = (o, m) => ((o.history || []).filter(h => !h.internal && String(h.m).startsWith(m)).pop() || {}).t || "";
 async function deliveries() {
   const ids = await db.latest("orders", 200);
-  const list = (await Promise.all(ids.map(id => db.get("order:" + id)))).filter(o => o && ["packed", "out_for_delivery"].includes(o.status));
-  return list.map(o => ({
+  const today = lagosDay(Date.now());
+  const all = (await Promise.all(ids.map(id => db.get("order:" + id)))).filter(Boolean);
+  const done = all.filter(o => o.status === "delivered" && lagosDay(o.deliveredAt || when(o, "Delivered") || 0) === today);
+  return all.filter(o => ["packed", "out_for_delivery"].includes(o.status)).map(o => ({
     id: o.id, status: o.status, statusLabel: STATUS[o.status], createdAt: o.createdAt, speedId: o.delivery.speed || "", speed: o.delivery.label,
+    paidAt: (o.payment && o.payment.paidAt) || "", packedAt: when(o, "Packed"), outAt: when(o, "Out for delivery"),
     name: o.customer.name, phone: o.customer.phone, addr: o.delivery.addr, landmark: o.delivery.landmark || "", city: o.delivery.city, state: o.delivery.state, note: o.delivery.note || "",
     items: o.items.reduce((t, i) => t + (Number(i.qty) || 0), 0), total: o.total, idCheck: !!o.ageRestricted, rider: o.rider || "", hasCode: !!o.deliveryCode
-  }));
+  })).concat(done.map(o => ({
+    id: o.id, status: "delivered", statusLabel: STATUS.delivered, speedId: o.delivery.speed || "", name: String(o.customer.name || "").split(" ")[0],
+    city: o.delivery.city, rider: o.rider || "", outAt: when(o, "Out for delivery"), deliveredAt: o.deliveredAt || when(o, "Delivered")
+  })));
 }
 async function riderAction(req, b) {
   const o = await db.get("order:" + String(b.id || ""));

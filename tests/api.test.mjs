@@ -326,6 +326,10 @@ test("riders sign in with their own password and only see deliveries", async () 
   const done = await api("staff/orders", { token: rider, body: { action: "rider-delivered", id: o.id, code: o.deliveryCode, by: "Musa" }, headers: ip(46) });
   assert.equal(done.status, 200);
   assert.equal((await api(`order?id=${o.id}&phone=4567`)).json.order.status, "delivered");
+  const log = done.json.deliveries.find(x => x.id === o.id);
+  assert.equal(log.status, "delivered", "today's deliveries stay on the rider page");
+  assert.ok(log.deliveredAt && log.outAt && log.rider === "Musa");
+  assert.equal(log.phone ?? log.addr, undefined, "no phone or address once delivered");
 });
 
 test("unpaid orders get one reminder, then are cancelled; a late payment still counts", async () => {

@@ -406,3 +406,64 @@ test("supply: wholesalers, the shortage list, purchase orders and restocking", a
   assert.ok(!gone.json.suppliers.some(s => s.id === sup.id));
   assert.ok(gone.json.suppliers.some(s => s.name === "Tuyil Pharmaceuticals LTD"), "the starter wholesaler is kept once the list is saved");
 });
+
+test("the journal: starter posts, posts from the desk, scheduling and customer stories", async () => {
+  const lagos = new Date().toLocaleDateString("en-CA", { timeZone: "Africa/Lagos" });
+  const later = new Date(Date.now() + 5 * 864e5).toISOString().slice(0, 10);
+  const pub = async () => (await api("requests")).json.posts;
+  const first = await pub();
+  assert.ok(first.every(p => p.date <= lagos), "nothing shows before its date");
+  assert.ok(first.every(p => !("status" in p) && !("updatedBy" in p)), "the public list carries no desk details");
+
+  assert.equal((await api("staff/orders", { body: { action: "journal-save", post: { title: "x", body: "y".repeat(30) } } })).status, 401, "only staff can post");
+  const token = (await api("staff/login", { body: { password: "desk" }, headers: ip(21) })).json.token;
+  const save = post => api("staff/orders", { token, body: { action: "journal-save", by: "Pharm. Test", post } });
+  assert.equal((await save({ title: "", body: "Some words about today at the pharmacy." })).status, 400);
+
+  const today = await save({ title: "A busy Thursday", kind: "diary", date: lagos, body: "Lots of orders for **vitamin C** today.\n\n- Item one\n- Item two" });
+  assert.equal(today.status, 200);
+  assert.equal(today.json.post.id, "a-busy-thursday");
+  const again = await save({ title: "A busy Thursday", kind: "diary", date: lagos, body: "A second post with the same title." });
+  assert.equal(again.json.post.id, "a-busy-thursday-2", "each post gets its own address");
+  await save({ title: "Coming next week", kind: "tip", date: later, body: "This one is scheduled for later in the week." });
+  await save({ title: "Not ready yet", kind: "diary", date: lagos, status: "draft", body: "Still writing this one, staff only for now." });
+
+  let live = await pub();
+  assert.ok(live.some(p => p.id === "a-busy-thursday" && p.author === "Synako Pharmacy"));
+  assert.ok(!live.some(p => p.title === "Coming next week"), "scheduled posts wait for their date");
+  assert.ok(!live.some(p => p.title === "Not ready yet"), "drafts stay on the desk");
+
+  const desk = (await api("staff/orders", { token })).json;
+  assert.ok(desk.posts.some(p => p.title === "Not ready yet" && p.status === "draft"), "the desk sees drafts");
+  assert.ok(desk.posts.some(p => p.id === "welcome-to-the-synako-journal" && p.starter), "and the starter posts");
+
+  const edited = await save({ id: "welcome-to-the-synako-journal", title: "Welcome to our journal", kind: "diary", date: "2026-10-29", body: "An edited welcome post from the desk team." });
+  assert.equal(edited.json.post.id, "welcome-to-the-synako-journal", "editing a starter post keeps its address");
+  assert.equal(edited.json.posts.filter(p => p.id === "welcome-to-the-synako-journal").length, 1);
+  const hidden = await api("staff/orders", { token, body: { action: "journal-hide", id: "a-busy-thursday-2" } });
+  assert.equal(hidden.json.posts.find(p => p.id === "a-busy-thursday-2").status, "hidden");
+  live = await pub();
+  assert.ok(!live.some(p => p.id === "a-busy-thursday-2"), "removed posts leave the journal");
+
+  // A customer shares their experience; the desk turns it into a story
+  assert.equal((await api("requests", { body: { type: "experience", name: "Bisi", rating: 9, message: "Fast delivery!" }, headers: ip(22) })).status, 400);
+  const exp = await api("requests", { body: { type: "experience", name: "Bisi", town: "Okitipupa", rating: 5, message: "The rider came in 25 minutes. Thank you!", publish: true }, headers: ip(22) });
+  assert.equal(exp.status, 201);
+  const r = (await api("staff/orders", { token })).json.requests.find(x => x.id === exp.json.id);
+  assert.equal(r.type, "experience"); assert.equal(r.rating, 5); assert.equal(r.publish, true);
+  const story = await save({ title: "“The rider came in 25 minutes.”", kind: "story", date: lagos, story: r.id, body: `${r.message}\n\n— Bisi, Okitipupa` });
+  assert.equal(story.status, 200);
+  assert.equal((await api("staff/orders", { token })).json.requests.find(x => x.id === r.id).status, "done", "publishing the story marks the experience as read");
+
+  // The week in review is drafted from the week's orders, without customer details
+  const placed = (await api("orders", { body: { items: [{ id: "para", q: 1 }], customer: { ...customer, name: "Zainab Secret" }, delivery, consent: true }, headers: ip(23) })).json.order;
+  const ref = (await api("pay-start", { body: { id: placed.id, phone: "4567" } })).json.reference;
+  await api("pay-verify", { body: { reference: ref } });
+  const week = (await api("staff/orders", { token, body: { action: "journal-week" } })).json.draft;
+  assert.equal(week.kind, "week");
+  assert.match(week.title, /^Week in review: /);
+  assert.ok(week.stats.placed >= 1 && week.stats.paid >= 1);
+  assert.ok(week.stats.stories >= 1);
+  assert.ok(!week.body.includes("Zainab") && !week.body.includes(placed.id) && !/paracetamol/i.test(week.body), "no names, order numbers or medicines");
+  assert.match(week.body, /medicines/, "departments are named instead");
+});

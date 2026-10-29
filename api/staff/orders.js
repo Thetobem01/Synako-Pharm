@@ -1,9 +1,11 @@
 import crypto from "node:crypto";
 import { handle, only, send, body, query, fail, requireStaff, requireRider, db, site, STATUS, emailReady, paystackReady, smsReady, riderReady, sendEmail, mailFrom, limit, outOfStock, baseUrl,
   log, notifyCustomer, checkDeliveryCode, remindUnpaid } from "../_lib/core.js";
+import { allPosts, savePost, hidePost, weekDraft } from "../_lib/journal.js";
 import { lowStock, setLow, notifySupply, suppliers, saveSupplier, deleteSupplier, purchaseOrders, createPO, updatePO, shortages, overdue, supplyDigest } from "../_lib/supply.js";
 /* Pharmacist Desk. GET: recent orders and requests, plus site details still missing.
-   POST: mark a message, booking or quote request as handled (or back to new), stock, test email, payment reminders.
+   POST: mark a message, booking or quote request as handled (or back to new), stock, test email, payment reminders,
+   and the journal (journal-save, journal-hide, journal-week for a week-in-review draft).
    Riders: GET ?view=rider lists deliveries; POST rider-take / rider-delivered.
    Vercel's daily scheduled job: GET ?task=reminders with CRON_SECRET.
    (One file for all of this keeps the API within Vercel Hobby's 12-function limit.) */
@@ -28,6 +30,9 @@ export default handle(async (req, res) => {
     if (b.action === "supplier-delete") { await deleteSupplier(String(b.id || "")); return send(res, 200, await supplyView()); }
     if (b.action === "po-create") { const po = await createPO(b, by); return send(res, 201, Object.assign(await supplyView(), { po })); }
     if (b.action === "po-update") { const po = await updatePO(b, by, tellWaitingCustomers); return send(res, 200, Object.assign(await supplyView(), { po })); }
+    if (b.action === "journal-save") { const post = await savePost(b, by); return send(res, 200, { post, posts: await allPosts() }); }
+    if (b.action === "journal-hide") { await hidePost(b.id, by); return send(res, 200, { posts: await allPosts() }); }
+    if (b.action === "journal-week") return send(res, 200, { draft: await weekDraft(DEV && b.now ? Number(b.now) : Date.now()) });
     if (b.action === "supply-digest") return send(res, 200, await supplyDigest(DEV && b.now ? Number(b.now) : Date.now()));
     if (b.action === "stock-low") { // "running low": an early warning for the supply manager; customers can still order
       const p = site().P.find(x => x.id === String(b.id));
@@ -92,7 +97,7 @@ export default handle(async (req, res) => {
   if (!process.env.CRON_SECRET) setup.push("CRON_SECRET so payment reminders also go out when the desk is closed");
   else if (!process.env.STAFF_EMAIL) setup.push("STAFF_EMAIL for new-order alerts");
   const low = await lowStock();
-  send(res, 200, { orders, requests, missing, setup, sms: smsReady(), low: [...low], out: [...await outOfStock()], serverTime: new Date().toISOString() });
+  send(res, 200, { orders, requests, missing, setup, sms: smsReady(), low: [...low], out: [...await outOfStock()], posts: await allPosts(), serverTime: new Date().toISOString() });
 });
 
 /* When a product is back, email everyone who asked to be told by email; phone-only requests stay on the desk to call */

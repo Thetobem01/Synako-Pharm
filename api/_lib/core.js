@@ -11,11 +11,11 @@ export function site() {
   const sandbox = { window: {}, Intl, Math, Number, String, Date };
   sandbox.globalThis = sandbox.window;
   vm.createContext(sandbox);
-  for (const f of ["js/config.js", "js/data.js", "js/pricing.js"]) {
+  for (const f of ["js/config.js", "js/data.js", "js/pricing.js", "js/journal.js"]) {
     vm.runInContext(fs.readFileSync(path.join(process.cwd(), f), "utf8"), sandbox, { filename: f });
   }
   const w = sandbox.window;
-  cache = { config: w.SYNAKO_CONFIG, P: w.SYNAKO.P, CATS: w.SYNAKO.CATS, pricing: w.SYNAKO_PRICING };
+  cache = { config: w.SYNAKO_CONFIG, P: w.SYNAKO.P, CATS: w.SYNAKO.CATS, DEPTS: w.SYNAKO.DEPTS, pricing: w.SYNAKO_PRICING, journal: w.SYNAKO_JOURNAL };
   return cache;
 }
 

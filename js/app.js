@@ -136,6 +136,7 @@ const ICONS = {
   cal: '<path d="M8 2v3"/><path d="M16 2v3"/><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/>',
   card: '<rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/><path d="M6 14h2"/>',
   check: '<path d="M20 6 9 17l-5-5"/>',
+  pen: '<path d="M13.4 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7.4"/><path d="M2 6h4"/><path d="M2 10h4"/><path d="M2 14h4"/><path d="M2 18h4"/><path d="M21.378 5.626a1 1 0 1 0-3.004-3.004l-5.01 5.012a2 2 0 0 0-.506.854l-.837 2.87a.5.5 0 0 0 .62.62l2.87-.837a2 2 0 0 0 .854-.506z"/>',
   wine: '<path d="M8 22h8"/><path d="M7 10h10"/><path d="M12 15v7"/><path d="M12 15a5 5 0 0 0 5-5c0-2-.5-4-2-8H9c-1.5 4-2 6-2 8a5 5 0 0 0 5 5Z"/>',
   scale: '<circle cx="12" cy="5" r="3"/><path d="M6.5 8a2 2 0 0 0-1.905 1.46L2.1 18.5A2 2 0 0 0 4 21h16a2 2 0 0 0 1.925-2.54L19.4 9.5A2 2 0 0 0 17.48 8Z"/>',
   layers: '<path d="M12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83z"/><path d="M2 12a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 12"/><path d="M2 17a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 17"/>',
@@ -158,6 +159,7 @@ const store = {
 const S = {
   mode: "shop", view: "home", filter: "all", tab: "vitamins", q: "", sort: "popular", product: null, qty: 1, unit: "1", page: "about", age18: store.get("synako.age18", false),
   cart: store.get("synako.cart", []).filter(l => l && prod(l.id)).map(l => ({ id: l.id, q: l.q, u: l.u || "1" })), rxRequest: false, step: 1, form: {}, busy: false, error: "",
+  journal: { posts: null, err: "", kind: "all", order: "" }, post: null,
   mine: store.get("synako.orders", []), seen: store.get("synako.seen", []).filter(id => prod(id)), trackId: null, track: null, trackErr: "",
   rider: { token: store.sget("synako.rider"), name: store.get("synako.riderName", ""), list: null, err: "" },
   staff: { token: store.sget("synako.staff"), name: store.sget("synako.staffName"), list: null, sel: null, detail: null, file: null, tab: "overview", err: "", updated: null }
@@ -218,7 +220,8 @@ const demo = (() => {
     staffLogin: (pw, role) => wait({ token: "demo", role: role === "rider" ? "rider" : "staff" }),
     riderList: () => wait({ deliveries: [...orders.values()].filter(o => ["packed", "out_for_delivery"].includes(o.status)).map(o => ({ id: o.id, status: o.status, statusLabel: LBL[o.status], createdAt: o.createdAt, speedId: o.delivery.speed, speed: o.delivery.label, name: o.customer.name, phone: o.customer.phone, addr: o.delivery.addr, landmark: o.delivery.landmark || "", city: o.delivery.city, state: o.delivery.state, note: o.delivery.note || "", items: o.items.length, total: o.total, idCheck: false, rider: o.rider || "", hasCode: false })) }),
     riderAct: () => Promise.reject(new Error("Riders can't update orders in the design preview.")),
-    staffList: () => wait({ orders: [...orders.values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).map(o => ({ id: o.id, createdAt: o.createdAt, status: o.status, statusLabel: LBL[o.status], rx: o.rx, rxRequest: o.rxRequest, customer: o.customer.name, total: o.total, priced: o.priced, items: o.items.map(i => `${i.qty} × ${i.name}`), speed: o.delivery.label })), requests: reqs, missing: missingDetails() }),
+    staffList: () => wait({ orders: [...orders.values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).map(o => ({ id: o.id, createdAt: o.createdAt, status: o.status, statusLabel: LBL[o.status], rx: o.rx, rxRequest: o.rxRequest, customer: o.customer.name, total: o.total, priced: o.priced, items: o.items.map(i => `${i.qty} × ${i.name}`), speed: o.delivery.label })), requests: reqs, missing: missingDetails(), posts: J.merge(jDemo) }),
+    weekDraft: () => wait({ draft: J.weekReview([...orders.values()].map(o => ({ createdAt: o.createdAt, status: o.status, rx: o.rx, speed: o.delivery.speed, city: o.delivery.city, state: o.delivery.state, items: o.items.map(i => ({ id: i.id, qty: i.qty })) })), [], P, DEPTS, Date.now(), CFG.site.timezone) }),
     staffOrder: (t, oid) => { const o = orders.get(oid); return wait({ order: full(o), file: o.file || null }); },
     staffAct: (t, b) => {
       const o = orders.get(b.id);
@@ -245,7 +248,9 @@ const api = {
   staffPost: (t, b) => DEMO ? Promise.resolve({ reminded: 0, cancelled: 0 }) : call("staff/orders", { method: "POST", body: b, token: t }),
   staffList: t => DEMO ? demo.staffList(t) : call("staff/orders", { token: t }),
   staffOrder: (t, id) => DEMO ? demo.staffOrder(t, id) : call("staff/order?id=" + encodeURIComponent(id), { token: t }),
-  staffAct: (t, b) => DEMO ? demo.staffAct(t, b) : call("staff/order", { method: "POST", body: b, token: t })
+  staffAct: (t, b) => DEMO ? demo.staffAct(t, b) : call("staff/order", { method: "POST", body: b, token: t }),
+  journal: () => DEMO ? Promise.resolve({ posts: J.merge(jDemo).filter(p => J.isLive(p, jToday())) }) : call("requests"),
+  journalAct: (t, b) => DEMO ? demoJournal(b) : call("staff/orders", { method: "POST", body: b, token: t })
 };
 const ordersOn = () => DEMO || LIVE.orders;
 const paymentsOn = () => DEMO || LIVE.payments;
@@ -290,6 +295,7 @@ function parse(path) {
   else if (a === "basket" || a === "checkout") r.view = a;
   else if (["pharmacist", "desk", "staff", "admin"].includes(a)) { r.view = "home"; r.mode = "staff"; }
   else if (["rider", "riders"].includes(a)) { r.view = "home"; r.mode = "rider"; }
+  else if (a === "journal" || a === "blog") { r.view = "journal"; r.post = b || ""; }
   else if (PAGES.includes(a)) { r.view = "page"; r.page = a; }
   else r.view = "notfound";
   return r;
@@ -307,6 +313,7 @@ function pathFor() {
     case "controlled": return "/controlled-medicines";
     case "track": return "/track" + (S.trackId ? "/" + S.trackId : "");
     case "page": return "/" + S.page;
+    case "journal": return "/journal" + (S.post ? "/" + S.post : "");
     case "notfound": return location.pathname;
     default: return "/" + S.view;
   }
@@ -322,10 +329,12 @@ function go(path, opts) {
   closeSuggest();
   if (r.page) S.page = r.page;
   if (r.view === "track") { S.trackId = r.trackId || S.trackId; }
+  if (r.view === "journal") S.post = r.post || null;
   if (!MEMORY && !opts.noHistory) { try { history[opts.replace ? "replaceState" : "pushState"]({}, "", pathFor()); } catch (e) { /* stay in memory */ } }
   closeDrawer(true);
   render(true);
   if (S.view === "track" && S.trackId) loadTrack();
+  if (S.mode === "shop" && ["journal", "home"].includes(S.view) && !S.journal.posts) loadJournal();
   if (S.mode === "staff" && S.staff.token) loadDesk();
   if (S.mode === "rider" && S.rider.token) loadRider();
   const focusTarget = S.mode !== "shop" ? $("#staff-view") : $("#view");
@@ -495,6 +504,8 @@ function vHome() {
     <ol class="steps">${stepsHTML()}</ol>
     <div class="center">${link("/prescriptions", "Start a prescription order", "btn btn-accent btn-lg")}</div>
   </div></div></section>
+
+  ${journalTeaser()}
 
   ${mobileBanner()}`;
 }
@@ -869,9 +880,100 @@ function vTrack() {
           <div class="r"><span>Delivery · ${esc(o.delivery.label)}</span><span class="num">${o.deliveryFee ? NGN(o.deliveryFee) : "Free"}</span></div><div class="r"><b>Total</b><b class="num">${NGN(o.total)}${o.priced ? "" : "+"}</b></div></div></details>
         <div class="order-actions"><button class="btn ${o.canPay ? "btn-secondary" : "btn-primary"}" type="button" data-receipt>${icon("download", "ic sm")} ${PAID(o.status) ? "Download receipt (PDF)" : "Download order summary (PDF)"}</button>${o.items.some(i => prod(i.id)) ? `<button class="btn btn-secondary" type="button" data-reorder>${icon("box", "ic sm")} Order these items again</button>` : ""}</div>
         <div><h3 style="margin-bottom:.5rem">Order record</h3><div class="audit">${o.history.slice().reverse().map(l => `<div><span>${stamp(l.t)}</span><b style="font-weight:500">${esc(l.m)}</b></div>`).join("")}</div></div>
+        ${o.status === "delivered" ? `<div class="notice info jask-track"><b>How did we do?</b><span>Tell us about your order in a minute. With your permission we may share it on the Synako Journal.</span><button class="btn btn-secondary btn-sm" type="button" data-shareexp="${esc(o.id)}">${icon("chat", "ic sm")} Share your experience</button></div>` : ""}
         ${final ? "" : `<p class="small muted">Questions? ${contactLine()}.</p>`}`}
     </section>
   </div>`;
+}
+
+/* ---------- Journal (/journal): a note from the pharmacy every day, the week in review, orders, customer stories, health tips ---------- */
+const J = window.SYNAKO_JOURNAL;
+const jToday = () => J.lagosDay(Date.now(), CFG.site.timezone);
+const jDate = (d, opts) => new Date(d + "T12:00:00Z").toLocaleDateString(CFG.site.locale, Object.assign({ day: "numeric", month: "long", year: "numeric", timeZone: "UTC" }, opts || {}));
+const jKind = p => (J.KINDS[p.kind] || J.KINDS.diary);
+/* Published posts: from the server once loaded, the starter posts until then */
+const jPosts = () => S.journal.posts || J.merge([]).filter(p => J.isLive(p, jToday()));
+async function loadJournal() {
+  if (S.journal.loading) return;
+  S.journal.loading = true;
+  try { S.journal.posts = (await api.journal()).posts; S.journal.err = ""; }
+  catch (e) { S.journal.err = e.message; }
+  S.journal.loading = false;
+  const typing = document.activeElement && document.activeElement.closest && document.activeElement.closest("#expform");
+  if (S.mode === "shop" && ["journal", "home"].includes(S.view) && !typing) render();
+}
+/* Post text: blank line between paragraphs, "## " subheading, "- " list, **bold**, [words](/path or https://…) */
+const jInline = t => esc(t).replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>")
+  .replace(/\[([^\]]+)\]\(((?:\/(?!\/)|https:\/\/)[^\s)]*)\)/g, (m, label, href) => href.startsWith("/") ? `<a href="${href}" data-link>${label}</a>` : `<a href="${href}" target="_blank" rel="noopener">${label}</a>`);
+function jBody(text) {
+  return String(text || "").split(/\n\s*\n/).map(b => b.trim()).filter(Boolean).map(b => {
+    const lines = b.split("\n");
+    const head = lines[0].startsWith("## ") ? `<h2>${jInline(lines.shift().slice(3))}</h2>` : "";
+    if (!lines.length) return head;
+    return head + (lines.every(l => /^\s*-\s+/.test(l)) ? `<ul>${lines.map(l => `<li>${jInline(l.replace(/^\s*-\s+/, ""))}</li>`).join("")}</ul>` : `<p>${lines.map(jInline).join("<br>")}</p>`);
+  }).join("");
+}
+function jExcerpt(p, n) {
+  const t = String(p.body || "").split(/\n\s*\n/).map(b => b.trim()).find(b => b && !b.startsWith("## ") && !b.startsWith("- ")) || "";
+  const s = t.replace(/\*\*|\[|\]\([^)]*\)/g, "").replace(/\s+/g, " ").trim(), max = n || 170;
+  return s.length > max ? s.slice(0, max).replace(/\s+\S*$/, "") + "…" : s;
+}
+const jMeta = p => `<p class="jmeta"><span class="tag jk jk-${esc(p.kind)}">${esc(jKind(p).short)}</span><time datetime="${esc(p.date)}">${jDate(p.date)}</time></p>`;
+const jCard = (p, h) => `<article class="jcard">${jMeta(p)}<${h || "h2"} class="h3">${link("/journal/" + p.id, esc(p.title))}</${h || "h2"}><p class="small muted">${esc(jExcerpt(p))}</p></article>`;
+function journalTeaser() {
+  const list = jPosts().slice(0, 3);
+  if (!list.length) return "";
+  return `<section class="section tight" aria-labelledby="journal-title"><div class="wrap">
+    ${sectionHead("journal-title", "Synako Journal", "News from the pharmacy", "", link("/journal", "All posts <span aria-hidden=\"true\">→</span>", "more"))}
+    <div class="jlist three">${list.map(p => jCard(p, "h3")).join("")}</div>
+  </div></section>`;
+}
+const RATINGS = [[5, "Excellent"], [4, "Good"], [3, "Okay"], [2, "Poor"], [1, "Very poor"]];
+function shareForm() {
+  return `<form class="f panel jshare" id="expform" novalidate><div class="hp" aria-hidden="true"><label>Leave this empty<input name="website" tabindex="-1" autocomplete="off"></label></div>
+    <h2 class="h3" id="share" tabindex="-1">${icon("chat", "ic")} Share your experience</h2>
+    <p class="small muted">Ordered from us, or visited the pharmacy? Tell us how it went. We read every one.</p>
+    <fieldset class="jrate"><legend>How did we do?</legend>${RATINGS.map(([n, l]) => `<label><input type="radio" name="rating" value="${n}" required><span><b aria-hidden="true">${"★".repeat(n)}</b> ${l}</span></label>`).join("")}</fieldset>
+    <div class="row2"><label for="exname">First name<input id="exname" name="name" required maxlength="60" autocomplete="given-name"></label><label for="extown">Town<span class="hint">Optional</span><input id="extown" name="town" maxlength="60" autocomplete="address-level2"></label></div>
+    <label for="exmsg">Your experience<textarea id="exmsg" name="message" rows="4" required minlength="10" maxlength="2000" placeholder="How quickly did it arrive? Did our pharmacist help?"></textarea></label>
+    <label for="exorder">Order number<span class="hint">Optional, so we can look into anything that went wrong.</span><input id="exorder" name="order" class="mono" maxlength="20" placeholder="SYN-XXXXXX" value="${esc(S.journal.order || "")}" autocapitalize="characters"></label>
+    <label class="check"><input type="checkbox" name="publish"><span>You may share this on the journal with my first name and town. <span class="muted">We never publish phone numbers, addresses or what you ordered.</span></span></label>
+    <button class="btn btn-primary" type="submit">Send</button></form>`;
+}
+function vJournal() {
+  const all = jPosts();
+  if (S.post) return vPost(all);
+  const k = S.journal.kind || "all", list = all.filter(p => k === "all" || p.kind === k);
+  const kinds = [["all", "All posts"]].concat(Object.keys(J.KINDS).filter(id => all.some(p => p.kind === id)).map(id => [id, J.KINDS[id].name]));
+  return `<div class="wrap page-head"><nav class="crumbs" aria-label="Breadcrumb">${link("/", "Home")}</nav><p class="eyebrow">Synako Journal</p><h1>News from the pharmacy</h1>
+    <p class="muted lead">A note from the counter every day, the week's orders and deliveries in review, customer stories and health tips from our pharmacists.</p></div>
+  <div class="wrap two journal">
+    <section aria-labelledby="jlist-h"><h2 id="jlist-h" class="sr">Posts</h2>
+      <div class="jfilter" role="group" aria-label="Show">${kinds.map(([id, l]) => `<button type="button" class="jchip" data-jkind="${id}" aria-pressed="${k === id}">${esc(l)}</button>`).join("")}</div>
+      <div class="jlist">${list.length ? list.map(p => jCard(p)).join("") : `<p class="muted">No posts here yet.</p>`}</div>
+    </section>
+    <aside class="jside">${shareForm()}
+      <div class="panel jask">${icon("chat", "ic")}<div><b>Questions about your health?</b><p class="small muted">Quick questions to a pharmacist are free.</p>${link("/contact", "Talk to a pharmacist <span aria-hidden=\"true\">→</span>", "more")}</div></div>
+    </aside>
+  </div>`;
+}
+function vPost(all) {
+  const p = all.find(x => x.id === S.post);
+  if (!p) return S.journal.posts || S.journal.err ? vNotFound() : `<div class="wrap page-head"><p class="muted">Loading…</p></div>`;
+  const more = all.filter(x => x.id !== p.id).slice(0, 3);
+  return `<div class="wrap page-head jhead"><nav class="crumbs" aria-label="Breadcrumb">${link("/", "Home")}<span aria-hidden="true">/</span>${link("/journal", "Journal")}</nav>
+    ${jMeta(p)}<h1>${esc(p.title)}</h1><p class="muted small">By ${esc(p.author || B.name)}</p></div>
+  <div class="wrap jpost">
+    <article class="prose jbody">${jBody(p.body)}</article>
+    <div class="jpost-foot"><button class="btn btn-ghost btn-sm" type="button" data-jshare>${icon("share", "ic sm")} Share this post</button>${link("/journal", "← All posts", "linkbtn")}</div>
+    ${more.length ? `<section class="jmore" aria-labelledby="jmore-h"><h2 id="jmore-h" class="h3">More from the journal</h2><div class="jlist three">${more.map(x => jCard(x, "h3")).join("")}</div></section>` : ""}
+  </div>`;
+}
+async function shareJournal() {
+  const p = jPosts().find(x => x.id === S.post); if (!p) return;
+  const url = `${SITE_URL}/journal/${p.id}`;
+  try { if (navigator.share) { await navigator.share({ title: p.title, text: `${p.title} · ${B.name}`, url }); return; } } catch (e) { if (e && e.name === "AbortError") return; }
+  try { await navigator.clipboard.writeText(url); toast("Link copied. Paste it anywhere to share."); } catch (e) { toast(url); }
 }
 
 /* ---------- Content pages ---------- */
@@ -1070,8 +1172,9 @@ function vStaff() {
   const takings = paidToday.reduce((t, o) => t + (Number(o.total) || 0), 0);
   $("#staff-stats").innerHTML = `<button type="button" class="cmdk-btn" data-cmdk aria-keyshortcuts="Control+K Meta+K" aria-haspopup="dialog">${icon("search", "ic sm")}<span>Search orders, products and actions</span><kbd>Ctrl K</kbd></button>`;
   const newMsgs = d.requests.filter(r => r.status === "new").length;
-  const count = { review: groups.review.length, pack: groups.pack.length, pay: groups.pay.length, requests: newMsgs, stock: P.filter(p => p.out).length, supply: shortCount(d) };
-  const warn = { review: groups.review.some(o => waitMins(o) > 60), pack: d.orders.some(o => o.status === "paid" && waitMins(o) > 60), supply: count.supply > 0, requests: newMsgs > 0 };
+  const js = journalState(d);
+  const count = { review: groups.review.length, pack: groups.pack.length, pay: groups.pay.length, requests: newMsgs, stock: P.filter(p => p.out).length, supply: shortCount(d), journal: js.fresh.length || (js.todayDone ? 0 : "Post due") };
+  const warn = { review: groups.review.some(o => waitMins(o) > 60), pack: d.orders.some(o => o.status === "paid" && waitMins(o) > 60), supply: count.supply > 0, requests: newMsgs > 0, journal: !js.todayDone };
   let n = 0;
   const navHtml = DESK_NAV.map(([label, items]) => `<p class="dk-nav-label">${label}</p>${items.map(([k, l, ic]) => { n++; return `<button type="button" class="dk-link" data-dtab="${k}"${tab === k ? ' aria-current="page"' : ""}>${icon(ic, "ic sm")}<span>${l}</span>${count[k] ? `<span class="count${warn[k] ? " warn" : ""}">${count[k]}${k === "stock" ? " out" : ""}</span>` : ""}<kbd aria-hidden="true">${n}</kbd></button>`; }).join("")}`).join("");
   let [group, title, sub] = DESK_TITLES[tab] || DESK_TITLES.overview;
@@ -1079,7 +1182,7 @@ function vStaff() {
   const ov = tab === "overview" ? overviewPanel(d, groups, takings, paidToday, day) : null;
   const head = `<header class="dk-head${tab === "overview" ? " is-dash" : ""}"><div><p class="dk-eyebrow">${group}</p><h1 tabindex="-1" id="dk-title">${title}</h1>${sub ? `<p>${sub}</p>` : ""}</div>${tab === "overview" ? overviewActions(d, groups) : ""}</header>`;
   const body = ov ? ov.rest
-    : tab === "supply" ? supplyPanel() : tab === "stock" ? stockPanel() : tab === "requests" ? requestsPanel(d)
+    : tab === "supply" ? supplyPanel() : tab === "stock" ? stockPanel() : tab === "requests" ? requestsPanel(d) : tab === "journal" ? journalPanel(d)
     : `<div class="desk${st.sel ? " has-sel" : ""}">
       <div class="queue-wrap">${queueTools(list)}<nav class="queue" id="queue" aria-label="Orders">${queueRows(list)}</nav></div>
       <section class="panel" aria-live="polite">${deskDetail()}</section>
@@ -1107,9 +1210,9 @@ function vStaff() {
   ${st.keys ? keysHelp() : ""}${st.cmdk ? cmdkView() : ""}`;
 }
 function requestsPanel(d) {
-  return `<div class="requests">${d.requests.length ? d.requests.slice().sort((a, b) => (a.status === "done") - (b.status === "done")).map(r => `<article class="panel req${r.status === "done" ? " done" : ""}"><div class="top"><b>${{ appointment: "Consultation booking", message: "Message", careers: "Careers interest", trade: "Wholesale quote request", restock: "Back-in-stock request" }[r.type]}</b><span class="small muted">${stamp(r.createdAt)}</span></div>
+  return `<div class="requests">${d.requests.length ? d.requests.slice().sort((a, b) => (a.status === "done") - (b.status === "done")).map(r => `<article class="panel req${r.status === "done" ? " done" : ""}"><div class="top"><b>${{ appointment: "Consultation booking", message: "Message", careers: "Careers interest", trade: "Wholesale quote request", restock: "Back-in-stock request", experience: "Customer experience" }[r.type]}</b><span class="small muted">${stamp(r.createdAt)}</span></div>
         <div class="small"><b>${esc(r.name)}</b> · ${r.phone ? `<a href="tel:${esc(r.phone)}">${esc(r.phone)}</a>` : ""} ${esc(r.email || "")}</div>
-        ${r.type === "appointment" ? `<div class="small">Wants: <b>${esc(r.date)} at ${esc(PR.fmt12(r.time || "00:00"))}</b></div>` : ""}${r.topic ? `<div class="small">${esc(r.topic)}</div>` : ""}${r.role ? `<div class="small">${esc(r.role)} ${r.pcn ? `· PCN ${esc(r.pcn)}` : ""}</div>` : ""}${r.business ? `<div class="small"><b>${esc(r.business)}</b>${r.bizType ? ` · ${esc(r.bizType)}` : ""}${r.state ? ` · ${esc(r.state)}` : ""}${r.pcn && !r.role ? ` · Licence ${esc(r.pcn)}` : ""}</div>` : ""}
+        ${r.type === "experience" ? `<div class="small">${jStars(r.rating)}${r.town ? ` · ${esc(r.town)}` : ""}${r.order ? ` · <span class="mono">${esc(r.order)}</span>` : ""} · ${r.publish ? "may be shared on the journal" : "private"}</div>` : ""}${r.type === "appointment" ? `<div class="small">Wants: <b>${esc(r.date)} at ${esc(PR.fmt12(r.time || "00:00"))}</b></div>` : ""}${r.topic ? `<div class="small">${esc(r.topic)}</div>` : ""}${r.role ? `<div class="small">${esc(r.role)} ${r.pcn ? `· PCN ${esc(r.pcn)}` : ""}</div>` : ""}${r.business ? `<div class="small"><b>${esc(r.business)}</b>${r.bizType ? ` · ${esc(r.bizType)}` : ""}${r.state ? ` · ${esc(r.state)}` : ""}${r.pcn && !r.role ? ` · Licence ${esc(r.pcn)}` : ""}</div>` : ""}
         ${r.message ? `<p class="small" style="white-space:pre-line">${esc(r.message)}</p>` : ""}
         <div class="req-foot">${r.status === "done" ? `<span class="tag ok">Handled${r.handledBy ? ` by ${esc(r.handledBy)}` : ""}</span><button class="linkbtn" type="button" data-req="${esc(r.id)}" data-st="new">Mark as new</button>` : `<button class="btn btn-secondary btn-sm" type="button" data-req="${esc(r.id)}" data-st="done">${icon("check", "ic sm")} Mark as handled</button>`}</div></article>`).join("") : `<p class="muted">No messages or bookings yet.</p>`}</div>`;
 }
@@ -1127,7 +1230,7 @@ function weekBars(orders, day) {
 const soundOn = () => store.get("synako.sound", true) !== false;
 function keysHelp() {
   return `<div class="keys-help" role="dialog" aria-label="Keyboard shortcuts"><div class="panel"><div class="top"><h2 class="h3">Keyboard shortcuts</h2><button class="iconbtn" type="button" data-keys aria-label="Close">${icon("close", "ic sm")}</button></div>
-    <dl class="kv"><dt><kbd>Ctrl</kbd> <kbd>K</kbd></dt><dd>Search orders, products and actions</dd><dt><kbd>1</kbd>–<kbd>8</kbd></dt><dd>Go to a section (the numbers in the sidebar)</dd><dt><kbd>/</kbd></dt><dd>Search orders</dd><dt><kbd>J</kbd> <kbd>K</kbd> or <kbd>↓</kbd> <kbd>↑</kbd></dt><dd>Next / previous order</dd><dt><kbd>Esc</kbd></dt><dd>Close the order, or this box</dd><dt><kbd>R</kbd></dt><dd>Refresh now</dd><dt><kbd>?</kbd></dt><dd>Show or hide these shortcuts</dd></dl></div></div>`;
+    <dl class="kv"><dt><kbd>Ctrl</kbd> <kbd>K</kbd></dt><dd>Search orders, products and actions</dd><dt><kbd>1</kbd>–<kbd>9</kbd></dt><dd>Go to a section (the numbers in the sidebar)</dd><dt><kbd>/</kbd></dt><dd>Search orders</dd><dt><kbd>J</kbd> <kbd>K</kbd> or <kbd>↓</kbd> <kbd>↑</kbd></dt><dd>Next / previous order</dd><dt><kbd>Esc</kbd></dt><dd>Close the order, or this box</dd><dt><kbd>R</kbd></dt><dd>Refresh now</dd><dt><kbd>?</kbd></dt><dd>Show or hide these shortcuts</dd></dl></div></div>`;
 }
 /* Order progress at a glance, from its record */
 function progressSteps(o) {
@@ -1149,7 +1252,8 @@ function deskFonts() {
 const DESK_NAV = [
   ["Operations", [["overview", "Overview", "pulse"], ["review", "To review", "rx"], ["pack", "Pack & deliver", "box"], ["pay", "Awaiting payment", "card"], ["done", "Completed", "check"]]],
   ["Customers", [["requests", "Messages & bookings", "chat"]]],
-  ["Inventory", [["stock", "Stock", "layers"], ["supply", "Supply", "truck"]]]
+  ["Inventory", [["stock", "Stock", "layers"], ["supply", "Supply", "truck"]]],
+  ["Website", [["journal", "Journal", "pen"]]]
 ];
 const DESK_TABS = DESK_NAV.flatMap(([, items]) => items.map(i => i[0]));
 const DESK_TITLES = {
@@ -1160,7 +1264,8 @@ const DESK_TITLES = {
   done: ["Operations", "Completed", "Delivered, cancelled and not-approved orders."],
   requests: ["Customers", "Messages & bookings", "Messages, consultations, wholesale quotes and back-in-stock requests."],
   stock: ["Inventory", "Stock", "Mark products running low or out of stock. Out-of-stock items can't be ordered online."],
-  supply: ["Inventory", "Supply", "Shortages, purchase orders to wholesalers, and your wholesaler list."]
+  supply: ["Inventory", "Supply", "Shortages, purchase orders to wholesalers, and your wholesaler list."],
+  journal: ["Website", "Journal", "Your daily routine for the shop's journal: a post every day, customer stories, and the week in review."]
 };
 function goDesk(tab, extra) {
   const st = S.staff; st.tab = tab; st.sel = null; st.detail = null; st.status = ""; Object.assign(st, extra || {});
@@ -1264,6 +1369,112 @@ function openOrder(id) {
   S.staff.tab = tab; S.staff.status = ""; S.staff.q = ""; loadDeskOrder(id);
   setTimeout(() => { const b = document.querySelector(`[data-sel="${id}"]`); if (b) b.scrollIntoView({ block: "nearest" }); }, 0);
 }
+/* Desk: the journal. The daily routine (a post a day, customer stories, the week in review), the next 7 days, the editor and every post */
+const jAddDays = (iso, n) => { const t = new Date(iso + "T12:00:00Z"); t.setUTCDate(t.getUTCDate() + n); return t.toISOString().slice(0, 10); };
+const jStage = (p, today) => p.status === "draft" ? ["gen", "Draft"] : p.date > today ? ["warn", "Scheduled"] : ["ok", "Published"];
+const jStars = n => `<span class="jstars" aria-label="${n} out of 5">${"★".repeat(n)}<span aria-hidden="true">${"★".repeat(5 - n)}</span></span>`;
+function journalState(d) {
+  const today = jToday(), posts = (d.posts || J.merge([])).filter(p => p.status !== "hidden");
+  const stories = (d.requests || []).filter(r => r.type === "experience");
+  return { today, posts, stories, fresh: stories.filter(r => r.status === "new"),
+    todayDone: posts.some(p => p.date === today && p.status === "published"),
+    weekDone: posts.some(p => p.kind === "week" && p.status === "published" && p.date > jAddDays(today, -7) && p.date <= today) };
+}
+function journalEditor() {
+  const e = S.staff.jedit;
+  if (!e) return "";
+  return `<form class="f panel jeditor" id="jform" novalidate aria-labelledby="jform-h">
+    <div class="jeditor-top"><h2 class="h3" id="jform-h">${e.id ? "Edit post" : e.kind === "week" ? "Week in review (draft from this week's orders)" : e.story ? "Customer story" : "New post"}</h2><button class="linkbtn" type="button" data-jcancel>Cancel</button></div>
+    ${e.kind === "week" && !e.id ? `<div class="notice info small"><span>The figures come from this week's orders: counts only, no names or medicines. Check them, then replace the line in brackets with a note from the counter.</span></div>` : ""}
+    ${e.story ? `<div class="notice info small"><span>The customer agreed to share this with their first name and town. Keep their words; trim anything that identifies them further.</span></div>` : ""}
+    <div class="row2"><label for="jtitle">Title<input id="jtitle" required maxlength="140" value="${esc(e.title || "")}"></label>
+      <label for="jkind">Type<select id="jkind">${Object.entries(J.KINDS).map(([k, v]) => `<option value="${k}"${(e.kind || "diary") === k ? " selected" : ""}>${esc(v.name)}</option>`).join("")}</select></label></div>
+    <div class="row2"><label for="jdate">Publish on<span class="hint">A later date schedules it. Posts go live that day (Nigeria time).</span><input id="jdate" type="date" required value="${esc(e.date || jToday())}"></label>
+      <label for="jauthor">Written by<input id="jauthor" maxlength="60" value="${esc(e.author || S.staff.name || "")}"></label></div>
+    <label for="jbody">Post<span class="hint">Leave a blank line between paragraphs. <code>## </code> starts a subheading, <code>- </code> a list item, <code>**bold**</code>, and <code>[words](/products/otc)</code> makes a link. Never name a customer or their medicines without their permission.</span><textarea id="jbody" rows="14" required>${esc(e.body || "")}</textarea></label>
+    <div class="actions"><button class="btn btn-primary" type="button" data-jsave="published">${icon("check", "ic sm")} Publish</button><button class="btn btn-ghost" type="button" data-jsave="draft">Save as draft</button></div>
+  </form>`;
+}
+function journalPanel(d) {
+  const st = S.staff, j = journalState(d), today = j.today;
+  const days = [...Array(7)].map((_, i) => jAddDays(today, i));
+  const dayPosts = iso => j.posts.filter(p => p.date === iso);
+  const todo = (done, label, note, btn) => `<li class="${done ? "done" : ""}"><span class="jtick" aria-hidden="true">${done ? icon("check", "ic sm") : ""}</span><div><b>${label}</b><span class="small muted">${note}</span></div>${btn || ""}<span class="sr">${done ? "(done)" : "(to do)"}</span></li>`;
+  const routine = `<section class="panel jroutine" aria-labelledby="jr-h"><h2 class="h3" id="jr-h">Today's routine · ${jDate(today, { weekday: "long", year: undefined })}</h2>
+    <ol class="jtodo">
+      ${todo(j.todayDone, "Post today's note", j.todayDone ? "Today's post is live on the journal." : "What came in, what customers asked about, anything to know before ordering.", j.todayDone ? "" : `<button class="btn btn-primary btn-sm" type="button" data-jnew="${today}">Write today's post</button>`)}
+      ${todo(!j.fresh.length, "Read customer experiences", j.fresh.length ? `${j.fresh.length} new, below. Publish the ones customers agreed to share.` : "Nothing new.", "")}
+      ${todo(j.weekDone, "Week in review", j.weekDone ? "This week's review is published." : "Once a week: the orders and deliveries in numbers, drafted for you.", j.weekDone ? "" : `<button class="btn btn-ghost btn-sm" type="button" data-jweek>Draft from this week's orders</button>`)}
+    </ol></section>`;
+  const plan = `<section class="jweek" aria-labelledby="jw-h"><h2 class="h3 ov-sub" id="jw-h">The next 7 days</h2>
+    <ol class="jdays">${days.map((iso, i) => { const ps = dayPosts(iso); return `<li class="jday${ps.some(p => p.status === "published") ? " has" : ""}${i === 0 ? " today" : ""}"><p class="jday-name">${i === 0 ? "Today" : jDate(iso, { weekday: "short", month: "short", year: undefined })}</p>
+      ${ps.map(p => { const [c, l] = jStage(p, today); return `<button type="button" class="jday-post" data-jedit="${esc(p.id)}"><span class="tag ${c}">${l}</span><span>${esc(p.title)}</span></button>`; }).join("")}
+      ${ps.length ? "" : `<button type="button" class="linkbtn small" data-jnew="${iso}">+ Plan a post</button>`}</li>`; }).join("")}</ol></section>`;
+  const stories = j.fresh.length ? `<section aria-labelledby="js-h"><h2 class="h3 ov-sub" id="js-h">New customer experiences</h2><div class="requests">${j.fresh.map(r => `<article class="panel req"><div class="top">${jStars(r.rating)}<span class="small muted">${stamp(r.createdAt)}</span></div>
+      <div class="small"><b>${esc(r.name)}</b>${r.town ? ` · ${esc(r.town)}` : ""}${r.order ? ` · <button class="linkbtn mono" type="button" data-openorder="${esc(r.order)}">${esc(r.order)}</button>` : ""}</div>
+      <p class="small" style="white-space:pre-line">${esc(r.message)}</p>
+      <div class="req-foot">${r.publish ? `<span class="tag ok">May be shared</span><button class="btn btn-secondary btn-sm" type="button" data-jstory="${esc(r.id)}">${icon("pen", "ic sm")} Write up as a story</button>` : `<span class="tag gen">Private</span>`}<button class="linkbtn" type="button" data-req="${esc(r.id)}" data-st="done">Mark as read</button></div></article>`).join("")}</div></section>` : "";
+  const rows = j.posts.slice().sort((a, b) => b.date.localeCompare(a.date)).map(p => { const [c, l] = jStage(p, today); return `<tr><td class="mono small">${esc(p.date)}</td><td>${p.status === "published" && p.date <= today ? link("/journal/" + p.id, esc(p.title)) : esc(p.title)}</td><td class="small">${esc(jKind(p).name)}</td><td><span class="tag ${c}">${l}</span></td>
+    <td class="jrow-btns"><button class="btn btn-ghost btn-sm" type="button" data-jedit="${esc(p.id)}">Edit</button><button class="linkbtn small" type="button" data-jhide="${esc(p.id)}">Remove</button></td></tr>`; }).join("");
+  return `<div class="jdesk">
+    <div class="jdesk-top">${routine}${plan}</div>
+    ${journalEditor()}
+    ${st.jedit ? "" : `<div class="jdesk-new"><button class="btn btn-primary" type="button" data-jnew="${today}">${icon("pen", "ic sm")} New post</button><a class="btn btn-ghost" href="/journal" data-link>View the journal</a></div>`}
+    ${stories}
+    <section aria-labelledby="jp-h"><h2 class="h3 ov-sub" id="jp-h">All posts</h2><div class="panel jtable-wrap"><table class="jtable"><thead><tr><th scope="col">Date</th><th scope="col">Title</th><th scope="col">Type</th><th scope="col">Status</th><th scope="col"><span class="sr">Actions</span></th></tr></thead><tbody>${rows}</tbody></table></div></section>
+  </div>`;
+}
+function journalOpen(post) {
+  S.staff.jedit = post; render.fresh = true; render();
+  const f = $("#jtitle"); if (f) { f.closest("form").scrollIntoView({ block: "start", behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" }); f.focus({ preventScroll: true }); }
+}
+function journalStory(id) {
+  const r = (S.staff.list.requests || []).find(x => x.id === id); if (!r) return;
+  const first = String(r.message).split(/(?<=[.!?])\s/)[0].slice(0, 90).trim();
+  journalOpen({ kind: "story", date: jToday(), author: S.staff.name, story: r.id, title: `“${first}”`,
+    body: `${r.message.trim()}\n\n— ${r.name}${r.town ? `, ${r.town}` : ""}${r.rating ? `, who rated us ${r.rating} out of 5` : ""}` });
+}
+async function journalCall(b, btn) {
+  if (btn) btn.disabled = true;
+  try { return await api.journalAct(S.staff.token, Object.assign({ by: S.staff.name }, b)); }
+  catch (e) { if (e.status === 401) signOut(); else toast(e.message); return null; }
+  finally { if (btn) btn.disabled = false; }
+}
+async function journalSave(status, btn) {
+  const st = S.staff, f = $("#jform"); if (!f || !f.reportValidity()) return;
+  const v = id => ($("#" + id) || {}).value || "";
+  const r = await journalCall({ action: "journal-save", post: { id: st.jedit.id || "", story: st.jedit.story || "", title: v("jtitle"), kind: v("jkind"), date: v("jdate"), author: v("jauthor"), body: v("jbody"), status } }, btn);
+  if (!r) return;
+  st.list.posts = r.posts; st.jedit = null; S.journal.posts = null; render.fresh = true;
+  toast(status === "draft" ? "Saved as a draft. Only staff can see it." : r.post.date > jToday() ? `Scheduled for ${jDate(r.post.date)}.` : "Published on the journal.");
+  if (r.post.story) await loadDesk(true); else render();
+}
+async function journalHide(id, btn) {
+  if (!confirm("Remove this post from the journal?")) return;
+  const r = await journalCall({ action: "journal-hide", id }, btn);
+  if (r) { S.staff.list.posts = r.posts; S.journal.posts = null; toast("Post removed."); render(); }
+}
+async function journalWeek(btn) {
+  const r = await journalCall({ action: "journal-week" }, btn);
+  if (r) journalOpen(Object.assign({ author: S.staff.name }, r.draft));
+}
+/* Design preview: posts kept in memory, like the demo orders */
+const jDemo = [];
+function demoJournal(b) {
+  const done = v => new Promise(ok => setTimeout(() => ok(v), 200));
+  if (b.action === "journal-week") return demo.weekDraft();
+  const all = J.merge(jDemo), put = p => { const i = jDemo.findIndex(x => x.id === p.id); if (i >= 0) jDemo[i] = p; else jDemo.push(p); };
+  if (b.action === "journal-hide") { put(Object.assign({}, all.find(x => x.id === b.id), { status: "hidden" })); return done({ posts: J.merge(jDemo) }); }
+  const p = b.post;
+  if (!p.title.trim()) return Promise.reject(new Error("Give the post a title."));
+  if (p.body.trim().length < 20) return Promise.reject(new Error("Write a little more before saving."));
+  let id = p.id;
+  if (!id) { const base = J.slug(p.title) || "post"; id = base; for (let n = 2; all.some(x => x.id === id); n++) id = `${base}-${n}`; }
+  const post = Object.assign({}, p, { id, title: p.title.trim(), body: p.body.trim(), author: p.author || B.name, createdAt: new Date().toISOString() });
+  put(post);
+  return done({ post, posts: J.merge(jDemo) });
+}
+
 /* ---------- Supply: shortages, purchase orders to wholesalers, suppliers ---------- */
 const shortCount = d => new Set([...(d.out || []), ...(d.low || []), ...P.filter(p => p.outInData).map(p => p.id)]).size;
 async function loadSupply(silent) {
@@ -1762,6 +1973,12 @@ function pageMeta() {
     case "basket": return { title: "Your basket", noindex: true };
     case "checkout": return { title: "Checkout", noindex: true };
     case "track": return { title: "Track your order", noindex: true };
+    case "journal": {
+      const p = S.post && jPosts().find(x => x.id === S.post);
+      if (!p) return S.post ? { title: "Journal", noindex: true } : { title: "Journal", desc: "News from Synako Pharmacy: a note from the counter every day, the week's orders and deliveries, customer stories and health tips from our pharmacists." };
+      return { title: p.title, desc: jExcerpt(p, 155), type: "article", ld: { "@context": "https://schema.org", "@type": "BlogPosting", headline: p.title, datePublished: p.date, articleSection: jKind(p).name,
+        author: { "@type": "Organization", name: p.author || B.name }, publisher: { "@type": "Organization", name: B.name, logo: { "@type": "ImageObject", url: SITE_URL + "/assets/logo@2x.png" } }, url: `${SITE_URL}/journal/${p.id}`, image: SITE_URL + "/assets/og-image.jpg" } };
+    }
     default: return { title: "Page not found", noindex: true };
   }
 }
@@ -1775,7 +1992,7 @@ function applyMeta() {
   metaTag("property", "og:title").setAttribute("content", title);
   metaTag("property", "og:description").setAttribute("content", m.desc || DEFAULT_DESC);
   metaTag("property", "og:url").setAttribute("content", url);
-  metaTag("property", "og:type").setAttribute("content", m.type === "product" ? "product" : "website");
+  metaTag("property", "og:type").setAttribute("content", m.type === "product" || m.type === "article" ? m.type : "website");
   let c = document.head.querySelector('link[rel="canonical"]');
   if (!c) { c = document.createElement("link"); c.rel = "canonical"; document.head.appendChild(c); }
   c.href = url;
@@ -1822,7 +2039,7 @@ function render(scroll) {
     const waiting = !rider && S.staff.list ? (c => c.pack + c.review)(deskCounts(S.staff.list)) : rider && S.rider.list ? S.rider.list.filter(d => d.status === "packed").length : 0;
     if (waiting) title = `(${waiting}) ${title}`;
   } else {
-    const V = { home: vHome, shop: vShop, product: vProduct, controlled: vControlled, basket: vBasket, checkout: vCheckout, rx: vRx, track: vTrack, page: vPage, notfound: vNotFound }[S.view] || vHome;
+    const V = { home: vHome, shop: vShop, product: vProduct, controlled: vControlled, basket: vBasket, checkout: vCheckout, rx: vRx, track: vTrack, page: vPage, journal: vJournal, notfound: vNotFound }[S.view] || vHome;
     $("#view").innerHTML = V();
     renderCount();
     $("#desk-link").hidden = !S.staff.token; // staff signed in on this device get a shortcut back to the desk
@@ -1830,7 +2047,7 @@ function render(scroll) {
     const here = pathFor();
     document.querySelectorAll(".nav a[data-link], .drawer a[data-link]").forEach(a => {
       const h = a.getAttribute("href");
-      const cur = h === here || (h === "/products" && S.view === "shop" && S.filter === "all") || (h === "/track" && S.view === "track");
+      const cur = h === here || (h === "/products" && S.view === "shop" && S.filter === "all") || (h === "/track" && S.view === "track") || (h === "/journal" && S.view === "journal");
       if (cur) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current");
     });
   }
@@ -1986,11 +2203,11 @@ document.addEventListener("keydown", e => {
   const typing = /^(TEXTAREA|SELECT)$/.test(e.target.tagName) || (e.target.tagName === "INPUT" && !/^(checkbox|radio|button|submit)$/.test(e.target.type));
   if (e.key === "Escape") { if (S.staff.keys) S.staff.keys = false; else if (typing) { e.target.blur(); return; } else { S.staff.sel = null; S.staff.detail = null; } render(); return; }
   if (typing) return;
-  if (/^[1-8]$/.test(e.key)) { goDesk(DESK_TABS[Number(e.key) - 1]); e.preventDefault(); return; }
+  if (/^[1-9]$/.test(e.key)) { goDesk(DESK_TABS[Number(e.key) - 1]); e.preventDefault(); return; }
   if (e.key === "/") { const q = $("#deskq") || $("#stockq"); if (q) { q.focus(); e.preventDefault(); } return; }
   if (e.key === "?") { S.staff.keys = !S.staff.keys; render(); return; }
   if (e.key === "r" || e.key === "R") { loadDesk(); return; }
-  if (["j", "k", "ArrowDown", "ArrowUp"].includes(e.key) && !["overview", "requests", "stock", "supply"].includes(S.staff.tab)) {
+  if (["j", "k", "ArrowDown", "ArrowUp"].includes(e.key) && !["overview", "requests", "stock", "supply", "journal"].includes(S.staff.tab)) {
     const shown = queueFilter(deskGroup()); if (!shown.length) return;
     const i = shown.findIndex(o => o.id === S.staff.sel), step = e.key === "j" || e.key === "ArrowDown" ? 1 : -1;
     const next = shown[i < 0 ? 0 : Math.min(shown.length - 1, Math.max(0, i + step))];
@@ -2111,6 +2328,16 @@ document.addEventListener("click", e => {
   if (d.lineqty) { const l = S.cart.find(x => lineKey(x) === d.lineqty); if (l) { const p = prod(l.id); l.q = Math.max(1, Math.min(PR.maxQty(p, PR.unitOf(p, l.u)), l.q + Number(d.d))); saveCart(); } render(); return; }
   if (d.remove) { S.cart = S.cart.filter(x => lineKey(x) !== d.remove); saveCart(); render(); toast("Removed from your basket."); return; }
   if ("share" in d) { shareProduct(); return; }
+  if ("jshare" in d) { shareJournal(); return; }
+  if (d.jkind) { S.journal.kind = d.jkind; render(); const b = document.querySelector(`[data-jkind="${d.jkind}"]`); if (b) b.focus(); return; }
+  if (d.shareexp) { S.journal.order = d.shareexp; go("/journal"); const h = $("#share"); if (h) { h.scrollIntoView({ block: "start" }); h.focus({ preventScroll: true }); } return; }
+  if (d.jnew) { journalOpen({ kind: "diary", date: d.jnew, author: S.staff.name, title: "", body: "" }); return; }
+  if (d.jedit) { const p = (S.staff.list.posts || []).find(x => x.id === d.jedit); if (p) journalOpen(Object.assign({}, p)); return; }
+  if (d.jstory) { journalStory(d.jstory); return; }
+  if (d.jsave) { journalSave(d.jsave, t); return; }
+  if (d.jhide) { journalHide(d.jhide, t); return; }
+  if ("jweek" in d) { journalWeek(t); return; }
+  if ("jcancel" in d) { S.staff.jedit = null; render(); return; }
   if ("clearSeen" in d) { S.seen = []; store.set("synako.seen", []); render(); return; }
   if ("reorder" in d) { reorder(); return; }
   if ("csv" in d) { downloadCsv(); return; }
@@ -2270,6 +2497,14 @@ document.addEventListener("submit", async e => {
     return;
   }
   if (f.id === "promoform") { S.form.promo = f.promo.value.trim().toUpperCase(); render(); const q = quoteNow(); toast(q.promo ? `${q.promo.code} applied: ${q.promo.label}.` : q.promoError || "Enter a code."); return; }
+  if (f.id === "expform") {
+    if (!f.reportValidity()) return;
+    const data = Object.fromEntries(new FormData(f).entries()); data.type = "experience"; data.publish = f.publish.checked;
+    const btn = f.querySelector("[type=submit]"); btn.disabled = true;
+    try { await api.request(data); f.reset(); S.journal.order = ""; toast("Thank you! Our team will read it today."); }
+    catch (er) { toast(er.message); }
+    btn.disabled = false; return;
+  }
   if (f.id === "restockform") {
     if (!f.reportValidity()) return;
     const data = Object.fromEntries(new FormData(f).entries()); data.type = "restock";

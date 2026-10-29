@@ -72,7 +72,7 @@ const expressWhere = has(D.expressArea) ? ` in ${D.expressArea}` : "";
 const sameDayWhere = (D.localStates || []).length ? ` within ${D.localStates.join(", ")} State` : "";
 
 const IMG = {
-  hero: "assets/hero-pharmacist-wide.webp",
+  hero: "assets/hero-pharmacist-navy.webp",
   pharmacistMale: "assets/pharmacist-male.webp",
   pharmacistFemale: "assets/pharmacist-female.webp",
   delivery: "assets/delivery.webp",

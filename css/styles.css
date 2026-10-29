@@ -1427,8 +1427,8 @@ body:has(#shell-customer:not([hidden])) {
 /* Header */
 #shell-customer .topbar { background: var(--ink); color: #e8e8e8; }
 #shell-customer .topbar .lbl { color: #b8c3d6; }
-#shell-customer .topbar .lbl.open { color: #a9cdf5; }
-#shell-customer .topbar .lbl.open::before { background: #a9cdf5; }
+#shell-customer .topbar .lbl.open { color: #7dd89a; }  /* "Open now": the store's sale green, lifted to read on the navy bar */
+#shell-customer .topbar .lbl.open::before { background: #4cc472; box-shadow: 0 0 0 3px rgb(76 196 114 / .28); }
 #shell-customer .site { background: rgba(247, 247, 247, .94); border-bottom-color: var(--line); }
 #shell-customer .search input { background: #ffffff; border-color: var(--line-2); }
 #shell-customer .search input:focus { background: #ffffff; }

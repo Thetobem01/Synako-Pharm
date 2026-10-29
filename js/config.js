@@ -85,8 +85,8 @@
     },
     sms: {
       // Texts to customers, sent only once TERMII_API_KEY is added in the hosting settings (each text costs a few naira).
-      // Remove any you don't want: paid (with the delivery code), approve, info, reject, dispatched, delivered, reminder
-      events: ["paid", "approve", "info", "reject", "dispatched", "delivered", "reminder"]
+      // Remove any you don't want: paid (with the delivery code), approve, info, reject, packed, dispatched, delivered, reminder
+      events: ["paid", "approve", "info", "reject", "packed", "dispatched", "delivered", "reminder"]
     },
     wholesale: {
       minTradeOrder: 100000,      // ₦ — smallest order for a trade quote; set to 0 for none

@@ -934,9 +934,9 @@ function shareForm() {
     <h2 class="h3" id="share" tabindex="-1">${icon("chat", "ic")} Share your experience</h2>
     <p class="small muted">Ordered from us, or visited the pharmacy? Tell us how it went. We read every one.</p>
     <fieldset class="jrate"><legend>How did we do?</legend>${RATINGS.map(([n, l]) => `<label><input type="radio" name="rating" value="${n}" required><span><b aria-hidden="true">${"★".repeat(n)}</b> ${l}</span></label>`).join("")}</fieldset>
-    <div class="row2"><label for="exname">First name<input id="exname" name="name" required maxlength="60" autocomplete="given-name"></label><label for="extown">Town<span class="hint">Optional</span><input id="extown" name="town" maxlength="60" autocomplete="address-level2"></label></div>
+    <div class="row2"><label for="exname">First name<input id="exname" name="name" required maxlength="60" autocomplete="given-name"></label><label for="extown"><span>Town <span class="hint opt">(optional)</span></span><input id="extown" name="town" maxlength="60" autocomplete="address-level2"></label></div>
     <label for="exmsg">Your experience<textarea id="exmsg" name="message" rows="4" required minlength="10" maxlength="2000" placeholder="How quickly did it arrive? Did our pharmacist help?"></textarea></label>
-    <label for="exorder">Order number<span class="hint">Optional, so we can look into anything that went wrong.</span><input id="exorder" name="order" class="mono" maxlength="20" placeholder="SYN-XXXXXX" value="${esc(S.journal.order || "")}" autocapitalize="characters"></label>
+    <label for="exorder"><span>Order number <span class="hint opt">(optional)</span></span><input id="exorder" name="order" class="mono" maxlength="20" placeholder="SYN-XXXXXX" value="${esc(S.journal.order || "")}" autocapitalize="characters"><span class="hint">So we can look into anything that went wrong.</span></label>
     <label class="check"><input type="checkbox" name="publish"><span>You may share this on the journal with my first name and town. <span class="muted">We never publish phone numbers, addresses or what you ordered.</span></span></label>
     <button class="btn btn-primary" type="submit">Send</button></form>`;
 }

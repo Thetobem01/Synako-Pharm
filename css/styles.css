@@ -1746,3 +1746,56 @@ body:has(#shell-customer:not([hidden])) {
 @media (max-width: 820px) { .jside { position: static; } }
 @media (max-width: 560px) { .jdays { grid-template-columns: repeat(2, minmax(0, 1fr)); } .jcard { padding: var(--sp-4); } }
 @media (prefers-reduced-motion: reduce) { .jcard { transition: none; } }
+
+/* Drop-down menus: one chevron arrow pointing down, with room around it, on every select in the shop and the desk */
+select {
+  -webkit-appearance: none !important; -moz-appearance: none !important; appearance: none !important;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%235C677D' stroke-width='2.25' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") !important;
+  background-repeat: no-repeat !important; background-position: right .9rem center !important; background-size: 1.05rem !important;
+  padding-right: 2.75rem !important; padding-left: .9rem; min-height: 44px; line-height: 1.3; cursor: pointer; text-overflow: ellipsis;
+}
+select:hover { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%233362AB' stroke-width='2.25' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") !important; }
+select:disabled { cursor: not-allowed; opacity: .6; }
+select::-ms-expand { display: none; }
+.queue-tools select, .po-bar select { padding-left: .75rem; background-position: right .7rem center !important; padding-right: 2.4rem !important; }
+
+/* Journal spacing: even gaps, inputs lined up across each row, comfortable reading width */
+.f .hint.opt { display: inline; font-size: var(--fs-xs); }
+.journal { gap: var(--sp-7); }
+.jfilter { margin-bottom: var(--sp-5); }
+.jlist { gap: var(--sp-4); }
+.jcard { padding: var(--sp-5) var(--sp-5) calc(var(--sp-5) + .1rem); gap: .6rem; }
+.jcard h2, .jcard h3 { line-height: 1.3; }
+.jside { gap: var(--sp-5); }
+.jshare { gap: var(--sp-4); padding: var(--sp-5); }
+.jshare .row2, .jeditor .row2 { align-items: end; gap: var(--sp-4); }
+.jshare .btn[type=submit] { width: 100%; }
+.jrate { padding: var(--sp-3) var(--sp-4) var(--sp-4) !important; gap: .5rem !important; }
+.jask { padding: var(--sp-4) var(--sp-5); }
+.jhead { padding-bottom: var(--sp-5); }
+.jhead .jmeta { margin-top: var(--sp-2); }
+.jhead h1 { margin-top: var(--sp-3); margin-bottom: var(--sp-2); }
+.jpost { gap: var(--sp-7); }
+.jbody { gap: var(--sp-4); }
+.jbody h2 { margin-top: var(--sp-4); }
+.jpost-foot { padding-top: var(--sp-5); }
+.jdesk { gap: var(--sp-6); }
+.jroutine { padding: var(--sp-5) var(--sp-6); }
+.jtodo { gap: var(--sp-4); margin-top: var(--sp-4); }
+.jdays { gap: .75rem; }
+.jday { padding: .85rem .9rem; min-height: 132px; gap: .5rem; }
+.jeditor { padding: var(--sp-5) var(--sp-6); gap: var(--sp-5); }
+.jtable th, .jtable td { padding: .8rem 1.1rem; }
+@media (max-width: 820px) { .journal { gap: var(--sp-6); } }
+@media (max-width: 560px) {
+  .jcard, .jshare, .jask { padding: var(--sp-4); }
+  .jroutine, .jeditor { padding: var(--sp-4); }
+  .jpost { gap: var(--sp-6); }
+  .jtable th, .jtable td { padding: .65rem .75rem; }
+}
+/* Main menu: tighter spacing on narrower laptop screens so every link fits without scrolling */
+@media (max-width: 1280px) {
+  .nav a { padding: .7rem .55rem; font-size: .875rem; }
+  .nav a[aria-current="page"]::after { left: .55rem; right: .55rem; }
+}
+@media (max-width: 1120px) { .nav a { padding: .7rem .34rem; font-size: .8rem; } .nav a[aria-current="page"]::after { left: .34rem; right: .34rem; } }

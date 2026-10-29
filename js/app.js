@@ -79,37 +79,72 @@ const IMG = {
   mobileMockup: "assets/mobile-mockup.webp"
 };
 
+/* Icons: Lucide v1.63.0 (lucide.dev), keyed by the names used across the site.
+   ISC Licence. Copyright (c) Lucide Contributors 2022; portions Copyright (c) Cole Bemis 2013-2022 (Feather, MIT).
+   Permission to use, copy, modify and/or distribute this software for any purpose with or without fee is hereby granted,
+   provided that the above copyright notice and this permission notice appear in all copies. */
+/* Icons: Lucide v1.63.0 (lucide.dev), keyed by the names used across the site.
+   ISC Licence. Copyright (c) Lucide Contributors 2022; portions Copyright (c) Cole Bemis 2013-2022 (Feather, MIT).
+   Permission to use, copy, modify and/or distribute this software for any purpose with or without fee is hereby granted,
+   provided that the above copyright notice and this permission notice appear in all copies. */
+/* Icons: Lucide v1.63.0 (lucide.dev), keyed by the names used across the site.
+   ISC Licence. Copyright (c) Lucide Contributors 2022; portions Copyright (c) Cole Bemis 2013-2022 (Feather, MIT).
+   Permission to use, copy, modify and/or distribute this software for any purpose with or without fee is hereby granted,
+   provided that the above copyright notice and this permission notice appear in all copies. */
+/* Icons: Lucide v1.63.0 (lucide.dev), keyed by the names used across the site.
+   ISC Licence. Copyright (c) Lucide Contributors 2022; portions Copyright (c) Cole Bemis 2013-2022 (Feather, MIT).
+   Permission to use, copy, modify and/or distribute this software for any purpose with or without fee is hereby granted,
+   provided that the above copyright notice and this permission notice appear in all copies. */
 const ICONS = {
-  thermo: '<path d="M14 14.8V5a2 2 0 0 0-4 0v9.8a4 4 0 1 0 4 0z"/>',
-  drop: '<path d="M12 3s6 6.5 6 11a6 6 0 0 1-12 0c0-4.5 6-11 6-11z"/>',
-  sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
-  cup: '<path d="M6 4h12l-1.5 15a2 2 0 0 1-2 2h-5a2 2 0 0 1-2-2z"/><path d="M6.5 9h11"/>',
-  pulse: '<path d="M3 12h4l2-5 4 10 2-5h6"/>',
-  heart: '<path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/>',
-  hand: '<path d="M8 13V5.5a1.5 1.5 0 0 1 3 0V11M11 10V4.5a1.5 1.5 0 0 1 3 0V11M14 10V6.5a1.5 1.5 0 0 1 3 0V14a6 6 0 0 1-6 6h-.5A5.5 5.5 0 0 1 5 15l-1.2-3.2a1.5 1.5 0 0 1 2.7-1.2L8 13"/>',
-  rx: '<path d="M6 20V4h5a4 4 0 0 1 0 8H6M10 12l8 8M18 13l-5 5"/>',
-  wind: '<path d="M3 8h10a3 3 0 1 0-3-3M3 12h15a3 3 0 1 1-3 3M3 16h7"/>',
-  plus: '<rect x="3" y="3" width="18" height="18" rx="4"/><path d="M12 8v8M8 12h8"/>',
-  shield: '<path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/>',
-  lock: '<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>',
-  truck: '<path d="M3 7h11v9H3zM14 10h4l3 3v3h-7z"/><circle cx="7" cy="18" r="2"/><circle cx="17" cy="18" r="2"/>',
-  file: '<path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M8 14l2.5 2.5L16 11"/>',
-  chat: '<path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/>',
-  box: '<rect x="4" y="7" width="16" height="13" rx="2"/><path d="M9 7V5a3 3 0 0 1 6 0v2M12 11v5M9.5 13.5h5"/>',
-  store: '<path d="M4 9l1.5-5h13L20 9M4 9v11h16V9M4 9h16M9 20v-6h6v6"/>',
-  clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
-  cal: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>',
-  card: '<rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20M6 15h4"/>',
-  check: '<path d="M20 6L9 17l-5-5"/>',
-  wine: '<path d="M8 3h8l-.5 6a3.5 3.5 0 0 1-7 0zM12 12.5V20M8.5 21h7"/>',
-  scale: '<rect x="4" y="4" width="16" height="16" rx="3"/><path d="M8.5 9.5a5 5 0 0 1 7 0M12 9.5l1.2-1.6"/>',
-  layers: '<path d="M12 3l9 5-9 5-9-5zM3 13l9 5 9-5M3 17.5l9 5 9-5" />',
-  share: '<circle cx="18" cy="5" r="2.5"/><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="19" r="2.5"/><path d="M8.2 10.8l7.6-4.4M8.2 13.2l7.6 4.4"/>',
-  print: '<path d="M6 9V3h12v6M6 18H4a1 1 0 0 1-1-1v-6a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v6a1 1 0 0 1-1 1h-2"/><rect x="6" y="14" width="12" height="7"/>',
-  phone: '<path d="M5 3h4l2 5-2.5 1.5a11 11 0 0 0 6 6L16 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 5a2 2 0 0 1 2-2"/>',
-  search: '<circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/>',
-  pin: '<path d="M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/>',
-  download: '<path d="M12 3v12M7 10l5 5 5-5M4 21h16"/>'
+  thermo: '<path d="M14 4v10.54a4 4 0 1 1-4 0V4a2 2 0 0 1 4 0Z"/>',
+  drop: '<path d="M12 22a7 7 0 0 0 7-7c0-2-1-3.9-3-5.5s-3.5-4-4-6.5c-.5 2.5-2 4.9-4 6.5C6 11.1 5 13 5 15a7 7 0 0 0 7 7z"/>',
+  cup: '<path d="M10 2v2"/><path d="M14 2v2"/><path d="M16 8a1 1 0 0 1 1 1v8a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1h14a4 4 0 1 1 0 8h-1"/><path d="M6 2v2"/>',
+  pulse: '<path d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2"/>',
+  heart: '<path d="M2 9.5a5.5 5.5 0 0 1 9.591-3.676.56.56 0 0 0 .818 0A5.49 5.49 0 0 1 22 9.5c0 2.29-1.5 4-3 5.5l-5.492 5.313a2 2 0 0 1-3 .019L5 15c-1.5-1.5-3-3.2-3-5.5"/><path d="M3.22 13H9.5l.5-1 2 4.5 2-7 1.5 3.5h5.27"/>',
+  hand: '<path d="M11 14h2a2 2 0 0 0 0-4h-3c-.6 0-1.1.2-1.4.6L3 16"/><path d="m14.45 13.39 5.05-4.694C20.196 8 21 6.85 21 5.75a2.75 2.75 0 0 0-4.797-1.837.276.276 0 0 1-.406 0A2.75 2.75 0 0 0 11 5.75c0 1.2.802 2.248 1.5 2.946L16 11.95"/><path d="m2 15 6 6"/><path d="m7 20 1.6-1.4c.3-.4.8-.6 1.4-.6h4c1.1 0 2.1-.4 2.8-1.2l4.6-4.4a1 1 0 0 0-2.75-2.91"/>',
+  rx: '<rect width="8" height="4" x="8" y="2" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M9 14h6"/><path d="M12 17v-6"/>',
+  wind: '<path d="M12.8 19.6A2 2 0 1 0 14 16H2"/><path d="M17.5 8a2.5 2.5 0 1 1 2 4H2"/><path d="M9.8 4.4A2 2 0 1 1 11 8H2"/>',
+  plus: '<path d="M12 11v4"/><path d="M14 13h-4"/><path d="M16 6V4a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/><path d="M18 6v14"/><path d="M6 6v14"/><rect width="20" height="14" x="2" y="6" rx="2"/>',
+  pill: '<path d="m10.5 20.5 10-10a4.95 4.95 0 1 0-7-7l-10 10a4.95 4.95 0 1 0 7 7Z"/><path d="m8.5 8.5 7 7"/>',
+  steth: '<path d="M11 2v2"/><path d="M5 2v2"/><path d="M5 3H4a2 2 0 0 0-2 2v4a6 6 0 0 0 12 0V5a2 2 0 0 0-2-2h-1"/><path d="M8 15a6 6 0 0 0 12 0v-3"/><circle cx="20" cy="10" r="2"/>',
+  syringe: '<path d="m18 2 4 4"/><path d="m17 7 3-3"/><path d="M19 9 8.7 19.3c-1 1-2.5 1-3.4 0l-.6-.6c-1-1-1-2.5 0-3.4L15 5"/><path d="m9 11 4 4"/><path d="m5 19-3 3"/><path d="m14 4 6 6"/>',
+  bandage: '<path d="M10 10.01h.01"/><path d="M10 14.01h.01"/><path d="M14 10.01h.01"/><path d="M14 14.01h.01"/><path d="M18 6v12"/><path d="M6 6v12"/><rect x="2" y="6" width="20" height="12" rx="2"/>',
+  baby: '<path d="M10 16c.5.3 1.2.5 2 .5s1.5-.2 2-.5"/><path d="M15 12h.01"/><path d="M19.38 6.813A9 9 0 0 1 20.8 10.2a2 2 0 0 1 0 3.6 9 9 0 0 1-17.6 0 2 2 0 0 1 0-3.6A9 9 0 0 1 12 3c2 0 3.5 1.1 3.5 2.5s-.9 2.5-2 2.5c-.8 0-1.5-.4-1.5-1"/><path d="M9 12h.01"/>',
+  germ: '<path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="M9 12h6"/><path d="M12 9v6"/>',
+  smile: '<path d="M15 10V9"/><path d="M16.472 15a6 6 0 01-8.943 0"/><path d="M9 10V9"/><circle cx="12" cy="12" r="10"/>',
+  milk: '<path d="M8 2h8"/><path d="M9 2v2.789a4 4 0 0 1-.672 2.219l-.656.984A4 4 0 0 0 7 10.212V20a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2v-9.789a4 4 0 0 0-.672-2.219l-.656-.984A4 4 0 0 1 15 4.788V2"/><path d="M7 15a6.472 6.472 0 0 1 5 0 6.47 6.47 0 0 0 5 0"/>',
+  beer: '<path d="M17 11h1a3 3 0 0 1 0 6h-1"/><path d="M9 12v6"/><path d="M13 12v6"/><path d="M14 7.5c-1 0-1.44.5-3 .5s-2-.5-3-.5-1.72.5-2.5.5a2.5 2.5 0 0 1 0-5c.78 0 1.57.5 2.5.5S9.44 2 11 2s2 1.5 3 1.5 1.72-.5 2.5-.5a2.5 2.5 0 0 1 0 5c-.78 0-1.5-.5-2.5-.5Z"/><path d="M5 8v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V8"/>',
+  spirit: '<path d="M12 12 4.207 4.207A.707.707 0 0 1 4.707 3h14.586a.707.707 0 0 1 .5 1.207z"/><path d="M12 12v10"/><path d="M7 22h10"/>',
+  water: '<path d="M5.116 4.104A1 1 0 0 1 6.11 3h11.78a1 1 0 0 1 .994 1.105L17.19 20.21A2 2 0 0 1 15.2 22H8.8a2 2 0 0 1-2-1.79z"/><path d="M6 12a5 5 0 0 1 6 0 5 5 0 0 0 6 0"/>',
+  grain: '<path d="M2 22 16 8"/><path d="M3.47 12.53 5 11l1.53 1.53a3.5 3.5 0 0 1 0 4.94L5 19l-1.53-1.53a3.5 3.5 0 0 1 0-4.94Z"/><path d="M7.47 8.53 9 7l1.53 1.53a3.5 3.5 0 0 1 0 4.94L9 15l-1.53-1.53a3.5 3.5 0 0 1 0-4.94Z"/><path d="M11.47 4.53 13 3l1.53 1.53a3.5 3.5 0 0 1 0 4.94L13 11l-1.53-1.53a3.5 3.5 0 0 1 0-4.94Z"/><path d="M20 2h2v2a4 4 0 0 1-4 4h-2V6a4 4 0 0 1 4-4Z"/><path d="M11.47 17.47 13 19l-1.53 1.53a3.5 3.5 0 0 1-4.94 0L5 19l1.53-1.53a3.5 3.5 0 0 1 4.94 0Z"/><path d="M15.47 13.47 17 15l-1.53 1.53a3.5 3.5 0 0 1-4.94 0L9 15l1.53-1.53a3.5 3.5 0 0 1 4.94 0Z"/><path d="M19.47 9.47 21 11l-1.53 1.53a3.5 3.5 0 0 1-4.94 0L13 11l1.53-1.53a3.5 3.5 0 0 1 4.94 0Z"/>',
+  bug: '<path d="M12 20v-9"/><path d="M14 7a4 4 0 0 1 4 4v3a6 6 0 0 1-12 0v-3a4 4 0 0 1 4-4z"/><path d="M14.12 3.88 16 2"/><path d="M21 21a4 4 0 0 0-3.81-4"/><path d="M21 5a4 4 0 0 1-3.55 3.97"/><path d="M22 13h-4"/><path d="M3 21a4 4 0 0 1 3.81-4"/><path d="M3 5a4 4 0 0 0 3.55 3.97"/><path d="M6 13H2"/><path d="m8 2 1.88 1.88"/><path d="M9 7.13V6a3 3 0 1 1 6 0v1.13"/>',
+  mobility: '<circle cx="16" cy="4" r="1"/><path d="m18 19 1-7-6 1"/><path d="m5 8 3-3 5.5 3-2.36 3.5"/><path d="M4.24 14.5a5 5 0 0 0 6.88 6"/><path d="M13.76 17.5a5 5 0 0 0-6.88-6"/>',
+  badge: '<path d="M3.85 8.62a4 4 0 0 1 4.78-4.77 4 4 0 0 1 6.74 0 4 4 0 0 1 4.78 4.78 4 4 0 0 1 0 6.74 4 4 0 0 1-4.77 4.78 4 4 0 0 1-6.75 0 4 4 0 0 1-4.78-4.77 4 4 0 0 1 0-6.76Z"/><path d="m16 9-5.5 5.5L8 12"/>',
+  citrus: '<path d="M21.66 17.67a1.08 1.08 0 0 1-.04 1.6A12 12 0 0 1 4.73 2.38a1.1 1.1 0 0 1 1.61-.04z"/><path d="M19.65 15.66A8 8 0 0 1 8.35 4.34"/><path d="m14 10-5.5 5.5"/><path d="M14 17.85V10H6.15"/>',
+  bell: '<path d="M10.268 21a2 2 0 0 0 3.464 0"/><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"/>',
+  belloff: '<path d="M10.268 21a2 2 0 0 0 3.464 0"/><path d="M17 17H4a1 1 0 0 1-.74-1.673C4.59 13.956 6 12.499 6 8a6 6 0 0 1 .258-1.742"/><path d="m2 2 20 20"/><path d="M8.668 3.01A6 6 0 0 1 18 8c0 2.687.77 4.653 1.707 6.05"/>',
+  keys: '<path d="M10 8h.01"/><path d="M12 12h.01"/><path d="M14 8h.01"/><path d="M16 12h.01"/><path d="M18 8h.01"/><path d="M6 8h.01"/><path d="M7 16h10"/><path d="M8 12h.01"/><rect width="20" height="16" x="2" y="4" rx="2"/>',
+  close: '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
+  shield: '<path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/>',
+  lock: '<rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>',
+  truck: '<path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/><path d="M15 18H9"/><path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14"/><circle cx="17" cy="18" r="2"/><circle cx="7" cy="18" r="2"/>',
+  file: '<path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"/><path d="M14 2v5a1 1 0 0 0 1 1h5"/><path d="m9 15 2 2 4-4"/>',
+  chat: '<path d="M2.992 16.342a2 2 0 0 1 .094 1.167l-1.065 3.29a1 1 0 0 0 1.236 1.168l3.413-.998a2 2 0 0 1 1.099.092 10 10 0 1 0-4.777-4.719"/>',
+  box: '<path d="M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z"/><path d="M12 22V12"/><polyline points="3.29 7 12 12 20.71 7"/><path d="m7.5 4.27 9 5.15"/>',
+  store: '<path d="M15 21v-5a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v5"/><path d="M17.774 10.31a1.12 1.12 0 0 0-1.549 0 2.5 2.5 0 0 1-3.451 0 1.12 1.12 0 0 0-1.548 0 2.5 2.5 0 0 1-3.452 0 1.12 1.12 0 0 0-1.549 0 2.5 2.5 0 0 1-3.77-3.248l2.889-4.184A2 2 0 0 1 7 2h10a2 2 0 0 1 1.653.873l2.895 4.192a2.5 2.5 0 0 1-3.774 3.244"/><path d="M4 10.95V19a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8.05"/>',
+  clock: '<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>',
+  cal: '<path d="M8 2v3"/><path d="M16 2v3"/><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/>',
+  card: '<rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/><path d="M6 14h2"/>',
+  check: '<path d="M20 6 9 17l-5-5"/>',
+  wine: '<path d="M8 22h8"/><path d="M7 10h10"/><path d="M12 15v7"/><path d="M12 15a5 5 0 0 0 5-5c0-2-.5-4-2-8H9c-1.5 4-2 6-2 8a5 5 0 0 0 5 5Z"/>',
+  scale: '<circle cx="12" cy="5" r="3"/><path d="M6.5 8a2 2 0 0 0-1.905 1.46L2.1 18.5A2 2 0 0 0 4 21h16a2 2 0 0 0 1.925-2.54L19.4 9.5A2 2 0 0 0 17.48 8Z"/>',
+  layers: '<path d="M12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83z"/><path d="M2 12a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 12"/><path d="M2 17a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 17"/>',
+  share: '<circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" x2="15.42" y1="13.51" y2="17.49"/><line x1="15.41" x2="8.59" y1="6.51" y2="10.49"/>',
+  print: '<path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 9V3a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v6"/><rect x="6" y="14" width="12" height="8" rx="1"/>',
+  phone: '<path d="M13.832 16.568a1 1 0 0 0 1.213-.303l.355-.465A2 2 0 0 1 17 15h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2A18 18 0 0 1 2 4a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2v3a2 2 0 0 1-.8 1.6l-.468.351a1 1 0 0 0-.292 1.233 14 14 0 0 0 6.392 6.384"/>',
+  search: '<path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/>',
+  pin: '<path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0"/><circle cx="12" cy="10" r="3"/>',
+  download: '<path d="M12 15V3"/><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/>'
 };
 const icon = (k, cls) => `<svg class="${cls || "ic"}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[k] || ICONS.box}</svg>`;
 
@@ -411,7 +446,7 @@ function vHome() {
   <section class="trust" aria-label="Why shop with Synako"><div class="wrap trust-grid">
     <div>${icon("shield", "ic")}<p><b>Registered pharmacy</b><span>${has(L.pcnEPharmacy) ? `PCN e-pharmacy licence ${esc(L.pcnEPharmacy)}` : "Pharmacy Council of Nigeria"}</span></p></div>
     <div>${icon("file", "ic")}<p><b>Prescriptions checked</b><span>Before anything is charged</span></p></div>
-    <div>${icon("box", "ic")}<p><b>NAFDAC-registered</b><span>From approved suppliers</span></p></div>
+    <div>${icon("badge", "ic")}<p><b>NAFDAC-registered</b><span>From approved suppliers</span></p></div>
     <div>${icon("card", "ic")}<p><b>Secure payment</b><span>Card, transfer or USSD by Paystack</span></p></div>
   </div></section>
 
@@ -827,7 +862,7 @@ function vTrack() {
         ${o.canPay ? `<div class="paybox go">${icon("card", "ic big")}<div><b>${o.status === "approved_awaiting_payment" ? "Approved! " : ""}Pay ${NGN(o.total)} to confirm your order</b><p class="small muted">Card, bank transfer or USSD through Paystack.</p></div><button class="btn btn-primary btn-lg" type="button" data-pay="${esc(o.id)}" ${S.busy ? "disabled" : ""}>${S.busy ? "Opening payment…" : "Pay now"}</button></div>` : ""}
         ${o.deliveryCode ? `<div class="notice info code-box"><b>Your delivery code: <span class="mono code">${esc(o.deliveryCode)}</span></b><span>Give this code to the rider when your order arrives${o.rider ? `. ${esc(o.rider)} is bringing it now` : ""}. Please don't share it before then.</span></div>` : ""}
         ${o.rxRequest && !o.priced ? `<p class="small muted">Our pharmacist will add your prescription items and their price when they approve it.</p>` : ""}
-        <ol class="timeline">${st.map((s, i) => { const c = i < stage ? "done" : (i === stage && !bad && !final ? "now" : "next"); return `<li class="${c}"><span class="dot ${c}" aria-hidden="true">${i < stage ? "✓" : i + 1}</span><div><b>${s}</b>${c === "now" ? `<div class="small muted">In progress</div>` : ""}<span class="sr">${c === "done" ? " (done)" : c === "now" ? " (current step)" : ""}</span></div></li>`; }).join("")}</ol>
+        <ol class="timeline">${st.map((s, i) => { const c = i < stage ? "done" : (i === stage && !bad && !final ? "now" : "next"); return `<li class="${c}"><span class="dot ${c}" aria-hidden="true">${i < stage ? icon("check", "ic sm") : i + 1}</span><div><b>${s}</b>${c === "now" ? `<div class="small muted">In progress</div>` : ""}<span class="sr">${c === "done" ? " (done)" : c === "now" ? " (current step)" : ""}</span></div></li>`; }).join("")}</ol>
         <details class="facts"><summary>Order details</summary>
           <div class="small" style="display:grid;gap:.35rem;margin-top:.6rem">${o.items.map(i => `<div class="r"><span>${i.qty} × ${esc(i.name)}</span><span class="num">${NGN(i.total)}</span></div>`).join("")}
           ${o.discount ? `<div class="r disc"><span>Discount${o.promo ? ` (${esc(o.promo.code)})` : ""}</span><span class="num">−${NGN(o.discount)}</span></div>` : ""}
@@ -851,7 +886,7 @@ const CONTENT = {
     </div>
     <div class="values">
       <div>${icon("shield", "ic big")}<h3>Safe</h3><p>Pharmacist checks on every prescription, and controlled medicines supplied in person only.</p></div>
-      <div>${icon("box", "ic big")}<h3>Genuine</h3><p>NAFDAC-registered stock from approved manufacturers and distributors.</p></div>
+      <div>${icon("badge", "ic big")}<h3>Genuine</h3><p>NAFDAC-registered stock from approved manufacturers and distributors.</p></div>
       <div>${icon("chat", "ic big")}<h3>Personal</h3><p>Real pharmacists you can reach in under ${C.freeMinutes} minutes for free advice.</p></div>
       <div>${icon("truck", "ic big")}<h3>Fast</h3><p>Home delivery in ${D.expressMinutes} minutes${esc(expressWhere)}, or same day${esc(sameDayWhere)} for orders before ${cutoff}.</p></div>
     </div>` }),
@@ -1056,8 +1091,8 @@ function vStaff() {
         <button class="dk-tool" type="button" data-csv>${icon("download", "ic sm")} Download orders (CSV)</button>
         <button class="dk-tool" type="button" data-testmail>${icon("chat", "ic sm")} Send test email</button>
         <a class="dk-tool" href="/rider" data-link>${icon("truck", "ic sm")} Rider page</a>
-        <button class="dk-tool" type="button" data-sound aria-pressed="${soundOn()}">${soundOn() ? "🔔 Sound on" : "🔕 Sound off"}</button>
-        <button class="dk-tool" type="button" data-keys>⌨ Keyboard shortcuts</button>
+        <button class="dk-tool" type="button" data-sound aria-pressed="${soundOn()}">${soundOn() ? `${icon("bell", "ic sm")} Sound on` : `${icon("belloff", "ic sm")} Sound off`}</button>
+        <button class="dk-tool" type="button" data-keys>${icon("keys", "ic sm")} Keyboard shortcuts</button>
       </div>
       <p class="dk-sync" role="status"><span class="dot" aria-hidden="true"></span>Live · ${st.updated ? `updated ${st.updated.toLocaleTimeString("en-GB")}` : "connecting"}</p>
     </nav>
@@ -1091,7 +1126,7 @@ function weekBars(orders, day) {
 }
 const soundOn = () => store.get("synako.sound", true) !== false;
 function keysHelp() {
-  return `<div class="keys-help" role="dialog" aria-label="Keyboard shortcuts"><div class="panel"><div class="top"><h2 class="h3">Keyboard shortcuts</h2><button class="iconbtn" type="button" data-keys aria-label="Close">✕</button></div>
+  return `<div class="keys-help" role="dialog" aria-label="Keyboard shortcuts"><div class="panel"><div class="top"><h2 class="h3">Keyboard shortcuts</h2><button class="iconbtn" type="button" data-keys aria-label="Close">${icon("close", "ic sm")}</button></div>
     <dl class="kv"><dt><kbd>Ctrl</kbd> <kbd>K</kbd></dt><dd>Search orders, products and actions</dd><dt><kbd>1</kbd>–<kbd>8</kbd></dt><dd>Go to a section (the numbers in the sidebar)</dd><dt><kbd>/</kbd></dt><dd>Search orders</dd><dt><kbd>J</kbd> <kbd>K</kbd> or <kbd>↓</kbd> <kbd>↑</kbd></dt><dd>Next / previous order</dd><dt><kbd>Esc</kbd></dt><dd>Close the order, or this box</dd><dt><kbd>R</kbd></dt><dd>Refresh now</dd><dt><kbd>?</kbd></dt><dd>Show or hide these shortcuts</dd></dl></div></div>`;
 }
 /* Order progress at a glance, from its record */
@@ -1101,7 +1136,7 @@ function progressSteps(o) {
     [["Paid", at(/^Payment received/)], ["Packed", at(/^Packed/)], ["On the road", at(/^Out for delivery/)], ["Delivered", at(/^Delivered/)]]);
   if (["rejected", "cancelled"].includes(o.status)) return `<p class="small"><span class="tag bad">${esc(o.statusLabel || o.status)}</span></p>`;
   const cur = steps.findIndex(x => !x[1]);
-  return `<ol class="steps${cur < 0 ? " complete" : ""}">${steps.map(([l, t], i) => `<li class="${t ? "done" : i === cur ? "now" : ""}"><span class="dot" aria-hidden="true">${t ? "✓" : i + 1}</span><b>${l}</b><span class="small muted">${t ? stamp(t) : i === cur ? "Next" : ""}</span></li>`).join("")}</ol>`;
+  return `<ol class="steps${cur < 0 ? " complete" : ""}">${steps.map(([l, t], i) => `<li class="${t ? "done" : i === cur ? "now" : ""}"><span class="dot" aria-hidden="true">${t ? icon("check", "ic sm") : i + 1}</span><b>${l}</b><span class="small muted">${t ? stamp(t) : i === cur ? "Next" : ""}</span></li>`).join("")}</ol>`;
 }
 /* ---------- Desk layout: sections, overview and the command palette ---------- */
 /* The desk's own typefaces (Host Grotesk for headings, Instrument Sans for text), loaded only for staff screens */

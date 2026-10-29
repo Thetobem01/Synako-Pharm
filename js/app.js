@@ -145,7 +145,10 @@ const ICONS = {
   phone: '<path d="M13.832 16.568a1 1 0 0 0 1.213-.303l.355-.465A2 2 0 0 1 17 15h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2A18 18 0 0 1 2 4a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2v3a2 2 0 0 1-.8 1.6l-.468.351a1 1 0 0 0-.292 1.233 14 14 0 0 0 6.392 6.384"/>',
   search: '<path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/>',
   pin: '<path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0"/><circle cx="12" cy="10" r="3"/>',
-  download: '<path d="M12 15V3"/><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/>'
+  download: '<path d="M12 15V3"/><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/>',
+  users: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
+  minus: '<path d="M5 12h14"/>',
+  add: '<path d="M5 12h14"/><path d="M12 5v14"/>'
 };
 const icon = (k, cls) => `<svg class="${cls || "ic"}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[k] || ICONS.box}</svg>`;
 
@@ -162,6 +165,7 @@ const S = {
   journal: { posts: null, err: "", kind: "all", order: "" }, post: null,
   mine: store.get("synako.orders", []), seen: store.get("synako.seen", []).filter(id => prod(id)), trackId: null, track: null, trackErr: "",
   rider: { token: store.sget("synako.rider"), name: store.get("synako.riderName", ""), list: null, err: "" },
+  pos: { token: store.sget("synako.pos"), role: store.sget("synako.posRole"), name: store.get("synako.posName", ""), data: null, err: "", tab: "sell", cart: null },
   staff: { token: store.sget("synako.staff"), name: store.sget("synako.staffName"), list: null, sel: null, detail: null, file: null, tab: "overview", err: "", updated: null }
 };
 const saveCart = () => store.set("synako.cart", S.cart);
@@ -217,7 +221,7 @@ const demo = (() => {
     payStart: (oid, phone) => { const o = find(oid, phone); return wait({ reference: o.id + "-1", amount: Math.round(o.total * 100), email: o.customer.email, mock: true }); },
     payVerify: ref => { const o = orders.get(ref.replace(/-\d+$/, "")); o.status = "paid"; log(o, "Payment received · demo (no money taken)"); return wait({ order: pub(o) }); },
     request: () => wait({ id: id("MSG") }),
-    staffLogin: (pw, role) => wait({ token: "demo", role: role === "rider" ? "rider" : "staff" }),
+    staffLogin: (pw, role) => wait({ token: "demo", role: role === "rider" ? "rider" : "staff" }), // a manager on the till, so voids can be tried
     riderList: () => wait({ deliveries: [...orders.values()].filter(o => ["packed", "out_for_delivery"].includes(o.status)).map(o => ({ id: o.id, status: o.status, statusLabel: LBL[o.status], createdAt: o.createdAt, speedId: o.delivery.speed, speed: o.delivery.label, name: o.customer.name, phone: o.customer.phone, addr: o.delivery.addr, landmark: o.delivery.landmark || "", city: o.delivery.city, state: o.delivery.state, note: o.delivery.note || "", items: o.items.length, total: o.total, idCheck: false, rider: o.rider || "", hasCode: false })) }),
     riderAct: () => Promise.reject(new Error("Riders can't update orders in the design preview.")),
     staffList: () => wait({ orders: [...orders.values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).map(o => ({ id: o.id, createdAt: o.createdAt, status: o.status, statusLabel: LBL[o.status], rx: o.rx, rxRequest: o.rxRequest, customer: o.customer.name, total: o.total, priced: o.priced, items: o.items.map(i => `${i.qty} × ${i.name}`), speed: o.delivery.label })), requests: reqs, missing: missingDetails(), posts: J.merge(jDemo) }),
@@ -250,7 +254,9 @@ const api = {
   staffOrder: (t, id) => DEMO ? demo.staffOrder(t, id) : call("staff/order?id=" + encodeURIComponent(id), { token: t }),
   staffAct: (t, b) => DEMO ? demo.staffAct(t, b) : call("staff/order", { method: "POST", body: b, token: t }),
   journal: () => DEMO ? Promise.resolve({ posts: J.merge(jDemo).filter(p => J.isLive(p, jToday())) }) : call("requests"),
-  journalAct: (t, b) => DEMO ? demoJournal(b) : call("staff/orders", { method: "POST", body: b, token: t })
+  journalAct: (t, b) => DEMO ? demoJournal(b) : call("staff/orders", { method: "POST", body: b, token: t }),
+  posView: t => DEMO ? demoPos().then(x => x.view()) : call("staff/orders?view=pos", { token: t }),
+  posAct: (t, b) => DEMO ? demoPosAct(b) : call("staff/orders", { method: "POST", body: b, token: t })
 };
 const ordersOn = () => DEMO || LIVE.orders;
 const paymentsOn = () => DEMO || LIVE.payments;
@@ -295,6 +301,7 @@ function parse(path) {
   else if (a === "basket" || a === "checkout") r.view = a;
   else if (["pharmacist", "desk", "staff", "admin"].includes(a)) { r.view = "home"; r.mode = "staff"; }
   else if (["rider", "riders"].includes(a)) { r.view = "home"; r.mode = "rider"; }
+  else if (["pos", "till", "counter"].includes(a)) { r.view = "home"; r.mode = "pos"; }
   else if (a === "journal" || a === "blog") { r.view = "journal"; r.post = b || ""; }
   else if (PAGES.includes(a)) { r.view = "page"; r.page = a; }
   else r.view = "notfound";
@@ -305,6 +312,7 @@ const fpath = f => "/products" + (f === "all" ? "" : f === "pom" ? "/prescriptio
 function pathFor() {
   if (S.mode === "staff") return "/pharmacist";
   if (S.mode === "rider") return "/rider";
+  if (S.mode === "pos") return "/pos";
   switch (S.view) {
     case "home": return "/";
     case "shop": return fpath(S.filter);
@@ -337,6 +345,7 @@ function go(path, opts) {
   if (S.mode === "shop" && ["journal", "home"].includes(S.view) && !S.journal.posts) loadJournal();
   if (S.mode === "staff" && S.staff.token) loadDesk();
   if (S.mode === "rider" && S.rider.token) loadRider();
+  if (S.mode === "pos" && S.pos.token) loadPos();
   const focusTarget = S.mode !== "shop" ? $("#staff-view") : $("#view");
   if (!opts.replace && focusTarget) focusTarget.focus({ preventScroll: true });
 }
@@ -1193,6 +1202,7 @@ function vStaff() {
         <button class="dk-tool" type="button" data-remind>${icon("card", "ic sm")} Send payment reminders</button>
         <button class="dk-tool" type="button" data-csv>${icon("download", "ic sm")} Download orders (CSV)</button>
         <button class="dk-tool" type="button" data-testmail>${icon("chat", "ic sm")} Send test email</button>
+        <a class="dk-tool" href="/pos" data-link>${icon("card", "ic sm")} Till (point of sale)</a>
         <a class="dk-tool" href="/rider" data-link>${icon("truck", "ic sm")} Rider page</a>
         <button class="dk-tool" type="button" data-sound aria-pressed="${soundOn()}">${soundOn() ? `${icon("bell", "ic sm")} Sound on` : `${icon("belloff", "ic sm")} Sound off`}</button>
         <button class="dk-tool" type="button" data-keys>${icon("keys", "ic sm")} Keyboard shortcuts</button>
@@ -1339,6 +1349,7 @@ function cmdkItems(q) {
     { kind: "Action", label: "Send test email", run: () => { const b = document.querySelector("[data-testmail]"); if (b) testEmail(b); } },
     { kind: "Action", label: soundOn() ? "Turn the new-order sound off" : "Turn the new-order sound on", run: () => { store.set("synako.sound", !soundOn()); render(); } },
     { kind: "Action", label: "Keyboard shortcuts", run: () => { st.keys = true; render(); } },
+    { kind: "Page", label: "Till (point of sale)", sub: "/pos", run: () => go("/pos") },
     { kind: "Page", label: "Rider page", sub: "/rider", run: () => go("/rider") },
     { kind: "Page", label: "Back to the shop", sub: "/", run: () => go("/") }
   ];
@@ -1834,6 +1845,453 @@ function vRider() {
       <p class="small muted">Problem at the door (wrong address, customer not in, no ID)? Keep the bag and call the pharmacy${has(B.phone) ? ` on <a href="tel:${esc(B.phone)}">${esc(B.phone)}</a>` : ""}.</p></details>
   </div>`;
 }
+/* ---------- Till (/pos): counter sales, today's dashboard, sales, customers, stock & prices ---------- */
+const TILL = window.SYNAKO_POS;
+let posTimer = null;
+const posBlank = () => ({ lines: [], customer: null, discount: "", method: "cash", tendered: "", reference: "" });
+function posCartLoad() { try { const c = JSON.parse(store.sget("synako.posCart") || "null"); return c && Array.isArray(c.lines) ? c : posBlank(); } catch (e) { return posBlank(); } }
+const posCartSave = () => store.sset("synako.posCart", JSON.stringify(S.pos.cart));
+const POS_NAV = [
+  ["Counter", [["sell", "Sell", "card"], ["dash", "Today", "pulse"]]],
+  ["Records", [["sales", "Sales", "file"], ["customers", "Customers", "users"]]],
+  ["Inventory", [["stock", "Stock & prices", "layers"]]]
+];
+const POS_TABS = POS_NAV.flatMap(([, items]) => items.map(i => i[0]));
+const POS_TITLES = {
+  sell: ["Counter", "Sell", "Scan a barcode or tap an item. Prices come from Stock & prices, and counts update as you sell."],
+  dash: ["Counter", "Today at the counter", ""],
+  sales: ["Records", "Sales", "Every counter sale with who sold it and how it was paid. A manager can void a sale and put the stock back."],
+  customers: ["Records", "Customers", "Your regulars, their purchases and notes. Phone numbers link counter sales with online orders."],
+  stock: ["Inventory", "Stock & prices", "Receive deliveries, count shelves, set shelf prices and add items sold only in store. At zero, a website product goes out of stock online."]
+};
+const posMethod = m => (TILL.METHODS[m] || m || "").replace(/ \(.*\)$/, "");
+const posItems = () => (S.pos.data && S.pos.data.items) || [];
+const posItem = id => posItems().find(i => i.id === id);
+const sinceText = t => Date.now() - Date.parse(t) < 6e4 ? "just now" : `${waitText(Date.parse(t))} ago`;
+const inCart = id => (S.pos.cart.lines.find(l => l.id === id) || { qty: 0 }).qty;
+
+/* The design preview runs the same rules in memory, with a week of sample sales */
+let demoTill = null;
+async function demoPos() {
+  if (demoTill) return demoTill;
+  const ms = TILL.memoryStore("D"), t = TILL.engine(ms, P, CFG), real = ms.now;
+  const counts = { para: 48, ibu: 30, ors: 22, zinc: 6, lorat: 3, cetiri: 15, mrdt: 12, antacid: 2, cough: 9, saline: 0, net: 4, amox: 14 };
+  for (const [id, n] of Object.entries(counts)) if (prod(id)) await t.adjust({ id, mode: "count", n }, "Sample");
+  await t.saveItem({ id: "ibu", price: 1450, cost: 950, reorder: 8 }, "Sample");
+  await t.saveItem({ id: "antacid", price: prod("antacid").price, cost: 1100, reorder: 5 }, "Sample");
+  const ada = await t.saveCustomer({ name: "Ada B. (sample)", phone: "08030000001", tags: "Regular", notes: "Asks for sugar-free syrups." }, "Sample");
+  const tunde = await t.saveCustomer({ name: "Tunde O. (sample)", phone: "08030000002", tags: "BP check" }, "Sample");
+  const plan = [[6, "para", 2, "cash", ada], [5, "ors", 3, "transfer"], [4, "mrdt", 1, "card", tunde], [3, "cetiri", 1, "cash"], [2, "para", 4, "transfer", ada], [1, "ibu", 2, "cash"], [1, "net", 1, "card"], [0, "cough", 1, "cash", ada], [0, "ors", 2, "transfer"], [0, "para", 1, "card", tunde]];
+  for (const [d, id, qty, method, c] of plan) {
+    if (!prod(id)) continue;
+    const at = Math.min(real(), Date.now() - d * 864e5 - (d ? 0 : 3600e3) + (qty * 1.7e6) % 6e6);
+    ms.now = () => at;
+    try { await t.sell({ lines: [{ id, qty }], method, tendered: 0, customer: c ? { id: c.id } : null }, ["Pharm. Kemi (sample)", "Tolu (sample)"][qty % 2]); } catch (e) { /* sample skipped */ }
+  }
+  ms.now = real;
+  return (demoTill = t);
+}
+async function demoPosAct(b) {
+  const t = await demoPos(), by = b.by || "Staff";
+  const r = b.action === "pos-sell" ? await t.sell(b, by) : b.action === "pos-void" ? await t.voidSale(b, by) : b.action === "pos-item" ? await t.saveItem(b, by)
+    : b.action === "pos-item-remove" ? await t.archiveItem(b) : b.action === "pos-adjust" ? await t.adjust(b, by)
+    : b.action === "pos-customer-save" ? { customer: await t.saveCustomer(b.customer || {}, by) } : b.action === "pos-customer" ? Object.assign(await t.customer(b.id), { online: [] }) : {};
+  return b.action === "pos-customer" ? r : Object.assign(r, { view: await t.view() });
+}
+
+async function loadPos(silent) {
+  const p = S.pos; if (!p.token) return;
+  try { p.data = await api.posView(p.token); p.err = ""; p.at = Date.now(); }
+  catch (e) { if (e.status === 401) return posSignOut(); p.err = e.message; }
+  if (S.mode === "pos" && !(silent && p.receipt)) render();
+}
+function posSignOut() { Object.assign(S.pos, { token: "", role: "", data: null, err: "", receipt: null, sel: null, csel: null, cdetail: null, edit: null }); store.sset("synako.pos", ""); store.sset("synako.posRole", ""); render.fresh = true; render(); }
+async function posAct(body, btn, done) {
+  if (btn) btn.disabled = true;
+  try {
+    const r = await api.posAct(S.pos.token, Object.assign({ by: S.pos.name }, body));
+    if (r.view) S.pos.data = r.view;
+    if (r.shop && r.shop.out && r.shop.out.length) toast(`${r.shop.out.map(id => (posItem(id) || {}).name || id).join(", ")} sold out: now out of stock on the website.`);
+    if (done) done(r);
+    render.fresh = true; render();
+    return r;
+  } catch (e) { if (e.status === 401) return posSignOut(); toast(e.message); if (btn) btn.disabled = false; }
+}
+function posGo(tab, extra) {
+  Object.assign(S.pos, { tab, edit: null }, extra || {}); render.fresh = true; render();
+  const h = $("#dk-title"); if (h) h.focus({ preventScroll: true });
+}
+
+/* ----- Selling ----- */
+function posAdd(id, n) {
+  const i = posItem(id); if (!i) return;
+  const c = S.pos.cart, l = c.lines.find(x => x.id === id), want = (l ? l.qty : 0) + (n || 1);
+  if (i.qty != null && want > i.qty) { toast(i.qty > 0 ? `Only ${i.qty} × ${i.name} on the shelf. Update the count under Stock & prices if that's wrong.` : `${i.name}: none on the shelf by the count.`); return; }
+  if (!(i.price > 0)) { toast(`${i.name} has no shelf price yet. Set one under Stock & prices.`); return; }
+  if (l) l.qty = want; else c.lines.push({ id, qty: want });
+  posCartSave(); render();
+}
+function posTotals() {
+  const c = S.pos.cart, lines = c.lines.map(l => Object.assign({}, l, { item: posItem(l.id) })).filter(l => l.item);
+  const subtotal = Math.round(lines.reduce((t, l) => t + l.item.price * l.qty, 0) * 100) / 100;
+  const discount = Math.max(0, Math.min(subtotal, Number(c.discount) || 0)), total = Math.round((subtotal - discount) * 100) / 100;
+  const tendered = c.method === "cash" ? (c.tendered === "" ? total : Number(c.tendered) || 0) : total;
+  return { lines, subtotal, discount, total, tendered, change: Math.round((tendered - total) * 100) / 100, rx: lines.some(l => l.item.cls === "pom"), age: lines.some(l => l.item.age >= 18) };
+}
+/* Quick cash buttons: the exact amount, then the next round notes up */
+function quickCash(total) {
+  const out = [total];
+  [500, 1000, 5000, 10000].forEach(step => { const v = Math.ceil(total / step) * step; if (v > total && !out.includes(v) && out.length < 4) out.push(v); });
+  return out;
+}
+async function posSell(btn) {
+  const c = S.pos.cart, tt = posTotals();
+  if (!tt.lines.length) { toast("Add at least one item first."); return; }
+  if (tt.rx && !($("#prx") || {}).checked) { toast("A pharmacist must check the prescription and tick the box."); const x = $("#prx"); if (x) x.focus(); return; }
+  if (tt.age && !($("#pid") || {}).checked) { toast("Check the buyer's photo ID and tick the box."); const x = $("#pid"); if (x) x.focus(); return; }
+  if (c.method === "cash" && tt.tendered < tt.total) { toast("The cash received is less than the total."); const x = $("#ptend"); if (x) x.focus(); return; }
+  const cust = c.customer ? (c.customer.id ? { id: c.customer.id } : { name: c.customer.name, phone: c.customer.phone }) : null;
+  await posAct({ action: "pos-sell", lines: tt.lines.map(l => ({ id: l.id, qty: l.qty })), discount: tt.discount, method: c.method, tendered: tt.tendered, reference: c.reference, customer: cust, rxChecked: tt.rx, idChecked: tt.age }, btn, r => {
+    S.pos.receipt = r.sale; S.pos.cart = posBlank(); S.pos.cq = ""; S.pos.cnew = false; posCartSave();
+  });
+}
+function posTiles() {
+  const p = S.pos, q = norm(p.q || ""), top = ((p.data.stats || {}).top || []).map(t => t.id);
+  const rank = i => { const k = top.indexOf(i.id); return k < 0 ? 99 : k; };
+  const list = posItems().filter(i => (!p.dept || i.dept === p.dept) && (!q || norm([i.name, i.pack, i.barcode, i.id].join(" ")).includes(q)))
+    .sort((a, b) => q ? (b.barcode === p.q) - (a.barcode === p.q) || a.name.localeCompare(b.name) : rank(a) - rank(b) || (b.qty != null) - (a.qty != null) || a.name.localeCompare(b.name)).slice(0, 48);
+  if (!list.length) return `<p class="muted small till-empty">Nothing matches “${esc(p.q || "")}”. Add it under <button class="linkbtn" type="button" data-ptab="stock" data-pnew="1">Stock &amp; prices</button>.</p>`;
+  return list.map(i => {
+    const left = i.qty == null ? null : i.qty - inCart(i.id), out = left != null && left <= 0;
+    const pill = i.qty == null ? `<span class="tl-stock">Not counted</span>` : out ? `<span class="tl-stock bad">${i.qty <= 0 ? "None on shelf" : "All in this sale"}</span>` : left <= Math.max(3, i.reorder) ? `<span class="tl-stock warn">Last ${left}</span>` : `<span class="tl-stock">${left} on shelf</span>`;
+    return `<button type="button" class="tl${out ? " out" : ""}${inCart(i.id) ? " picked" : ""}" data-padd="${esc(i.id)}"${out || !(i.price > 0) ? " disabled" : ""}>
+      <span class="tl-top">${i.cls === "pom" ? `<span class="tag rx">Rx</span>` : i.age ? `<span class="tag age">18+</span>` : `<span class="tl-dept">${esc((dept(i.dept) || { short: "In store" }).short)}</span>`}${inCart(i.id) ? `<span class="tl-n">${inCart(i.id)}</span>` : ""}</span>
+      <b>${esc(i.name)}</b><span class="small muted">${esc(i.pack || "")}</span>
+      <span class="tl-foot"><span class="tl-price">${i.price > 0 ? NGN(i.price) : "No price"}</span>${pill}</span></button>`;
+  }).join("");
+}
+function posCustomerBox() {
+  const p = S.pos, c = p.cart.customer;
+  if (c) {
+    const rec = c.id && (p.data.customers || []).find(x => x.id === c.id);
+    return `<div class="till-cust is-set">${icon("users", "ic sm")}<span><b>${esc(c.name || c.phone)}</b><span class="small muted">${c.id ? `${esc(c.phone || "")}${rec ? ` · ${rec.visits} visit${rec.visits === 1 ? "" : "s"} · ${NGN(rec.spend)}` : ""}` : "New customer · saved with this sale"}</span></span><button class="linkbtn" type="button" data-pcclear>Change</button></div>`;
+  }
+  const q = norm(p.cq || ""), dq = String(p.cq || "").replace(/\D/g, "");
+  const hits = q.length >= 2 ? (p.data.customers || []).filter(x => norm(x.name).includes(q) || (dq.length >= 3 && String(x.phone).replace(/\D/g, "").includes(dq))).slice(0, 5) : [];
+  return `<div class="till-cust"><label for="pcq" class="sr">Customer</label><input id="pcq" type="search" placeholder="Customer: phone or name (optional)" autocomplete="off" value="${esc(p.cq || "")}">
+    ${q.length >= 2 ? `<div class="till-cust-res">${hits.map(x => `<button type="button" data-pcpick="${esc(x.id)}"><b>${esc(x.name)}</b><span class="small muted">${esc(x.phone || "")} · ${x.visits} visit${x.visits === 1 ? "" : "s"}</span></button>`).join("")}
+      <button type="button" class="new" data-pcnew>${icon("add", "ic sm")} Add “${esc(p.cq)}” as a new customer</button></div>` : ""}</div>`;
+}
+function posCartHTML() {
+  const c = S.pos.cart, t = posTotals(), n = t.lines.reduce((s, l) => s + l.qty, 0);
+  const lines = t.lines.length ? `<ol class="till-lines">${t.lines.map(l => `<li><div class="tln"><b>${esc(l.item.name)}</b><span class="small muted">${NGN(l.item.price)}${l.item.pack ? ` · ${esc(l.item.pack)}` : ""}</span></div>
+      <div class="tlq" role="group" aria-label="Quantity of ${esc(l.item.name)}"><button type="button" class="iconbtn" data-pq="${esc(l.id)}" data-d="-1" aria-label="One fewer">${icon("minus", "ic sm")}</button><span class="mono" aria-live="polite">${l.qty}</span><button type="button" class="iconbtn" data-pq="${esc(l.id)}" data-d="1" aria-label="One more">${icon("add", "ic sm")}</button></div>
+      <b class="tlt">${NGN(l.item.price * l.qty)}</b><button type="button" class="iconbtn tlx" data-prm="${esc(l.id)}" aria-label="Remove ${esc(l.item.name)}">${icon("close", "ic sm")}</button></li>`).join("")}</ol>`
+    : `<div class="till-none">${icon("card", "ic big")}<p><b>Ready for the next customer</b></p><p class="small muted">Scan a barcode, type a name, or tap an item.</p></div>`;
+  const methods = Object.keys(TILL.METHODS).map(m => `<button type="button" role="radio" aria-checked="${c.method === m}" data-pmethod="${m}">${icon(m === "cash" ? "card" : m === "transfer" ? "phone" : "card", "ic sm")}${posMethod(m)}</button>`).join("");
+  return `<header class="till-cart-head"><h2 class="h3">Current sale${n ? ` <span class="count">${n}</span>` : ""}</h2>${t.lines.length || c.customer ? `<button class="linkbtn" type="button" data-pclear>Clear</button>` : ""}</header>
+    ${posCustomerBox()}
+    ${lines}
+    ${t.lines.length ? `<div class="till-checks f">${t.rx ? `<label class="check"><input type="checkbox" id="prx"><span><b>Prescription checked by a pharmacist.</b> Prescription-only medicine in this sale.</span></label>` : ""}${t.age ? `<label class="check"><input type="checkbox" id="pid"><span><b>Photo ID checked: buyer is 18 or over.</b> Alcohol in this sale.</span></label>` : ""}</div>
+    <dl class="till-sum"><dt>Subtotal</dt><dd>${NGN(t.subtotal)}</dd>
+      <dt><label for="pdisc">Discount (₦)</label></dt><dd><input id="pdisc" class="till-in" inputmode="decimal" placeholder="0" value="${esc(c.discount)}" autocomplete="off"></dd>
+      <dt class="till-total">Total</dt><dd class="till-total">${NGN(t.total)}</dd></dl>
+    <div class="till-pay"><p class="fact-label" id="pmeth-l">Payment</p><div class="till-methods" role="radiogroup" aria-labelledby="pmeth-l">${methods}</div>
+      ${c.method === "cash" ? `<div class="till-cash"><label for="ptend">Cash received (₦)</label><input id="ptend" class="till-in" inputmode="decimal" placeholder="${t.total}" value="${esc(c.tendered)}" autocomplete="off">
+        <div class="till-quick">${quickCash(t.total).map(v => `<button type="button" data-ptend="${v}">${v === t.total ? "Exact" : NGN(v)}</button>`).join("")}</div>
+        <p class="till-change${t.change < 0 ? " short" : ""}" role="status">${t.change < 0 ? `Short by <b>${NGN(-t.change)}</b>` : `Change to give: <b>${NGN(t.change)}</b>`}</p></div>`
+        : `<div class="till-cash"><label for="pref">${c.method === "transfer" ? "Transfer reference or sender" : "Terminal slip number"} <span class="hint">optional</span></label><input id="pref" class="till-in" autocomplete="off" value="${esc(c.reference)}"></div>`}
+    </div>
+    <button class="btn btn-primary till-go" type="button" data-psell${S.busy ? " disabled" : ""}>${icon("check", "ic sm")} Complete sale · ${NGN(t.total)}<kbd>F9</kbd></button>` : ""}`;
+}
+function posSellView() {
+  const p = S.pos, depts = DEPTS.filter(d => posItems().some(i => i.dept === d.id));
+  return `<div class="till">
+    <section class="till-pick" aria-label="Items">
+      <div class="till-search">${icon("search", "ic sm")}<label for="posq" class="sr">Scan a barcode or search items</label><input id="posq" type="search" placeholder="Scan a barcode or type a name, then Enter" autocomplete="off" value="${esc(p.q || "")}"><kbd>/</kbd></div>
+      <div class="till-depts" role="group" aria-label="Departments"><button type="button" data-pdept="" aria-pressed="${!p.dept}">All</button>${depts.map(d => `<button type="button" data-pdept="${d.id}" aria-pressed="${p.dept === d.id}">${esc(d.short)}</button>`).join("")}</div>
+      <div class="till-grid" id="till-grid">${posTiles()}</div>
+    </section>
+    <aside class="till-cart panel" aria-label="Current sale">${posCartHTML()}</aside>
+  </div>`;
+}
+function posReceipt(s) {
+  const wa = s.customer && s.customer.phone ? waTo(s.customer.phone, `Hello ${String(s.customer.name || "").split(" ")[0]}, thank you for shopping at ${B.name}. Your receipt ${s.id}: ${s.lines.map(l => `${l.qty} × ${l.name}`).join(", ")}. Total ${NGN(s.total)} (${posMethod(s.method)}).`) : "";
+  return `<div class="keys-help pos-receipt-wrap" role="dialog" aria-modal="true" aria-label="Receipt ${esc(s.id)}"><div class="panel pos-receipt">
+    <div class="rc-paper" id="rc-paper">
+      <p class="rc-shop">${esc(B.name)}</p><p class="rc-small">${esc(addressLine)}${has(B.phone) ? `<br>${esc(B.phone)}` : ""}</p>
+      <p class="rc-small">${stamp(s.createdAt)} · <span class="mono">${esc(s.id)}</span><br>Served by ${esc(s.by)}${s.customer ? ` · ${esc(s.customer.name)}` : ""}</p>
+      <table class="rc-lines"><tbody>${s.lines.map(l => `<tr><td>${l.qty} × ${esc(l.name)}<span>${NGN(l.price)} each</span></td><td>${NGN(l.total)}</td></tr>`).join("")}</tbody></table>
+      <table class="rc-tot"><tbody>${s.discount ? `<tr><td>Subtotal</td><td>${NGN(s.subtotal)}</td></tr><tr><td>Discount</td><td>−${NGN(s.discount)}</td></tr>` : ""}
+        <tr class="big"><td>Total</td><td>${NGN(s.total)}</td></tr><tr><td>${esc(posMethod(s.method))}${s.reference ? ` · ${esc(s.reference)}` : ""}</td><td>${NGN(s.tendered)}</td></tr>${s.method === "cash" ? `<tr><td>Change</td><td>${NGN(s.change)}</td></tr>` : ""}</tbody></table>
+      ${s.status === "voided" ? `<p class="rc-void">VOIDED · ${esc(s.voidReason || "")}</p>` : ""}
+      <p class="rc-small">Thank you. Keep this receipt for returns.${has(L.pcnPremises) ? `<br>PCN premises ${esc(L.pcnPremises)}` : ""}</p>
+    </div>
+    <div class="rc-actions"><button class="btn btn-ghost btn-sm" type="button" data-pprint>${icon("print", "ic sm")} Print</button>${wa ? `<a class="btn btn-ghost btn-sm" href="${esc(wa)}" target="_blank" rel="noopener">${icon("chat", "ic sm")} WhatsApp</a>` : ""}<button class="btn btn-primary btn-sm" type="button" data-pdone>${S.pos.tab === "sell" ? "Next customer" : "Close"}</button></div>
+  </div></div>`;
+}
+
+/* ----- Today: the till dashboard ----- */
+function posDash() {
+  const d = S.pos.data, st = d.stats, t = st.today, y = st.yesterday;
+  const delta = y.total ? Math.round((t.total - y.total) / y.total * 100) : null;
+  const cols = { cash: "#1f8a70", transfer: "#074ce0", card: "#e8892b" };
+  const mix = Object.keys(TILL.METHODS).map(k => [k, t.byMethod[k] || 0]);
+  const mixBar = t.total ? `<div class="pd-mix" role="img" aria-label="${mix.map(([k, v]) => `${posMethod(k)} ${NGN(v)}`).join(", ")}">${mix.filter(([, v]) => v).map(([k, v]) => `<span style="flex:${v};background:${cols[k]}" title="${posMethod(k)}: ${NGN(v)}"></span>`).join("")}</div>` : `<div class="pd-mix empty"></div>`;
+  const legend = `<ul class="pd-legend">${mix.map(([k, v]) => `<li><i style="background:${cols[k]}"></i><span>${posMethod(k)}</span><b>${NGN(v)}</b><small>${t.total ? Math.round(v / t.total * 100) : 0}%</small></li>`).join("")}</ul>`;
+  const nowH = Number(new Date().toLocaleString("en-GB", { hour: "numeric", hour12: false, timeZone: CFG.site.timezone })) % 24;
+  const hours = [...Array(15)].map((_, i) => i + 7), hmax = Math.max(1, ...hours.map(h => t.byHour[h]));
+  const pulse = `<div class="pd-hours" role="img" aria-label="Takings by hour today">${hours.map(h => { const v = t.byHour[h]; return `<span class="${h === nowH ? "now" : ""}${h > nowH ? " later" : ""}" title="${String(h).padStart(2, "0")}:00–${String(h + 1).padStart(2, "0")}:00 · ${NGN(v)}"><i style="height:${v ? Math.max(6, v / hmax * 100) : 2}%"></i><small>${h % 3 === 1 ? (h > 12 ? h - 12 : h) + (h >= 12 ? "pm" : "am") : ""}</small></span>`; }).join("")}</div>`;
+  const wmax = Math.max(1, ...st.week.map(w => w.total));
+  const week = `<div class="pd-week" role="img" aria-label="Takings, last 7 days">${st.week.map((w, i) => `<span${i === 6 ? ' class="now"' : ""} title="${w.day}: ${NGN(w.total)} · ${w.count} sale${w.count === 1 ? "" : "s"}"><b>${w.total && (i === 6 || w.total === wmax) ? NGN(w.total).replace(/\.00$/, "") : ""}</b><i style="height:${w.total ? Math.max(4, w.total / wmax * 100) : 2}%"></i><small>${new Date(w.day + "T12:00:00").toLocaleDateString("en-GB", { weekday: "short" })}</small></span>`).join("")}</div>`;
+  const tmax = Math.max(1, ...st.top.map(x => x.qty));
+  const low = posItems().filter(TILL.isLow).sort((a, b) => a.qty - b.qty).slice(0, 7);
+  const recent = d.sales.filter(s => s.status === "completed").slice(0, 6);
+  const tile = (label, value, note) => `<li><span class="fact-label">${label}</span><b>${value}</b><span class="fact-note">${note}</span></li>`;
+  const regulars = (d.customers || []).filter(c => c.visits >= 3).length;
+  return `<section class="pd-hero" aria-labelledby="pd-h">
+      <div class="pd-take"><p class="pd-eyebrow" id="pd-h">Takings today</p><p class="pd-big">${NGN(t.total)}</p>
+        <p class="pd-delta${delta == null ? "" : delta >= 0 ? " up" : " down"}">${delta == null ? (t.count ? "Nothing sold yesterday to compare with" : "No sales yet today. The first one shows here.") : `${delta >= 0 ? "▲" : "▼"} ${Math.abs(delta)}% on yesterday (${NGN(y.total)})`}</p>
+        <ul class="pd-mini">${tile("Sales", t.count, t.voided ? `${t.voided} voided` : "completed")}${tile("Average basket", NGN(t.avg), `${t.items} item${t.items === 1 ? "" : "s"} sold`)}${tile("Est. profit", NGN(t.profit), "on items with a cost price")}${tile("Discounts", NGN(t.discounts), "given today")}</ul></div>
+      <div class="pd-paid"><p class="pd-eyebrow">How customers paid</p>${mixBar}${legend}</div>
+    </section>
+    <div class="pd-grid">
+      <section class="panel pd-card pd-wide"><div class="pd-card-head"><h2 class="h3">Pulse of the day</h2><p class="small muted">Takings by hour, 7am to 10pm. The bright bar is this hour.</p></div>${pulse}</section>
+      <section class="panel pd-card"><div class="pd-card-head"><h2 class="h3">Last 7 days</h2><p class="small muted">${NGN(st.week.reduce((n, w) => n + w.total, 0))} from ${st.week.reduce((n, w) => n + w.count, 0)} sales</p></div>${week}</section>
+      <section class="panel pd-card"><div class="pd-card-head"><h2 class="h3">Best sellers this week</h2></div>${st.top.length ? `<ol class="pd-top">${st.top.map((x, i) => `<li><span class="pd-rank">${i + 1}</span><span class="pd-top-name"><b>${esc(x.name)}</b><i style="width:${x.qty / tmax * 100}%"></i></span><span class="small"><b>${x.qty}</b> sold</span></li>`).join("")}</ol>` : `<p class="muted small">Sales show here as they happen.</p>`}</section>
+      <section class="panel pd-card"><div class="pd-card-head"><h2 class="h3">Shelf alerts</h2><button class="linkbtn" type="button" data-ptab="stock" data-pf="low">See all</button></div>${low.length ? `<ul class="pd-alerts">${low.map(i => `<li><span><b>${esc(i.name)}</b><span class="small muted">${i.qty <= 0 ? "None left" : `${i.qty} left · reorder at ${i.reorder}`}</span></span><button class="btn btn-ghost btn-sm" type="button" data-pedit="${esc(i.id)}">Receive</button></li>`).join("")}</ul>` : `<p class="muted small">Nothing low on the counted shelves. Set reorder levels under Stock &amp; prices to get warnings here.</p>`}</section>
+      <section class="panel pd-card"><div class="pd-card-head"><h2 class="h3">Team today</h2></div>${st.staff.length ? `<ul class="pd-team">${st.staff.map(x => `<li><span class="pd-av" aria-hidden="true">${esc(String(x.name).replace(/^(pharm|dr|mr|mrs|ms)\.?\s+/i, "").slice(0, 1).toUpperCase())}</span><span><b>${esc(x.name)}</b><span class="small muted">${x.count} sale${x.count === 1 ? "" : "s"}</span></span><b>${NGN(x.total)}</b></li>`).join("")}</ul>` : `<p class="muted small">No one has sold yet today.</p>`}</section>
+      <section class="panel pd-card pd-full"><div class="pd-card-head"><h2 class="h3">Recent sales</h2><button class="linkbtn" type="button" data-ptab="sales">All sales</button></div>${recent.length ? `<ul class="pd-feed">${recent.map(s => `<li><button type="button" data-psale="${esc(s.id)}"><span class="mono small">${TILL.dayOf(s.createdAt, CFG.site.timezone) === TILL.dayOf(Date.now(), CFG.site.timezone) ? hhmm(s.createdAt) : new Date(s.createdAt).toLocaleDateString("en-GB", { weekday: "short", timeZone: CFG.site.timezone })}</span><span><b>${esc(s.customer ? s.customer.name : "Walk-in")}</b><span class="small muted">${s.lines.reduce((n, l) => n + l.qty, 0)} item${s.lines.reduce((n, l) => n + l.qty, 0) === 1 ? "" : "s"} · ${posMethod(s.method)}</span></span><b>${NGN(s.total)}</b></button></li>`).join("")}</ul>` : `<p class="muted small">No sales yet.</p>`}</section>
+    </div>
+    <ul class="dk-facts pd-facts" aria-label="Shelf and customers">${tile("Shelf value at cost", NGN(st.stock.value), `${st.stock.counted} items counted`)}${tile("Shelf value at price", NGN(st.stock.retail), "if every counted item sold")}${tile("Running low", st.stock.low, "at or under reorder level")}${tile("Out", st.stock.out, "counted at zero")}${tile("Customers", (d.customers || []).length, `${regulars} regular${regulars === 1 ? "" : "s"} (3+ visits)`)}${tile("Prices changed", d.items.filter(i => i.webPrice != null && i.price !== i.webPrice).length, "differ from the website")}</ul>`;
+}
+
+/* ----- Sales ----- */
+function posSalesList() {
+  const p = S.pos, q = norm(p.sq || ""), day = t => TILL.dayOf(t, CFG.site.timezone), today = day(Date.now());
+  return p.data.sales.filter(s => (p.srange === "all" || (p.srange === "week" ? Date.parse(s.createdAt) > Date.now() - 7 * 864e5 : day(s.createdAt) === today))
+    && (!q || norm([s.id, s.by, s.customer && s.customer.name, s.customer && s.customer.phone, s.lines.map(l => l.name).join(" ")].join(" ")).includes(q)));
+}
+function posSalesView() {
+  const p = S.pos, list = posSalesList(), done = list.filter(s => s.status === "completed"), sel = p.sel && p.data.sales.find(s => s.id === p.sel);
+  const rows = list.length ? list.map(s => `<button type="button" class="ps-row${s.status === "voided" ? " void" : ""}" data-psale="${esc(s.id)}"${p.sel === s.id ? ' aria-current="true"' : ""}><span><b class="mono">${esc(s.id)}</b><span class="small muted">${stamp(s.createdAt)} · ${esc(s.by)}</span></span><span>${esc(s.customer ? s.customer.name : "Walk-in")}<span class="small muted">${s.lines.length} line${s.lines.length === 1 ? "" : "s"} · ${posMethod(s.method)}</span></span><b>${s.status === "voided" ? `<span class="tag bad">Voided</span> ` : ""}${NGN(s.total)}</b></button>`).join("") : `<p class="muted small">No sales in this range.</p>`;
+  const detail = !sel ? `<div class="empty-state">${icon("file", "ic big")}<p><b>Select a sale</b></p><p class="muted small">See what was sold, print the receipt again or void it.</p></div>`
+    : `<div class="ps-detail"><div class="top"><h2 class="h3 mono">${esc(sel.id)}</h2>${sel.status === "voided" ? `<span class="tag bad">Voided</span>` : `<span class="tag ok">Completed</span>`}</div>
+      <dl class="kv"><dt>When</dt><dd>${stamp(sel.createdAt)}</dd><dt>Sold by</dt><dd>${esc(sel.by)}</dd><dt>Customer</dt><dd>${sel.customer ? `<button class="linkbtn" type="button" data-pcopen="${esc(sel.customer.id)}">${esc(sel.customer.name)}</button>` : "Walk-in"}</dd><dt>Paid</dt><dd>${esc(TILL.METHODS[sel.method] || sel.method)}${sel.reference ? ` · ${esc(sel.reference)}` : ""}</dd>${sel.rxChecked ? `<dt>Prescription</dt><dd>Checked by ${esc(sel.rxChecked)}</dd>` : ""}${sel.idChecked ? `<dt>ID (18+)</dt><dd>Checked by ${esc(sel.idChecked)}</dd>` : ""}${sel.status === "voided" ? `<dt>Voided</dt><dd>${stamp(sel.voidedAt)} by ${esc(sel.voidedBy)} · “${esc(sel.voidReason)}”</dd>` : ""}</dl>
+      <table class="ps-lines"><thead><tr><th>Item</th><th>Qty</th><th>Price</th><th>Total</th></tr></thead><tbody>${sel.lines.map(l => `<tr><td>${esc(l.name)}</td><td>${l.qty}</td><td>${NGN(l.price)}</td><td>${NGN(l.total)}</td></tr>`).join("")}</tbody>
+        <tfoot>${sel.discount ? `<tr><td colspan="3">Discount</td><td>−${NGN(sel.discount)}</td></tr>` : ""}<tr><th colspan="3">Total</th><th>${NGN(sel.total)}</th></tr></tfoot></table>
+      <div class="ps-actions"><button class="btn btn-ghost btn-sm" type="button" data-preceipt="${esc(sel.id)}">${icon("print", "ic sm")} Receipt</button></div>
+      ${sel.status === "completed" ? `<form class="f ps-void" data-pvoid="${esc(sel.id)}" novalidate><label for="pvr">Void this sale<span class="hint">${p.role === "staff" ? "Puts the stock back and takes it off today's takings. Give the money back first." : "Only a manager can void a sale. Sign in to the till with the desk password."}</span><input id="pvr" required placeholder="Reason, e.g. wrong item scanned"${p.role === "staff" ? "" : " disabled"}></label><button class="btn btn-ghost btn-sm" type="submit"${p.role === "staff" ? "" : " disabled"}>Void sale</button></form>` : ""}</div>`;
+  const seg = [["today", "Today"], ["week", "7 days"], ["all", "All"]].map(([k, l]) => `<button type="button" role="tab" aria-selected="${(p.srange || "today") === k}" data-psrange="${k}">${l}</button>`).join("");
+  return `<div class="ps-tools"><div class="seg" role="tablist" aria-label="Date range">${seg}</div><label for="psq" class="sr">Search sales</label><input id="psq" type="search" placeholder="Search by receipt, customer, item or staff" value="${esc(p.sq || "")}" autocomplete="off">
+      <p class="small muted" role="status">${done.length} sale${done.length === 1 ? "" : "s"} · <b>${NGN(done.reduce((n, s) => n + s.total, 0))}</b>${list.length > done.length ? ` · ${list.length - done.length} voided` : ""}</p><button class="btn btn-ghost btn-sm" type="button" data-pcsv>${icon("download", "ic sm")} CSV</button></div>
+    <div class="ps${sel ? " has-sel" : ""}"><nav class="ps-list" aria-label="Sales">${rows}</nav><section class="panel" aria-live="polite">${sel ? `<button class="linkbtn ps-back" type="button" data-psale="">← All sales</button>` : ""}${detail}</section></div>`;
+}
+function posCsv() {
+  const rows = [["Receipt", "Date", "Status", "Sold by", "Customer", "Phone", "Items", "Subtotal", "Discount", "Total", "Paid by", "Reference"]].concat(posSalesList().map(s =>
+    [s.id, s.createdAt, s.status, s.by, s.customer ? s.customer.name : "", s.customer ? s.customer.phone : "", s.lines.map(l => `${l.qty} x ${l.name}`).join("; "), s.subtotal, s.discount, s.total, posMethod(s.method), s.reference || ""]));
+  const csv = rows.map(r => r.map(v => `"${String(v == null ? "" : v).replace(/"/g, '""')}"`).join(",")).join("\r\n");
+  const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob(["﻿" + csv], { type: "text/csv" })); a.download = `synako-counter-sales-${new Date().toISOString().slice(0, 10)}.csv`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+}
+
+/* ----- Customers (CRM) ----- */
+const CSEG = {
+  all: ["Everyone", () => true],
+  regular: ["Regulars", c => c.visits >= 3],
+  new: ["New this month", c => Date.parse(c.createdAt) > Date.now() - 30 * 864e5],
+  lapsed: ["Not seen in 60 days", c => c.lastVisit && Date.parse(c.lastVisit) < Date.now() - 60 * 864e5],
+  birthday: ["Birthdays this week", c => { if (!c.birthday) return false; for (let i = 0; i < 7; i++) { const d = new Date(Date.now() + i * 864e5); if (`${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}` === c.birthday) return true; } return false; }],
+  vip: ["Top spenders", (c, all) => { const s = all.map(x => x.spend).filter(Boolean).sort((a, b) => b - a); return c.spend > 0 && c.spend >= (s[Math.max(0, Math.ceil(s.length / 10) - 1)] || Infinity); }]
+};
+function posCustomersView() {
+  const p = S.pos, all = p.data.customers || [], q = norm(p.cq2 || ""), dq = String(p.cq2 || "").replace(/\D/g, ""), seg = CSEG[p.cseg] ? p.cseg : "all";
+  const list = all.filter(c => CSEG[seg][1](c, all) && (!q || norm([c.name, c.email, (c.tags || []).join(" ")].join(" ")).includes(q) || (dq.length >= 3 && String(c.phone).replace(/\D/g, "").includes(dq))))
+    .sort((a, b) => (Date.parse(b.lastVisit || b.createdAt) || 0) - (Date.parse(a.lastVisit || a.createdAt) || 0));
+  const segs = Object.entries(CSEG).map(([k, [l, f]]) => `<button type="button" role="tab" aria-selected="${seg === k}" data-pcseg="${k}">${l} <span class="count">${all.filter(c => f(c, all)).length}</span></button>`).join("");
+  const rows = list.length ? list.map(c => `<button type="button" class="pc-row" data-pcopen="${esc(c.id)}"${p.csel === c.id ? ' aria-current="true"' : ""}><span class="pd-av" aria-hidden="true">${esc(String(c.name).slice(0, 1).toUpperCase())}</span><span><b>${esc(c.name)}</b><span class="small muted">${esc(c.phone || "no phone")}${(c.tags || []).length ? ` · ${c.tags.map(esc).join(", ")}` : ""}</span></span><span class="pc-num"><b>${NGN(c.spend || 0)}</b><span class="small muted">${c.visits || 0} visit${c.visits === 1 ? "" : "s"}${c.lastVisit ? ` · ${sinceText(c.lastVisit)}` : ""}</span></span></button>`).join("")
+    : `<p class="muted small">${all.length ? "No customers match." : "No customers yet. Add one here, or attach a customer to a sale at the till."}</p>`;
+  return `<div class="ps-tools"><div class="seg" role="tablist" aria-label="Customer groups">${segs}</div></div>
+    <div class="ps-tools"><label for="pcq2" class="sr">Search customers</label><input id="pcq2" type="search" placeholder="Search by name, phone, email or tag" value="${esc(p.cq2 || "")}" autocomplete="off"><button class="btn btn-primary btn-sm" type="button" data-pcedit="">${icon("add", "ic sm")} Add a customer</button></div>
+    <div class="ps${p.csel || p.cedit != null ? " has-sel" : ""}"><nav class="ps-list" aria-label="Customers">${rows}</nav><section class="panel" aria-live="polite">${p.csel || p.cedit != null ? `<button class="linkbtn ps-back" type="button" data-pcopen="">← All customers</button>` : ""}${p.cedit != null ? posCustomerForm() : posCustomerDetail()}</section></div>`;
+}
+function posCustomerForm() {
+  const p = S.pos, c = (p.cedit && (p.data.customers || []).find(x => x.id === p.cedit)) || {};
+  return `<form class="f pc-form" id="pcform" novalidate><h2 class="h3">${c.id ? "Edit customer" : "New customer"}</h2>
+    <div class="row2"><label for="pc-name">Name<input id="pc-name" required autocomplete="off" value="${esc(c.name || "")}"></label><label for="pc-phone">Phone<span class="hint">Links counter sales and online orders.</span><input id="pc-phone" inputmode="tel" autocomplete="off" value="${esc(c.phone || "")}"></label></div>
+    <div class="row2"><label for="pc-email">Email<input id="pc-email" type="email" autocomplete="off" value="${esc(c.email || "")}"></label><label for="pc-bday">Birthday<span class="hint">Month and day, e.g. 04-23</span><input id="pc-bday" pattern="\\d{2}-\\d{2}" placeholder="MM-DD" autocomplete="off" value="${esc(c.birthday || "")}"></label></div>
+    <label for="pc-tags">Tags<span class="hint">Comma separated, e.g. Regular, BP check, Diabetes club</span><input id="pc-tags" autocomplete="off" value="${esc((c.tags || []).join(", "))}"></label>
+    <label for="pc-notes">Notes<span class="hint">Preferences and reminders. No diagnoses: clinical notes belong in the patient record.</span><textarea id="pc-notes" maxlength="600">${esc(c.notes || "")}</textarea></label>
+    <label class="check"><input type="checkbox" id="pc-consent"${c.consent ? " checked" : ""}><span>Happy to hear about offers and refill reminders by SMS or WhatsApp.</span></label>
+    <div class="row-actions"><button class="btn btn-primary" type="submit">Save customer</button><button class="btn btn-ghost" type="button" data-pcopen="${esc(c.id || "")}">Cancel</button></div></form>`;
+}
+function posCustomerDetail() {
+  const p = S.pos, d = p.cdetail;
+  if (!p.csel) return `<div class="empty-state">${icon("users", "ic big")}<p><b>Select a customer</b></p><p class="muted small">See what they buy, when they last came in, and your notes.</p></div>`;
+  if (!d || d.customer.id !== p.csel) return `<p class="muted">Loading…</p>`;
+  const c = d.customer, wa = c.phone ? waTo(c.phone, `Hello ${String(c.name).split(" ")[0]}, this is ${S.pos.name} from ${B.name}.`) : "";
+  const fav = {}; d.sales.filter(s => s.status === "completed").forEach(s => s.lines.forEach(l => { fav[l.name] = (fav[l.name] || 0) + l.qty; }));
+  const favs = Object.entries(fav).sort((a, b) => b[1] - a[1]).slice(0, 5);
+  const tile = (label, value) => `<li><span class="fact-label">${label}</span><b>${value}</b></li>`;
+  return `<div class="pc-detail"><div class="pc-head"><span class="pd-av big" aria-hidden="true">${esc(String(c.name).slice(0, 1).toUpperCase())}</span><div><h2 class="h3">${esc(c.name)}</h2><p class="small muted">${[c.phone, c.email].filter(has).map(esc).join(" · ") || "No contact details"}${c.consent ? " · happy to hear from us" : ""}</p>${(c.tags || []).length ? `<p class="pc-tags">${c.tags.map(t => `<span class="tag gen">${esc(t)}</span>`).join(" ")}</p>` : ""}</div></div>
+    <div class="ride-links">${c.phone ? `<a class="btn btn-ghost btn-sm" href="tel:${esc(c.phone)}">${icon("phone", "ic sm")} Call</a>` : ""}${wa ? `<a class="btn btn-ghost btn-sm" href="${esc(wa)}" target="_blank" rel="noopener">${icon("chat", "ic sm")} WhatsApp</a>` : ""}<button class="btn btn-primary btn-sm" type="button" data-pcsell="${esc(c.id)}">${icon("card", "ic sm")} Start a sale</button><button class="btn btn-ghost btn-sm" type="button" data-pcedit="${esc(c.id)}">${icon("pen", "ic sm")} Edit</button></div>
+    <ul class="dk-facts pc-facts">${tile("Spent", NGN(c.spend || 0))}${tile("Visits", c.visits || 0)}${tile("Average", NGN(c.visits ? c.spend / c.visits : 0))}${tile("Last visit", c.lastVisit ? new Date(c.lastVisit).toLocaleDateString(CFG.site.locale, { day: "numeric", month: "short", timeZone: CFG.site.timezone }) : "–")}</ul>
+    ${c.notes ? `<p class="pc-notes">${esc(c.notes)}</p>` : ""}${c.birthday ? `<p class="small muted">Birthday: ${esc(new Date(`2000-${c.birthday}T12:00:00`).toLocaleDateString("en-GB", { day: "numeric", month: "long" }))}</p>` : ""}
+    ${favs.length ? `<div><h3 class="h4">Usually buys</h3><p class="pc-favs">${favs.map(([n, q]) => `<span>${esc(n)} <b>×${q}</b></span>`).join("")}</p></div>` : ""}
+    <div><h3 class="h4">At the counter</h3>${d.sales.length ? `<ul class="pd-feed">${d.sales.map(s => `<li><button type="button" data-psale="${esc(s.id)}" data-pgo="sales"><span class="mono small">${new Date(s.createdAt).toLocaleDateString(CFG.site.locale, { day: "numeric", month: "short", timeZone: CFG.site.timezone })}</span><span><b>${esc(s.lines.map(l => `${l.qty} × ${l.name}`).join(", "))}</b><span class="small muted">${posMethod(s.method)} · ${esc(s.by)}</span></span><b>${s.status === "voided" ? `<span class="tag bad">Voided</span>` : NGN(s.total)}</b></button></li>`).join("")}</ul>` : `<p class="muted small">No counter purchases yet.</p>`}</div>
+    <div><h3 class="h4">Online orders</h3>${(d.online || []).length ? `<ul class="pd-feed">${d.online.map(o => `<li><span class="pc-online"><span class="mono small">${esc(o.id)}</span><span><b>${esc(o.items.join(", "))}</b><span class="small muted">${stamp(o.createdAt)} · ${esc(o.statusLabel)}</span></span><b>${NGN(o.total)}</b></span></li>`).join("")}</ul>` : `<p class="muted small">${DEMO ? "Online orders show here on the live site." : "None from this phone number in the latest 200 online orders."}</p>`}</div>
+    <p class="small muted">Customer since ${stamp(c.createdAt)}${c.createdBy ? ` · added by ${esc(c.createdBy)}` : ""}.</p></div>`;
+}
+async function posOpenCustomer(id) {
+  const p = S.pos; p.csel = id || null; p.cedit = null; p.tab = "customers";
+  if (!id) { p.cdetail = null; render.fresh = true; render(); return; }
+  if (!p.cdetail || p.cdetail.customer.id !== id) p.cdetail = null;
+  render();
+  try { p.cdetail = await api.posAct(p.token, { action: "pos-customer", id, by: p.name }); } catch (e) { if (e.status === 401) return posSignOut(); toast(e.message); }
+  render();
+}
+
+/* ----- Stock & prices ----- */
+const PFILTERS = [["all", "All items"], ["low", "Low or out"], ["uncounted", "Not counted"], ["changed", "Price differs from website"], ["instore", "In store only"]];
+function posStockRows() {
+  const p = S.pos, q = norm(p.iq || ""), f = p.pf || "all";
+  const test = { all: () => true, low: TILL.isLow, uncounted: i => i.qty == null, changed: i => i.webPrice != null && i.price !== i.webPrice, instore: i => i.custom }[f] || (() => true);
+  const list = posItems().filter(i => test(i) && (!q || norm([i.name, i.pack, i.barcode, i.id].join(" ")).includes(q)))
+    .sort((a, b) => (f === "low" ? (a.qty - b.qty) : 0) || TILL.isLow(b) - TILL.isLow(a) || a.name.localeCompare(b.name)).slice(0, 120);
+  if (!list.length) return `<p class="muted small">No items match.</p>`;
+  return `<table class="inv"><thead><tr><th>Item</th><th class="num">Shelf price</th><th class="num">Cost · margin</th><th class="num">On shelf</th><th><span class="sr">Edit</span></th></tr></thead><tbody>${list.map(i => {
+    const margin = i.cost != null && i.price > 0 ? Math.round((i.price - i.cost) / i.price * 100) : null;
+    const shelf = i.qty == null ? `<span class="tl-stock">Not counted</span>` : i.qty <= 0 ? `<span class="tl-stock bad">0</span>` : TILL.isLow(i) ? `<span class="tl-stock warn">${i.qty}</span>` : `<span class="tl-stock">${i.qty}</span>`;
+    return `<tr${p.edit === i.id ? ' class="editing"' : ""}><td><b>${esc(i.name)}</b><span class="small muted">${esc(i.pack || "")}${i.custom ? " · in store only" : ""}${i.barcode ? ` · <span class="mono">${esc(i.barcode)}</span>` : ""}</span></td>
+      <td class="num"><b>${i.price > 0 ? NGN(i.price) : "–"}</b>${i.webPrice != null && i.price !== i.webPrice ? `<span class="small muted">Website ${NGN(i.webPrice)}</span>` : ""}</td>
+      <td class="num">${i.cost != null ? NGN(i.cost) : "–"}${margin != null ? `<span class="small ${margin < 10 ? "bad-ink" : "muted"}">${margin}% margin</span>` : ""}</td>
+      <td class="num">${shelf}${i.reorder ? `<span class="small muted">reorder at ${i.reorder}</span>` : ""}</td>
+      <td><button class="btn btn-ghost btn-sm" type="button" data-pedit="${esc(i.id)}">${p.edit === i.id ? "Editing" : "Update"}</button></td></tr>`;
+  }).join("")}</tbody></table>`;
+}
+function posItemForm() {
+  const p = S.pos, i = p.edit === "new" ? { custom: true, dept: "otc", qty: null, reorder: 0 } : posItem(p.edit);
+  if (!i) return "";
+  return `<form class="f panel inv-form" id="piform" novalidate><div class="top"><h2 class="h3">${i.id ? esc(i.name) : "Add an item sold in store"}</h2><button class="iconbtn" type="button" data-pedit="" aria-label="Close">${icon("close", "ic sm")}</button></div>
+    ${i.id ? `<p class="small muted">${esc(i.pack || "")}${i.custom ? " · sold in store only" : ` · on the website at ${NGN(i.webPrice)}`}${i.updatedBy ? ` · last changed by ${esc(i.updatedBy)} ${sinceText(i.updatedAt)}` : ""}</p>` : ""}
+    ${i.custom ? `<div class="row2"><label for="pi-name">Name<input id="pi-name" required autocomplete="off" value="${esc(i.name || "")}"></label><label for="pi-pack">Pack size<span class="hint">e.g. 100 ml, 30 tablets</span><input id="pi-pack" autocomplete="off" value="${esc(i.pack || "")}"></label></div>
+      <div class="row2"><label for="pi-dept">Department<select id="pi-dept">${DEPTS.filter(d => d.id !== "pom").map(d => `<option value="${d.id}"${i.dept === d.id ? " selected" : ""}>${esc(d.name)}</option>`).join("")}</select></label><label class="check" style="align-self:end"><input type="checkbox" id="pi-age"${i.age ? " checked" : ""}><span>Alcohol: check ID (18+)</span></label></div>` : ""}
+    <div class="row3"><label for="pi-price">Shelf price (₦)${i.custom ? "" : `<span class="hint">Blank: website price</span>`}<input id="pi-price" inputmode="decimal" autocomplete="off" ${i.custom ? "required " : ""}value="${i.id && (i.custom || i.price !== i.webPrice) ? i.price : ""}" placeholder="${i.webPrice || ""}"></label>
+      <label for="pi-cost">Cost price (₦)<span class="hint">What you paid; for margins</span><input id="pi-cost" inputmode="decimal" autocomplete="off" value="${i.cost != null ? i.cost : ""}"></label>
+      <label for="pi-reorder">Reorder at<span class="hint">Warn when this few are left</span><input id="pi-reorder" inputmode="numeric" autocomplete="off" value="${i.reorder || ""}" placeholder="0"></label></div>
+    <label for="pi-barcode">Barcode<span class="hint">Click here and scan the pack, or type the number</span><input id="pi-barcode" autocomplete="off" class="mono" value="${esc(i.barcode || "")}"></label>
+    <fieldset><legend>Stock on the shelf: ${i.qty == null ? "not counted yet" : `<b>${i.qty}</b>`}</legend>
+      <div class="row3"><label for="pi-mode">What happened<select id="pi-mode">${[["received", "Delivery received (add)"], ["count", "Shelf counted (set to)"], ["damaged", "Damaged or expired (remove)"], ["returned", "Returned by a customer (add)"]].map(([k, l]) => `<option value="${k}"${(i.qty == null ? "count" : "received") === k ? " selected" : ""}>${l}</option>`).join("")}</select></label>
+        <label for="pi-n">How many<input id="pi-n" inputmode="numeric" autocomplete="off" placeholder="${i.qty == null ? "e.g. 24" : "0"}"></label>
+        <label for="pi-note">Note<span class="hint">Optional: supplier, batch, expiry</span><input id="pi-note" autocomplete="off"></label></div>
+      ${i.custom ? "" : `<p class="small muted">At zero this product goes out of stock on the website, and comes back when you receive more. Online orders come off this count when they're packed.</p>`}</fieldset>
+    <div class="row-actions"><button class="btn btn-primary" type="submit">Save</button><button class="btn btn-ghost" type="button" data-pedit="">Cancel</button>${i.custom && i.id ? `<button class="btn btn-ghost" type="button" data-prmitem="${esc(i.id)}">Remove item</button>` : ""}</div></form>`;
+}
+function posStockView() {
+  const p = S.pos, f = p.pf || "all", moves = (p.data.moves || []).slice(0, 25);
+  const why = m => m.why === "price" ? m.note : `${TILL.MOVES[m.why] || m.why}${m.note ? ` · ${m.note}` : ""}`;
+  return `${p.edit ? posItemForm() : ""}
+    <div class="ps-tools"><div class="seg" role="tablist" aria-label="Show">${PFILTERS.map(([k, l]) => `<button type="button" role="tab" aria-selected="${f === k}" data-pf="${k}">${l}</button>`).join("")}</div></div>
+    <div class="ps-tools"><label for="piq" class="sr">Search stock</label><input id="piq" type="search" placeholder="Search by name, pack or barcode" value="${esc(p.iq || "")}" autocomplete="off"><button class="btn btn-primary btn-sm" type="button" data-pedit="new">${icon("add", "ic sm")} Add an item</button></div>
+    <section class="panel inv-wrap" id="invlist">${posStockRows()}</section>
+    <section class="panel inv-log"><h2 class="h3">Recent stock changes</h2>${moves.length ? `<ol>${moves.map(m => `<li><span class="mono small">${stamp(m.t)}</span><span><b>${esc(m.name)}</b><span class="small muted">${esc(why(m))} · ${esc(m.by || "")}${m.ref ? ` · <span class="mono">${esc(m.ref)}</span>` : ""}</span></span>${m.why === "price" ? "" : `<b class="${m.change < 0 ? "bad-ink" : "ok-ink"}">${m.change > 0 ? "+" : ""}${m.change}</b><span class="small muted">→ ${m.qty}</span>`}</li>`).join("")}</ol>` : `<p class="muted small">Deliveries, counts, sales and price changes show here.</p>`}</section>`;
+}
+async function posSaveItem(f) {
+  const v = id => ((f.querySelector("#" + id) || {}).value || "").trim(), p = S.pos, isNew = p.edit === "new";
+  const n = v("pi-n");
+  if (n !== "" && !/^\d+$/.test(n)) { toast("Enter a whole number of packs."); f.querySelector("#pi-n").focus(); return; }
+  const body = { action: "pos-item", id: isNew ? "" : p.edit, price: v("pi-price"), cost: v("pi-cost"), reorder: v("pi-reorder"), barcode: v("pi-barcode"), adjust: n === "" ? null : { mode: v("pi-mode"), n, note: v("pi-note") } };
+  if (isNew || (posItem(p.edit) || {}).custom) Object.assign(body, { name: v("pi-name"), pack: v("pi-pack"), dept: v("pi-dept"), age18: !!(f.querySelector("#pi-age") || {}).checked });
+  await posAct(body, f.querySelector("[type=submit]"), r => { p.edit = null; toast(`${(posItem(r.id) || { name: "Item" }).name} saved${r.changes && r.changes.length ? ` · ${r.changes[0].qty} on the shelf` : ""}.`); });
+}
+
+function vPos() {
+  const p = S.pos;
+  if (!p.token) return `<div class="wrap desk-login"><form class="f panel" id="posform" novalidate>
+      <h1 class="h2">Till sign-in</h1><p class="muted small">For Synako counter staff. Sell at the counter, receive stock, update shelf prices and look after customer records.</p>
+      ${alertBox(p.err)}
+      <label for="pname">Your name<span class="hint">Printed on receipts and recorded against every sale.</span><input id="pname" name="pname" required autocomplete="name" value="${esc(p.name)}"></label>
+      <label for="ppw">Till password<span class="hint">Ask the pharmacy manager. The desk password works too, and lets you void sales.</span><input id="ppw" name="ppw" type="password" required autocomplete="current-password"></label>
+      <button class="btn btn-primary" type="submit">Open the till</button>
+      ${DEMO ? `<p class="small muted">Design preview: any password works, with sample sales.</p>` : ""}</form></div>`;
+  if (!p.data) return `<div class="wrap"><p class="muted" style="padding:2rem 0">${p.err ? esc(p.err) : "Opening the till…"}</p></div>`;
+  const tab = POS_TABS.includes(p.tab) ? p.tab : "sell", st = p.data.stats.today;
+  const lowN = posItems().filter(TILL.isLow).length, cartN = p.cart.lines.reduce((n, l) => n + l.qty, 0);
+  const count = { sell: cartN, dash: "", sales: st.count, customers: (p.data.customers || []).length, stock: lowN };
+  let n = 0;
+  const nav = POS_NAV.map(([label, items]) => `<p class="dk-nav-label">${label}</p>${items.map(([k, l, ic]) => { n++; return `<button type="button" class="dk-link" data-ptab="${k}"${tab === k ? ' aria-current="page"' : ""}>${icon(ic, "ic sm")}<span>${l}</span>${count[k] ? `<span class="count${k === "stock" ? " warn" : ""}">${count[k]}${k === "stock" ? " low" : ""}</span>` : ""}<kbd aria-hidden="true">${n}</kbd></button>`; }).join("")}`).join("");
+  let [group, title, sub] = POS_TITLES[tab];
+  if (tab === "dash") { title = `${greeting()}, ${esc(String(p.name).split(/\s+/).filter(w => !/^(pharm|dr|mr|mrs|ms)\.?$/i.test(w))[0] || "team")}.`; sub = st.count ? `${st.count} sale${st.count === 1 ? "" : "s"} so far today${lowN ? `, and ${lowN} item${lowN === 1 ? " is" : "s are"} running low.` : "."}` : `The till is open. ${lowN ? `${lowN} item${lowN === 1 ? " is" : "s are"} running low.` : "Shelves look fine."}`; }
+  const body = tab === "sell" ? posSellView() : tab === "dash" ? posDash() : tab === "sales" ? posSalesView() : tab === "customers" ? posCustomersView() : posStockView();
+  $("#staff-stats").innerHTML = `<div class="pos-ticker" aria-label="Today"><span><small>Today</small><b>${NGN(st.total)}</b></span><span><small>Sales</small><b>${st.count}</b></span><span><small>Signed in</small><b>${esc(p.name)}${p.role === "staff" ? " · manager" : ""}</b></span></div>`;
+  return `<div class="dk pos">
+    <nav class="dk-nav" aria-label="Till sections">${nav}
+      <div class="dk-tools" aria-label="Tools"><p class="dk-nav-label">Tools</p>
+        <button class="dk-tool" type="button" data-pnewsale>${icon("add", "ic sm")} New sale</button>
+        <button class="dk-tool" type="button" data-ptab="sales" data-pcsvgo>${icon("download", "ic sm")} Sales (CSV)</button>
+        ${p.role === "staff" ? `<a class="dk-tool" href="/desk" data-link>${icon("rx", "ic sm")} Pharmacist Desk</a>` : ""}
+        <a class="dk-tool" href="/" data-link>${icon("store", "ic sm")} The shop</a>
+      </div>
+      <p class="dk-sync" role="status"><span class="dot" aria-hidden="true"></span>Live · ${p.at ? `updated ${new Date(p.at).toLocaleTimeString("en-GB")}` : "connecting"}</p>
+    </nav>
+    <div class="dk-main">
+      <header class="dk-head${tab === "dash" ? " is-dash" : ""}"><div><p class="dk-eyebrow">${group}</p><h1 tabindex="-1" id="dk-title">${title}</h1>${sub ? `<p>${sub}</p>` : ""}</div>${tab === "dash" ? `<div class="dk-head-actions"><button class="btn btn-primary" type="button" data-ptab="sell">${icon("card", "ic sm")} Go to the till</button><button class="btn btn-ghost" type="button" data-ptab="stock" data-pf="low">Receive stock</button></div>` : ""}</header>
+      ${p.err ? alertBox(p.err) : ""}
+      ${body}
+    </div>
+  </div>
+  ${p.receipt ? posReceipt(p.receipt) : ""}`;
+}
+
+/* Till clicks; returns true when handled */
+function posClick(t, d) {
+  const p = S.pos;
+  if (d.ptab) { const extra = {}; if ("pf" in d) extra.pf = d.pf; if (d.pnew) extra.edit = "new"; posGo(d.ptab, extra); if ("pcsvgo" in d) posCsv(); return true; }
+  if ("pf" in d) { p.pf = d.pf; render(); return true; }
+  if (d.padd) { posAdd(d.padd); const q = $("#posq"); if (q && q.value && matchMedia("(pointer: fine)").matches) q.select(); return true; }
+  if (d.pq) { const l = p.cart.lines.find(x => x.id === d.pq); if (l) { if (Number(d.d) > 0) { posAdd(l.id); return true; } l.qty -= 1; if (l.qty <= 0) p.cart.lines = p.cart.lines.filter(x => x !== l); posCartSave(); render(); } return true; }
+  if (d.prm) { p.cart.lines = p.cart.lines.filter(x => x.id !== d.prm); posCartSave(); render(); return true; }
+  if ("pclear" in d || "pnewsale" in d) { p.cart = posBlank(); p.cq = ""; posCartSave(); if (p.tab !== "sell") posGo("sell"); else { render.fresh = true; render(); } const q = $("#posq"); if (q) q.focus(); return true; }
+  if ("pdept" in d) { p.dept = d.pdept; render(); return true; }
+  if (d.pmethod) { p.cart.method = d.pmethod; posCartSave(); render(); const b = document.querySelector(`[data-pmethod="${d.pmethod}"]`); if (b) b.focus(); return true; }
+  if (d.ptend) { p.cart.tendered = d.ptend; posCartSave(); render.fresh = true; render(); return true; }
+  if ("psell" in d) { posSell(t); return true; }
+  if ("pdone" in d) { p.receipt = null; render.fresh = true; render(); const q = $("#posq"); if (q && p.tab === "sell") q.focus(); return true; }
+  if ("pprint" in d) { document.body.classList.add("printing-receipt"); window.print(); return true; }
+  if (d.preceipt) { p.receipt = p.data.sales.find(s => s.id === d.preceipt) || null; render(); return true; }
+  if (d.pcpick) { const c = (p.data.customers || []).find(x => x.id === d.pcpick); if (c) { p.cart.customer = { id: c.id, name: c.name, phone: c.phone }; p.cq = ""; posCartSave(); render.fresh = true; render(); } return true; }
+  if ("pcnew" in d) { const v = String(p.cq || "").trim(), phone = /\d{7,}/.test(v.replace(/\D/g, "")) && !/[a-z]{2,}/i.test(v); p.cart.customer = phone ? { phone: v, name: "" } : { name: v, phone: "" }; if (phone) { const nm = prompt("Customer's name (for the receipt and their record):", ""); if (!nm) { p.cart.customer = null; return true; } p.cart.customer.name = nm.trim().slice(0, 80); } p.cq = ""; posCartSave(); render.fresh = true; render(); return true; }
+  if ("pcclear" in d) { p.cart.customer = null; posCartSave(); render(); const q = $("#pcq"); if (q) q.focus(); return true; }
+  if ("psale" in d) { p.sel = d.psale || null; if (d.pgo || p.tab !== "sales") { p.tab = "sales"; if (p.sel && !posSalesList().some(s => s.id === p.sel)) p.srange = "all"; } render.fresh = true; render(); return true; }
+  if (d.psrange) { p.srange = d.psrange; render(); return true; }
+  if ("pcsv" in d) { posCsv(); return true; }
+  if (d.pcseg) { p.cseg = d.pcseg; render(); return true; }
+  if ("pcopen" in d) { posOpenCustomer(d.pcopen); return true; }
+  if ("pcedit" in d) { p.tab = "customers"; p.cedit = d.pcedit; render.fresh = true; render(); const f = $("#pc-name"); if (f) f.focus(); return true; }
+  if (d.pcsell) { const c = (p.data.customers || []).find(x => x.id === d.pcsell); if (c) { p.cart.customer = { id: c.id, name: c.name, phone: c.phone }; posCartSave(); posGo("sell"); toast(`Selling to ${c.name}.`); } return true; }
+  if ("pedit" in d) { p.tab = "stock"; p.edit = d.pedit || null; render.fresh = true; render(); const f = $(d.pedit === "new" ? "#pi-name" : "#pi-n"); if (f) { f.focus(); f.scrollIntoView({ block: "center" }); } return true; }
+  if (d.prmitem) { if (confirm("Remove this item from the till? Past sales keep it.")) posAct({ action: "pos-item-remove", id: d.prmitem }, t, () => { p.edit = null; toast("Item removed."); }); return true; }
+  return false;
+}
+window.addEventListener("afterprint", () => document.body.classList.remove("printing-receipt"));
+/* Till keyboard: / to search, Enter adds the scanned or first item, F9 completes the sale, 1–5 switch sections */
+document.addEventListener("keydown", e => {
+  if (S.mode !== "pos" || !S.pos.token || !S.pos.data) return;
+  const p = S.pos, typing = /^(TEXTAREA|SELECT)$/.test(e.target.tagName) || (e.target.tagName === "INPUT" && !/^(checkbox|radio|button|submit)$/.test(e.target.type));
+  if (e.key === "Escape" && p.receipt) { e.preventDefault(); p.receipt = null; render.fresh = true; render(); return; }
+  if (e.key === "F9" && p.tab === "sell") { e.preventDefault(); const b = document.querySelector("[data-psell]"); if (b && !b.disabled) posSell(b); return; }
+  if (e.target.id === "posq" && e.key === "Enter") {
+    e.preventDefault();
+    const v = e.target.value.trim(), hit = posItems().find(i => i.barcode && i.barcode === v.replace(/\s+/g, "")) || null;
+    const first = document.querySelector("#till-grid [data-padd]:not(:disabled)");
+    if (hit || first) { posAdd(hit ? hit.id : first.dataset.padd); p.q = ""; render.fresh = true; render(); const q = $("#posq"); if (q) q.focus(); }
+    else if (v) toast(`Nothing found for “${v}”.`);
+    return;
+  }
+  if (e.target.id === "posq" && e.key === "Escape") { p.q = ""; e.target.value = ""; render(); return; }
+  if (typing || e.ctrlKey || e.metaKey || e.altKey || p.receipt) return;
+  if (e.key === "/" || e.key === "F2") { const q = $("#posq") || $("#piq") || $("#psq") || $("#pcq2"); if (q) { e.preventDefault(); q.focus(); } return; }
+  if (/^[1-5]$/.test(e.key)) { e.preventDefault(); posGo(POS_TABS[Number(e.key) - 1]); }
+});
 function deskDetail() {
   const st = S.staff, o = st.detail;
   if (!st.sel) return `<div class="empty-state">${icon("file", "ic big")}<p><b>Select an order</b></p><p class="muted small">Prescriptions waiting for review are under “To review”.</p></div>`;
@@ -1951,6 +2409,7 @@ function pageMeta() {
   const strip = t => String(t).replace(/<[^>]+>/g, "").replace(/&amp;/g, "&").replace(/&[^;]+;/g, "");
   if (S.mode === "staff") return { title: "Pharmacist Desk", noindex: true };
   if (S.mode === "rider") return { title: "Rider deliveries", noindex: true };
+  if (S.mode === "pos") return { title: "Till", noindex: true };
   switch (S.view) {
     case "home": return { title: "", desc: DEFAULT_DESC };
     case "shop": {
@@ -2016,9 +2475,9 @@ function orgLd() {
 /* ---------- Render ---------- */
 function renderCount() { const n = S.cart.reduce((s, l) => s + l.q, 0) + (S.rxRequest ? 1 : 0); document.querySelectorAll("[data-count]").forEach(b => { b.textContent = n; b.hidden = !n; }); const bl = $("#basket-link"); if (bl) bl.setAttribute("aria-label", `Basket, ${n} item${n === 1 ? "" : "s"}`); }
 function render(scroll) {
-  const staff = S.mode !== "shop", rider = S.mode === "rider";
+  const staff = S.mode !== "shop", rider = S.mode === "rider", till = S.mode === "pos";
   $("#shell-customer").hidden = staff; $("#shell-staff").hidden = !staff;
-  clearInterval(deskTimer); clearInterval(trackTimer); clearInterval(riderTimer);
+  clearInterval(deskTimer); clearInterval(trackTimer); clearInterval(riderTimer); clearInterval(posTimer);
   let title;
   if (staff) {
     deskFonts();
@@ -2027,16 +2486,19 @@ function render(scroll) {
     const typed = render.fresh ? [] : [...view.querySelectorAll("input[id], textarea[id], select[id]")].map(el => [el.id, el.type === "checkbox" ? el.checked : el.value]);
     const keep = a && a.id && view.contains(a) ? [a.id, a.selectionStart, a.selectionEnd] : null;
     render.fresh = false;
-    view.innerHTML = rider ? vRider() : vStaff(); title = rider ? "Rider deliveries" : "Pharmacist Desk";
+    if (till && !S.pos.cart) S.pos.cart = posCartLoad();
+    view.innerHTML = till ? vPos() : rider ? vRider() : vStaff(); title = till ? "Till" : rider ? "Rider deliveries" : "Pharmacist Desk";
     typed.forEach(([id, v]) => { const el = document.getElementById(id); if (el && view.contains(el)) { if (el.type === "checkbox") el.checked = v; else if (el.type !== "password" || v) el.value = v; } });
     if (keep) { const el = document.getElementById(keep[0]); if (el) { el.focus(); try { el.setSelectionRange(keep[1], keep[2]); } catch (e) { /* not a text box */ } } }
-    $(".staff-title").textContent = rider ? "Rider deliveries" : "Pharmacist Desk";
-    $(".staff-head .eyebrow").textContent = rider ? "Synako Pharmaceutical LTD · Riders" : "Synako Pharmaceutical LTD";
-    if (rider) $("#staff-stats").innerHTML = "";
-    $("#staff-signout").hidden = !(rider ? S.rider.token : S.staff.token);
+    $(".staff-title").textContent = till ? "Till · Point of sale" : rider ? "Rider deliveries" : "Pharmacist Desk";
+    $(".staff-head .eyebrow").textContent = till ? "Synako Pharmaceutical LTD · Counter" : rider ? "Synako Pharmaceutical LTD · Riders" : "Synako Pharmaceutical LTD";
+    if (rider || (till && !(S.pos.token && S.pos.data))) $("#staff-stats").innerHTML = "";
+    $("#shell-staff").classList.toggle("is-pos", till);
+    $("#staff-signout").hidden = !(till ? S.pos.token : rider ? S.rider.token : S.staff.token);
+    if (till && S.pos.token) posTimer = setInterval(() => { if (!document.hidden) loadPos(true); }, 30000);
     if (!rider && S.staff.token) deskTimer = setInterval(() => loadDesk(true), 10000);
     if (rider && S.rider.token) riderTimer = setInterval(() => loadRider(true), 20000);
-    const waiting = !rider && S.staff.list ? (c => c.pack + c.review)(deskCounts(S.staff.list)) : rider && S.rider.list ? S.rider.list.filter(d => d.status === "packed").length : 0;
+    const waiting = till ? 0 : !rider && S.staff.list ? (c => c.pack + c.review)(deskCounts(S.staff.list)) : rider && S.rider.list ? S.rider.list.filter(d => d.status === "packed").length : 0;
     if (waiting) title = `(${waiting}) ${title}`;
   } else {
     const V = { home: vHome, shop: vShop, product: vProduct, controlled: vControlled, basket: vBasket, checkout: vCheckout, rx: vRx, track: vTrack, page: vPage, journal: vJournal, notfound: vNotFound }[S.view] || vHome;
@@ -2175,6 +2637,16 @@ document.addEventListener("input", e => {
   if (e.target.id === "cmdk-q") { S.staff.cq = e.target.value; S.staff.ci = 0; cmdkRefresh(); }
   if (e.target.id === "shq") { S.staff.shq = e.target.value; render(); }
   if (e.target.id === "deskq") { S.staff.q = e.target.value; refreshQueue(); }
+  if (S.mode === "pos") {
+    const p = S.pos, id = e.target.id, v = e.target.value;
+    if (id === "posq") { p.q = v; const g = $("#till-grid"); if (g) g.innerHTML = posTiles(); }
+    else if (id === "pcq") { p.cq = v; render(); }
+    else if (id === "pdisc" || id === "ptend") { p.cart[id === "pdisc" ? "discount" : "tendered"] = v.replace(/[^\d.]/g, ""); posCartSave(); render(); }
+    else if (id === "pref") { p.cart.reference = v; posCartSave(); }
+    else if (id === "psq") { p.sq = v; render(); }
+    else if (id === "pcq2") { p.cq2 = v; render(); }
+    else if (id === "piq") { p.iq = v; const l = $("#invlist"); if (l) l.innerHTML = posStockRows(); }
+  }
   if (e.target.id === "stockq") { S.staff.stockQ = e.target.value; const l = $("#stocklist"); if (l) l.innerHTML = stockRows(); }
 });
 document.addEventListener("focusin", e => { if (e.target.id === "q") openSuggest(); });
@@ -2320,7 +2792,8 @@ document.addEventListener("click", e => {
   const d = t.dataset;
   if (t.id === "menu-toggle") { drawer().hidden ? openDrawer() : closeDrawer(); return; }
   if ("closeDrawer" in d) { closeDrawer(); return; }
-  if (t.id === "staff-signout") { if (S.mode === "rider") riderSignOut(); else signOut(); return; }
+  if (t.id === "staff-signout") { if (S.mode === "pos") posSignOut(); else if (S.mode === "rider") riderSignOut(); else signOut(); return; }
+  if (S.mode === "pos" && posClick(t, d)) return;
   if ("app" in d) { toast("The Synako app is coming soon. You can order on this website from any phone in the meantime."); return; }
   if (d.tab) { S.tab = d.tab; render(); const nt = $(`#tab-${d.tab}`); if (nt) nt.focus(); return; }
   if (d.add) { addToCart(d.add, d.withqty ? S.qty : 1, d.withqty ? S.unit : "1"); return; }
@@ -2479,6 +2952,28 @@ document.addEventListener("submit", async e => {
     if (!f.reportValidity()) return;
     const v = id => (f.querySelector("#" + id) || {}).value || "";
     await supplierCall({ action: "supplier-save", supplier: { id: S.staff.editSup === "new" ? "" : S.staff.editSup, name: v("sup-name"), contact: v("sup-contact"), phone: v("sup-phone"), whatsapp: v("sup-wa"), email: v("sup-email"), leadDays: v("sup-lead"), notes: v("sup-notes") } }, f.querySelector("[type=submit]"), "Wholesaler saved.", true);
+    return;
+  }
+  if (f.id === "posform") {
+    if (!f.reportValidity()) return;
+    S.pos.name = f.pname.value.trim(); store.set("synako.posName", S.pos.name);
+    try { const { token, role } = await api.staffLogin(f.ppw.value, "pos"); Object.assign(S.pos, { token, role, err: "", tab: "sell" }); store.sset("synako.pos", token); store.sset("synako.posRole", role); render.fresh = true; render(); loadPos(); }
+    catch (er) { S.pos.err = er.message; render(); }
+    return;
+  }
+  if (f.id === "pcform") {
+    if (!f.reportValidity()) return;
+    const v = id => (f.querySelector("#" + id) || {}).value || "", p = S.pos;
+    await posAct({ action: "pos-customer-save", customer: { id: p.cedit || "", name: v("pc-name"), phone: v("pc-phone"), email: v("pc-email"), birthday: v("pc-bday"), tags: v("pc-tags"), notes: v("pc-notes"), consent: f.querySelector("#pc-consent").checked } },
+      f.querySelector("[type=submit]"), r => { toast(`${r.customer.name} saved.`); p.cedit = null; p.cdetail = null; setTimeout(() => posOpenCustomer(r.customer.id), 0); });
+    return;
+  }
+  if (f.id === "piform") { if (f.reportValidity()) posSaveItem(f); return; }
+  if (f.dataset.pvoid) {
+    const reason = (f.querySelector("input") || {}).value || "";
+    if (!reason.trim()) { toast("Say why the sale is being voided."); return; }
+    if (!confirm(`Void ${f.dataset.pvoid}? The stock goes back on the shelf and it comes off today's takings.`)) return;
+    await posAct({ action: "pos-void", id: f.dataset.pvoid, reason: reason.trim() }, f.querySelector("button"), () => toast("Sale voided. Stock put back."));
     return;
   }
   if (f.id === "riderform") {

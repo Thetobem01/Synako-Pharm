@@ -1,6 +1,6 @@
 /* Local preview of the site + API, like Vercel.
    Run: npm run dev   (uses in-memory storage and test payments; nothing is saved)
-   Staff password in dev: "desk" */
+   Passwords in dev: desk "desk", rider page "ride", till (/pos) "till" */
 import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";

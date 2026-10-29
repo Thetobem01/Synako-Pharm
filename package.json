@@ -7,7 +7,7 @@
     "node": ">=18"
   },
   "scripts": {
-    "dev": "SYNAKO_DEV=1 PAYSTACK_MOCK=1 STAFF_PASSWORD=desk node dev/server.mjs",
+    "dev": "SYNAKO_DEV=1 PAYSTACK_MOCK=1 STAFF_PASSWORD=desk RIDER_PASSWORD=ride POS_PASSWORD=till node dev/server.mjs",
     "test": "node --test tests/*.test.mjs",
     "check": "for f in js/*.js api/*.js api/*/*.js api/_lib/*.js dev/*.mjs tests/*.mjs; do node --check \"$f\" || exit 1; done"
   }

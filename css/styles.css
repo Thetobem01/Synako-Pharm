@@ -1661,3 +1661,141 @@ body:has(#shell-customer:not([hidden])) {
 #shell-customer .pcard-bulk, #shell-customer .bulk-txt { color: var(--sale-green); }
 #shell-customer .pcard-bulk b, #shell-customer .bulk-txt b { color: inherit; }
 #shell-customer .was, #shell-customer .unit .save, #shell-customer .r.disc, #shell-customer .r.disc .num, #shell-customer .summary .r.ok.disc .num { color: var(--discount-red); }
+
+/* Journal (/journal): posts, filters, the share-your-experience form; and the desk's Journal section */
+.jfilter { display: flex; flex-wrap: wrap; gap: .5rem; margin-bottom: var(--sp-5); }
+.jchip { min-height: 40px; padding: .4rem .95rem; border: 1px solid var(--line-2); border-radius: var(--r-pill); background: var(--surface); color: var(--ink-2); font: 500 var(--fs-sm)/1 var(--font); cursor: pointer; }
+.jchip:hover { border-color: var(--brand-200); color: var(--brand); }
+.jchip[aria-pressed="true"] { background: var(--brand); border-color: var(--brand); color: #fff; }
+.jlist { display: grid; gap: var(--sp-4); }
+.jlist.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.jcard { position: relative; display: grid; gap: .5rem; align-content: start; padding: var(--sp-5); border: 1px solid var(--line); border-radius: var(--r); background: var(--surface); transition: border-color .15s, box-shadow .15s; }
+.jcard:hover { border-color: var(--brand-200); box-shadow: var(--shadow); }
+.jcard a { color: var(--ink); text-decoration: none; }
+.jcard a::after { content: ""; position: absolute; inset: 0; border-radius: var(--r); }
+.jcard a:focus-visible { outline: none; }
+.jcard:has(a:focus-visible) { outline: 3px solid var(--focus); outline-offset: 2px; }
+.jcard p { margin: 0; }
+.jmeta { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem; margin: 0; font-size: var(--fs-sm); color: var(--muted); }
+.tag.jk { background: var(--brand-50); color: var(--brand-700); }
+.tag.jk-week { background: var(--ok-bg); color: var(--ok); }
+.tag.jk-story { background: var(--accent-50); color: var(--accent-ink); }
+.tag.jk-tip { background: var(--wine-50); color: var(--wine); }
+.tag.jk-orders { background: var(--surface-2); color: var(--ink-2); border: 1px solid var(--line); }
+.jside { display: grid; gap: var(--sp-4); position: sticky; top: var(--sp-4); }
+.jshare h2 { font-size: var(--fs-md); }
+.jshare h2:focus { outline: none; }
+.jrate { display: flex !important; flex-wrap: wrap; gap: .4rem !important; }
+.jrate label { position: relative; display: block; }
+.jrate input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; }
+.jrate label > span { display: inline-flex; align-items: center; gap: .35rem; min-height: 40px; padding: .35rem .75rem; border: 1px solid var(--line-2); border-radius: var(--r-pill); font-weight: 500; font-size: var(--fs-sm); }
+.jrate b { color: var(--accent); letter-spacing: .05em; font-size: .8rem; }
+.jrate input:checked + span { border-color: var(--brand); background: var(--brand-50); color: var(--brand-700); }
+.jrate input:focus-visible + span { outline: 3px solid var(--focus); outline-offset: 2px; }
+.jask { display: flex; gap: var(--sp-3); align-items: flex-start; }
+.jask .ic { color: var(--brand); flex: none; margin-top: .15rem; }
+.jask p { margin: .2rem 0 .5rem; }
+.jhead h1 { font-size: var(--fs-2xl); max-width: 24em; margin-top: var(--sp-3); }
+.jpost { display: grid; gap: var(--sp-6); padding-bottom: var(--sp-8); }
+.jbody { font-size: var(--fs-md); }
+.jbody ul { margin: 0; padding-left: 1.25rem; display: grid; gap: .35rem; }
+.jbody p { margin: 0; }
+.jpost-foot { display: flex; flex-wrap: wrap; gap: var(--sp-4); align-items: center; padding-top: var(--sp-4); border-top: 1px solid var(--line); max-width: 72ch; }
+.jmore h2 { margin-bottom: var(--sp-4); }
+.jask-track { grid-template-columns: 1fr; }
+.jask-track .btn { justify-self: start; margin-top: .4rem; }
+.jstars { color: var(--accent); letter-spacing: .08em; }
+.jstars span { color: var(--line-2); }
+/* Desk */
+.jdesk { display: grid; gap: var(--sp-5); padding-bottom: var(--sp-8); }
+.jdesk-top { display: grid; gap: var(--sp-5); }
+.jtodo { list-style: none; margin: var(--sp-3) 0 0; padding: 0; display: grid; gap: var(--sp-3); }
+.jtodo li { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: .25rem .75rem; align-items: start; }
+.jtodo li > div { display: grid; gap: .1rem; }
+.jtodo li > .btn { grid-column: 2; justify-self: start; margin-top: .25rem; }
+.jtick { display: grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; border: 2px solid var(--line-2); color: #fff; }
+.jtodo li.done .jtick { background: var(--ok); border-color: var(--ok); }
+.jtodo li.done b { color: var(--muted); }
+.jdays { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: .5rem; }
+.jday { display: grid; gap: .4rem; align-content: start; min-height: 120px; padding: .7rem; border: 1px dashed var(--line-2); border-radius: var(--r-sm); background: var(--surface); }
+.jday.has { border-style: solid; border-color: var(--line); }
+.jday.today { border-color: var(--brand); box-shadow: inset 0 3px 0 var(--brand); }
+.jday-name { margin: 0; font-size: var(--fs-xs); font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+.jday.today .jday-name { color: var(--brand); }
+.jday-post { display: grid; gap: .3rem; padding: 0; border: 0; background: none; text-align: left; font: 500 var(--fs-sm)/1.35 var(--font); color: var(--ink); cursor: pointer; }
+.jday-post:hover span:last-child { text-decoration: underline; }
+.jday-post .tag { font-size: .65rem; }
+.jday-post span:last-child { overflow-wrap: anywhere; }
+.jdesk .req-foot { flex-wrap: wrap; }
+.jday .linkbtn { text-align: left; }
+.jeditor { display: grid; gap: var(--sp-4); }
+.jeditor-top { display: flex; justify-content: space-between; align-items: center; gap: var(--sp-3); }
+.jeditor textarea { font-size: var(--fs-base); line-height: 1.6; min-height: 280px; }
+.jeditor code { font-family: var(--font-mono); font-size: .8em; background: var(--surface-2); padding: 0 .25em; border-radius: 4px; }
+.jdesk-new { display: flex; gap: var(--sp-3); flex-wrap: wrap; }
+.jdesk .requests { padding: 0; }
+.jtable-wrap { padding: 0; overflow-x: auto; }
+.jtable { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); }
+.jtable th, .jtable td { padding: .65rem .9rem; border-bottom: 1px solid var(--line); text-align: left; vertical-align: middle; }
+.jtable th { font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-weight: 700; }
+.jtable tr:last-child td { border-bottom: 0; }
+.jrow-btns { white-space: nowrap; text-align: right !important; }
+.jrow-btns .linkbtn { margin-left: .75rem; }
+@media (max-width: 1180px) { .jdays { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+@media (max-width: 1024px) { .jlist.three { grid-template-columns: 1fr; } }
+@media (max-width: 820px) { .jside { position: static; } }
+@media (max-width: 560px) { .jdays { grid-template-columns: repeat(2, minmax(0, 1fr)); } .jcard { padding: var(--sp-4); } }
+@media (prefers-reduced-motion: reduce) { .jcard { transition: none; } }
+
+/* Drop-down menus: one chevron arrow pointing down, with room around it, on every select in the shop and the desk */
+select {
+  -webkit-appearance: none !important; -moz-appearance: none !important; appearance: none !important;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%235C677D' stroke-width='2.25' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") !important;
+  background-repeat: no-repeat !important; background-position: right .9rem center !important; background-size: 1.05rem !important;
+  padding-right: 2.75rem !important; padding-left: .9rem; min-height: 44px; line-height: 1.3; cursor: pointer; text-overflow: ellipsis;
+}
+select:hover { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%233362AB' stroke-width='2.25' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") !important; }
+select:disabled { cursor: not-allowed; opacity: .6; }
+select::-ms-expand { display: none; }
+.queue-tools select, .po-bar select { padding-left: .75rem; background-position: right .7rem center !important; padding-right: 2.4rem !important; }
+
+/* Journal spacing: even gaps, inputs lined up across each row, comfortable reading width */
+.f .hint.opt { display: inline; font-size: var(--fs-xs); }
+.journal { gap: var(--sp-7); }
+.jfilter { margin-bottom: var(--sp-5); }
+.jlist { gap: var(--sp-4); }
+.jcard { padding: var(--sp-5) var(--sp-5) calc(var(--sp-5) + .1rem); gap: .6rem; }
+.jcard h2, .jcard h3 { line-height: 1.3; }
+.jside { gap: var(--sp-5); }
+.jshare { gap: var(--sp-4); padding: var(--sp-5); }
+.jshare .row2, .jeditor .row2 { align-items: end; gap: var(--sp-4); }
+.jshare .btn[type=submit] { width: 100%; }
+.jrate { padding: var(--sp-3) var(--sp-4) var(--sp-4) !important; gap: .5rem !important; }
+.jask { padding: var(--sp-4) var(--sp-5); }
+.jhead { padding-bottom: var(--sp-5); }
+.jhead .jmeta { margin-top: var(--sp-2); }
+.jhead h1 { margin-top: var(--sp-3); margin-bottom: var(--sp-2); }
+.jpost { gap: var(--sp-7); }
+.jbody { gap: var(--sp-4); }
+.jbody h2 { margin-top: var(--sp-4); }
+.jpost-foot { padding-top: var(--sp-5); }
+.jdesk { gap: var(--sp-6); }
+.jroutine { padding: var(--sp-5) var(--sp-6); }
+.jtodo { gap: var(--sp-4); margin-top: var(--sp-4); }
+.jdays { gap: .75rem; }
+.jday { padding: .85rem .9rem; min-height: 132px; gap: .5rem; }
+.jeditor { padding: var(--sp-5) var(--sp-6); gap: var(--sp-5); }
+.jtable th, .jtable td { padding: .8rem 1.1rem; }
+@media (max-width: 820px) { .journal { gap: var(--sp-6); } }
+@media (max-width: 560px) {
+  .jcard, .jshare, .jask { padding: var(--sp-4); }
+  .jroutine, .jeditor { padding: var(--sp-4); }
+  .jpost { gap: var(--sp-6); }
+  .jtable th, .jtable td { padding: .65rem .75rem; }
+}
+/* Main menu: tighter spacing on narrower laptop screens so every link fits without scrolling */
+@media (max-width: 1280px) {
+  .nav a { padding: .7rem .55rem; font-size: .875rem; }
+  .nav a[aria-current="page"]::after { left: .55rem; right: .55rem; }
+}
+@media (max-width: 1120px) { .nav a { padding: .7rem .34rem; font-size: .8rem; } .nav a[aria-current="page"]::after { left: .34rem; right: .34rem; } }

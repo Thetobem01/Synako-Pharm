@@ -108,6 +108,19 @@ The Pharmacist Desk lists any hosting settings that are still missing.
 - **Customers** can see recently viewed products, reorder a past order with one tap from its tracking page, share a product, and add a note at checkout (sizes, delivery instructions). If you set `business.whatsapp`, product pages and the basket also offer *Ask on WhatsApp* / *Send us this basket*.
 - **Opening hours** in the top bar show live "Open now until 6pm" or "Closed. Opens 7:30am today", from `hours` in `js/config.js`.
 
+## Journal (blog) and the daily routine
+
+The shop has a blog at **`/journal`** (*Journal* in the menu and footer, with the latest three posts on the home page). It has five kinds of post: **Pharmacy diary** (a short daily note), **Week in review**, **Orders & delivery**, **Customer stories** and **Health tips**.
+
+- **Starter week:** six posts are ready in `js/journal.js`, one a day from 29 October to 3 November 2026. Each goes live on its date (Nigeria time). You can edit or remove any of them from the desk.
+- **The daily routine** is on the Pharmacist Desk under **Website → Journal** (shortcut `9`). It has:
+  - a checklist for today: post today's note, read new customer experiences, and the week in review
+  - the next 7 days, with each day's post, so gaps are easy to spot and fill
+  - the sidebar shows *Post due* until today's post is live
+- **Writing:** **New post** (or **+ Plan a post** on a day) opens the editor. Leave a blank line between paragraphs, start a line with `## ` for a subheading or `- ` for a list, and use `**bold**` and `[words](/products/otc)`. **Publish** with a later date schedules the post. **Save as draft** keeps it on the desk only.
+- **Week in review:** **Draft from this week's orders** fills in the last 7 days from real orders: orders received and delivered, 30-minute deliveries, average time from payment to door, prescriptions reviewed, top departments and customer ratings. It contains counts only, never names, order numbers or medicines. Add a line from the counter, then publish.
+- **Customer experiences:** customers rate their order and write a few words on `/journal`, or from their order page once it's delivered. They appear in the Journal section (and under *Messages & bookings*), and `STAFF_EMAIL` gets an alert. Only experiences the customer agreed to share can be published: **Write up as a story** publishes it with their first name and town only.
+
 ## Receipts and new-order alerts
 
 - **Receipts:** when a payment goes through, the customer's "Payment received" email has the **PDF receipt attached**, plus a link to their order page, where **Download receipt** makes a fresh copy at any time (before payment it's an order summary). Staff can download the same PDF from the Pharmacist Desk. The PDF comes from `js/receipt.js` and shows your business and licence details from `js/config.js`, so fill those in before launch.

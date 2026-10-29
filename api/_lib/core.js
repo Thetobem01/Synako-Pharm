@@ -11,11 +11,11 @@ export function site() {
   const sandbox = { window: {}, Intl, Math, Number, String, Date };
   sandbox.globalThis = sandbox.window;
   vm.createContext(sandbox);
-  for (const f of ["js/config.js", "js/data.js", "js/pricing.js", "js/journal.js"]) {
+  for (const f of ["js/config.js", "js/data.js", "js/pricing.js", "js/journal.js", "js/pos.js"]) {
     vm.runInContext(fs.readFileSync(path.join(process.cwd(), f), "utf8"), sandbox, { filename: f });
   }
   const w = sandbox.window;
-  cache = { config: w.SYNAKO_CONFIG, P: w.SYNAKO.P, CATS: w.SYNAKO.CATS, DEPTS: w.SYNAKO.DEPTS, pricing: w.SYNAKO_PRICING, journal: w.SYNAKO_JOURNAL };
+  cache = { config: w.SYNAKO_CONFIG, P: w.SYNAKO.P, CATS: w.SYNAKO.CATS, DEPTS: w.SYNAKO.DEPTS, pricing: w.SYNAKO_PRICING, journal: w.SYNAKO_JOURNAL, pos: w.SYNAKO_POS };
   return cache;
 }
 
@@ -54,6 +54,8 @@ function devRedis([op, key, ...a]) { // in-memory stand-in, only when SYNAKO_DEV
       return "OK";
     }
     case "INCR": { const n = Number(mem.kv.get(key) || 0) + 1; mem.kv.set(key, String(n)); return n; }
+    case "INCRBY": { const n = Number(mem.kv.get(key) || 0) + Number(a[0]); mem.kv.set(key, String(n)); return n; }
+    case "MGET": return [key, ...a].map(k => mem.kv.has(k) ? mem.kv.get(k) : null);
     case "EXPIRE": { const t = setTimeout(() => mem.kv.delete(key), Number(a[0]) * 1000); if (t.unref) t.unref(); return 1; }
     case "ZADD": { const z = mem.z.get(key) || new Map(); z.set(a[1], Number(a[0])); mem.z.set(key, z); return 1; }
     case "ZREVRANGE": { const z = [...(mem.z.get(key) || new Map()).entries()].sort((x, y) => y[1] - x[1]).map(e => e[0]); return z.slice(Number(a[0]), Number(a[1]) + 1); }
@@ -63,6 +65,14 @@ function devRedis([op, key, ...a]) { // in-memory stand-in, only when SYNAKO_DEV
 export const db = {
   async get(key) { const v = await redis(["GET", key]); return v ? JSON.parse(v) : null; },
   async set(key, val) { return redis(["SET", key, JSON.stringify(val)]); },
+  /* Atomic add to a whole number (counts on the shelf); a missing key starts at 0 */
+  async incrBy(key, n) { return Number(await redis(["INCRBY", key, String(Math.round(n))])); },
+  /* Several numbers at once; null where a key isn't set */
+  async nums(keys) {
+    const out = [];
+    for (let i = 0; i < keys.length; i += 200) out.push(...((await redis(["MGET", ...keys.slice(i, i + 200)])) || []));
+    return out.map(v => v == null ? null : Number(JSON.parse(v)));
+  },
   async index(list, member, score) { return redis(["ZADD", list, String(score), member]); },
   async latest(list, n) { return (await redis(["ZREVRANGE", list, "0", String(n - 1)])) || []; },
   /* true the first time in each window: for jobs that should run at most every few minutes */
@@ -145,19 +155,27 @@ export function checkRiderPassword(pw) {
   const a = Buffer.from(String(pw || "")), b = Buffer.from(process.env.RIDER_PASSWORD || "");
   return a.length === b.length && b.length > 0 && crypto.timingSafeEqual(a, b);
 }
-/* Staff token: "expiry.signature". Rider token: "expiry.rider.signature" */
+/* The till (/pos) has its own password too (POS_PASSWORD): counter sales, stock and customers, but not the desk */
+export function posReady() { return !!process.env.POS_PASSWORD; }
+export function checkPosPassword(pw) {
+  const a = Buffer.from(String(pw || "")), b = Buffer.from(process.env.POS_PASSWORD || "");
+  return a.length === b.length && b.length > 0 && crypto.timingSafeEqual(a, b);
+}
+/* Staff token: "expiry.signature". Rider token: "expiry.rider.signature". Till token: "expiry.pos.signature" */
 export function issueToken(hours = 12, role) { const exp = String(Date.now() + hours * 3600e3), body = role ? `${exp}.${role}` : exp; return body + "." + hmac(body); }
 function tokenRole(req) {
   const t = (req.headers.authorization || "").replace(/^Bearer\s+/i, "");
   const parts = t.split("."), sig = parts.pop(), body = parts.join(".");
-  if (!SECRET || !parts.length || parts.length > 2 || !sig || Number(parts[0]) < Date.now() || (parts[1] && parts[1] !== "rider")) throw fail(401, "Please sign in again.");
+  if (!SECRET || !parts.length || parts.length > 2 || !sig || Number(parts[0]) < Date.now() || (parts[1] && !["rider", "pos"].includes(parts[1]))) throw fail(401, "Please sign in again.");
   const good = hmac(body);
   if (sig.length !== good.length || !crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(good))) throw fail(401, "Please sign in again.");
   return parts[1] || "staff";
 }
 export function requireStaff(req) { if (tokenRole(req) !== "staff") throw fail(401, "Please sign in again."); }
 /* Riders and staff may both use the delivery list */
-export function requireRider(req) { return tokenRole(req); }
+export function requireRider(req) { const r = tokenRole(req); if (r === "pos") throw fail(401, "Please sign in again."); return r; }
+/* Staff and the till may both use the counter; returns "staff" or "pos" */
+export function requirePos(req) { const r = tokenRole(req); if (r === "rider") throw fail(401, "Please sign in again."); return r; }
 
 /* ---------- Orders ---------- */
 export function newId(prefix = "SYN") {

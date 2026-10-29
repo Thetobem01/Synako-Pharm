@@ -52,6 +52,7 @@ Regulations 2026); `/controlled-medicines` explains in-store collection.
    | `PAYSTACK_PUBLIC_KEY` | From Paystack dashboard → Settings → API Keys (`pk_test_…` first, then `pk_live_…`) |
    | `PAYSTACK_SECRET_KEY` | Same page (`sk_test_…`, then `sk_live_…`). Never put this in the code. |
    | `STAFF_PASSWORD` | A strong password for the Pharmacist Desk |
+   | `POS_PASSWORD` | *Optional.* A password for the till at `/pos`, for counter staff who shouldn't have the desk |
    | `SESSION_SECRET` | Any long random text (signs staff sign-ins) |
    | `RESEND_API_KEY` | *Optional, recommended.* From resend.com → API Keys. Turns on order emails. |
    | `MAIL_FROM` | Sender, e.g. `Synako Pharmacy <orders@yourdomain.com>` (verify the domain in Resend first) |
@@ -137,6 +138,20 @@ The shop has a blog at **`/journal`** (*Journal* in the menu and footer, with th
 
   Riders never see medicine names or health details, only the number of items in the sealed bag, and a **Check ID 18+** flag on orders with alcohol. The page refreshes every 20 seconds and chimes when a new order is packed.
 - **On the desk:** you can still mark orders out for delivery yourself (with the rider's name) or delivered (with the code). **WhatsApp the customer** on any order opens WhatsApp with an update for that order's status, ready to send from your phone.
+
+## The till: counter sales, stock, prices and customers
+
+Open **`/pos`** (also `/till`) on the counter computer or a tablet. Staff sign in with their name and the till password (`POS_PASSWORD`), or the desk password. Every sale, price change and stock change is recorded with their name. The desk has a **Till** link under Tools.
+
+- **Sell:** scan a barcode, or type a name and press Enter, or tap an item. Each item shows its shelf price and how many are on the shelf. Add a customer by phone or name (optional), give a discount, choose **Cash**, **Bank transfer** or **Card (POS terminal)**, and for cash press a quick-cash button to see the change to give. **F9** completes the sale and shows a receipt you can **print** (80 mm receipt printers work) or send by **WhatsApp**.
+  - A sale with a **prescription-only medicine** needs the box ticked to say a pharmacist checked the prescription, and **alcohol** needs the photo ID box ticked. Both are recorded on the sale.
+  - The server sets the prices, so a price can't be changed in the browser, and a sale can't take more than the shelf count.
+- **Today:** the till dashboard. It shows takings against yesterday, how customers paid, sales by hour, the last 7 days, best sellers, shelf alerts, who sold what, recent sales, and the value of stock on the shelf.
+- **Sales:** every counter sale, with a search and **CSV** download. A **manager** (signed in to the till with the desk password) can **void** a sale with a reason. This puts the stock back and takes the sale off the day's takings.
+- **Customers:** a simple CRM. Each customer has their phone, email, birthday, tags, notes and whether they're happy to hear about offers. The record shows what they usually buy, their counter purchases and their online orders, matched by phone number. Groups are ready made: *Regulars* (3+ visits), *New this month*, *Not seen in 60 days*, *Birthdays this week* and *Top spenders*. **Start a sale** puts the customer on the till.
+- **Stock & prices:** set a product's **shelf price** (leave it blank to use the website price), **cost price** (for margins and profit), **reorder level** and **barcode**. Record stock as **delivery received**, **shelf counted**, **damaged or expired** or **returned by a customer**. You can also **add items sold only in store**, which don't appear on the website. Recent stock changes are listed underneath.
+- **Stock and the website:** once a website product has been counted, its count goes down when it sells at the till and when an online order is **packed** on the desk. At zero it goes **out of stock online** and the supply manager is alerted. When stock is received, it comes back online and customers who asked are emailed. At or under its reorder level, it's marked **running low** in the desk's Supply tab.
+- **Prices:** till prices are for the shop counter. The website keeps the prices in `js/data.js`, and the **Price differs from website** filter shows where they don't match.
 
 ## SMS and WhatsApp updates
 
@@ -250,8 +265,8 @@ Products show a drawn pack until you add a photo. Save it as `assets/products/<p
 ## Run it locally
 
 ```bash
-npm run dev          # http://localhost:3000 · test storage and payments · desk password "desk"
-npm test             # pricing rules and the full order API (place, pay, review, track)
+npm run dev          # http://localhost:3000 · test storage and payments · passwords: desk "desk", rider "ride", till "till"
+npm test             # pricing rules, the full order API (place, pay, review, track) and the till
 npm run check        # syntax check of every script
 ```
 

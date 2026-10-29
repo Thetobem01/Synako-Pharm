@@ -38,7 +38,7 @@ test("every page address is served by the app (deep links, refreshes, email link
   // With cleanUrls on, /index.html is not a valid destination and Vercel answers 404 for /track/…, /product/… etc.
   if (v.cleanUrls) assert.notEqual(spa.destination, "/index.html", "with cleanUrls, rewrite page addresses to \"/\", not \"/index.html\"");
   const re = new RegExp("^" + spa.source + "$");
-  for (const p of ["/track/SYN-ABC123", "/product/para", "/products/otc", "/pharmacist", "/desk", "/staff", "/rider", "/wholesale", "/journal", "/journal/welcome-to-the-synako-journal"]) assert.ok(re.test(p), `${p} must reach the app`);
+  for (const p of ["/track/SYN-ABC123", "/product/para", "/products/otc", "/pharmacist", "/desk", "/staff", "/rider", "/pos", "/till", "/wholesale", "/journal", "/journal/welcome-to-the-synako-journal"]) assert.ok(re.test(p), `${p} must reach the app`);
   for (const p of ["/api/health", "/assets/logo.png", "/js/app.js", "/css/styles.css"]) assert.ok(!re.test(p), `${p} must not be rewritten`);
 });
 

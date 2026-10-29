@@ -343,7 +343,7 @@ form.f { display: grid; gap: var(--sp-4); }
 .hero-points li { display: flex; align-items: center; gap: .45rem; }
 .hero-points .ic { color: var(--ok); }
 .hero-media { position: relative; margin: 0; justify-self: end; width: 100%; max-width: 500px; }
-.hero-media img { width: 100%; height: auto; aspect-ratio: 960 / 1196; object-fit: cover; border-radius: 28px; box-shadow: var(--shadow-lg); background: #fff; }
+.hero-media img { width: 100%; height: auto; aspect-ratio: 4 / 5; object-fit: cover; border-radius: 28px; box-shadow: var(--shadow-lg); background: #fff; }
 .hero-card {
   position: absolute; left: -32px; bottom: 36px; display: flex; gap: .75rem; align-items: flex-start; max-width: 290px;
   padding: .9rem 1.1rem; background: var(--surface); border-radius: var(--r); box-shadow: var(--shadow); font-size: var(--fs-sm); color: var(--muted);

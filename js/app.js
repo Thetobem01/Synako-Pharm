@@ -72,7 +72,7 @@ const expressWhere = has(D.expressArea) ? ` in ${D.expressArea}` : "";
 const sameDayWhere = (D.localStates || []).length ? ` within ${D.localStates.join(", ")} State` : "";
 
 const IMG = {
-  hero: "assets/hero-pharmacist.webp",
+  hero: "assets/hero-pharmacist-laptop.webp",
   pharmacistMale: "assets/pharmacist-male.webp",
   pharmacistFemale: "assets/pharmacist-female.webp",
   delivery: "assets/delivery.webp",
@@ -406,7 +406,7 @@ function vHome() {
       <svg class="hero-arch" viewBox="0 0 400 520" preserveAspectRatio="none" aria-hidden="true" focusable="false"><path d="M1 519V200A199 199 0 0 1 399 200V519" fill="none" stroke="currentColor" stroke-width="1" vector-effect="non-scaling-stroke"/></svg>
       ${sprig("hero-sprig")}
       <span class="hero-orb" aria-hidden="true">${popular[0] ? media(popular[0]) : ""}</span>
-      <img src="${IMG.hero}" alt="A smiling Synako pharmacist at his desk" width="960" height="1196" fetchpriority="high" decoding="async">
+      <img src="${IMG.hero}" alt="A smiling Synako pharmacist working on a laptop in front of shelves of medicines" width="640" height="800" fetchpriority="high" decoding="async">
       <figcaption class="hero-card">${icon("shield", "ic")}<span><b>Pharmacist-checked</b><span>Every order is reviewed by a registered Synako pharmacist.</span></span></figcaption>
     </figure>
   </div></section>

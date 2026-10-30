@@ -1,4 +1,5 @@
 import { handle, only, send, body, query, fail, requireStaff, db, log, STATUS, notifyCustomer, checkDeliveryCode, limit, UPDATE_FOR } from "../_lib/core.js";
+import { till, syncShop } from "../_lib/pos.js";
 
 const NEXT = { // allowed staff actions by current status
   pending_review: ["approve", "info", "reject"],
@@ -69,6 +70,9 @@ export default handle(async (req, res) => {
   log(o, MSG[action]);
   log(o, `${MSG[action]} by ${by}${o.rider && action === "dispatched" ? ` · rider ${o.rider}` : ""}${action === "delivered" && b.code ? " · delivery code checked" : ""}${note ? ` · “${note}”` : ""}`, { internal: true });
   await db.set("order:" + o.id, o);
+  if (action === "packed") { // the parcel leaves the same shelf the till counts; never blocks packing
+    try { await syncShop(await till().takeOnline(o.items, by, o.id), by); } catch (e) { console.error("Shelf count not updated", e); }
+  }
   const sent = await notifyCustomer(o, action);
   const fresh = (await db.get("order:" + o.id)) || o;
   send(res, 200, { order: Object.assign({}, fresh, { statusLabel: STATUS[fresh.status], actions: NEXT[fresh.status] || [] }), sent });

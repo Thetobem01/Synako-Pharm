@@ -1,12 +1,14 @@
 import crypto from "node:crypto";
-import { handle, only, send, body, query, fail, requireStaff, requireRider, db, site, STATUS, emailReady, paystackReady, smsReady, riderReady, sendEmail, mailFrom, limit, outOfStock, baseUrl,
+import { handle, only, send, body, query, fail, requireStaff, requireRider, requirePos, posReady, db, site, STATUS, emailReady, paystackReady, smsReady, riderReady, sendEmail, mailFrom, limit, outOfStock, baseUrl,
   log, notifyCustomer, checkDeliveryCode, remindUnpaid } from "../_lib/core.js";
 import { allPosts, savePost, hidePost, weekDraft } from "../_lib/journal.js";
+import { posAction, posView } from "../_lib/pos.js";
 import { lowStock, setLow, notifySupply, suppliers, saveSupplier, deleteSupplier, purchaseOrders, createPO, updatePO, shortages, overdue, supplyDigest } from "../_lib/supply.js";
 /* Pharmacist Desk. GET: recent orders and requests, plus site details still missing.
    POST: mark a message, booking or quote request as handled (or back to new), stock, test email, payment reminders,
    and the journal (journal-save, journal-hide, journal-week for a week-in-review draft).
    Riders: GET ?view=rider lists deliveries; POST rider-take / rider-delivered.
+   The till (/pos): GET ?view=pos; POST pos-sell, pos-void, pos-item, pos-item-remove, pos-adjust, pos-customer, pos-customer-save.
    Vercel's daily scheduled job: GET ?task=reminders with CRON_SECRET.
    (One file for all of this keeps the API within Vercel Hobby's 12-function limit.) */
 const DEV = process.env.SYNAKO_DEV === "1";
@@ -22,6 +24,8 @@ export default handle(async (req, res) => {
   if (req.method === "GET" && q.view === "rider") { requireRider(req); return send(res, 200, { deliveries: await deliveries() }); }
   const b = req.method === "POST" ? await body(req) : {};
   if (b.action === "rider-take" || b.action === "rider-delivered") { requireRider(req); return send(res, 200, await riderAction(req, b)); }
+  if (req.method === "GET" && q.view === "pos") { requirePos(req); return send(res, 200, await posView()); }
+  if (/^pos-/.test(String(b.action || ""))) { const role = requirePos(req); return send(res, 200, await posAction(b, role, tellWaitingCustomers)); }
   requireStaff(req);
   if (req.method === "GET" && q.view === "supply") return send(res, 200, await supplyView());
   if (req.method === "POST") {
@@ -94,6 +98,7 @@ export default handle(async (req, res) => {
   if (!process.env.SESSION_SECRET) setup.push("SESSION_SECRET (separate from the staff password)");
   if (!emailReady()) setup.push("Order emails (RESEND_API_KEY, MAIL_FROM)");
   if (!riderReady()) setup.push("RIDER_PASSWORD for the rider page (/rider)");
+  if (!posReady()) setup.push("POS_PASSWORD for the till (/pos), so counter staff don't need the desk password");
   if (!process.env.CRON_SECRET) setup.push("CRON_SECRET so payment reminders also go out when the desk is closed");
   else if (!process.env.STAFF_EMAIL) setup.push("STAFF_EMAIL for new-order alerts");
   const low = await lowStock();

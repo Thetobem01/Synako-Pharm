@@ -229,6 +229,7 @@ const demo = (() => {
     staffOrder: (t, oid) => { const o = orders.get(oid); return wait({ order: full(o), file: o.file || null }); },
     staffAct: (t, b) => {
       const o = orders.get(b.id);
+      if (b.action === "notify") { log(o, `Update sent again by ${b.by || "Staff"} (preview: nothing sent)`, true); return wait({ order: full(o), sent: { email: b.via === "sms" ? null : { ok: true }, sms: b.via === "email" ? null : { ok: false, why: "SMS isn't set up in the design preview" } } }); }
       if (!(NEXT[o.status] || []).includes(b.action)) return Promise.reject(new Error("You can't do that now."));
       if (["info", "reject"].includes(b.action) && !b.note) return Promise.reject(new Error("Add a note so the customer knows what to do next."));
       const map = { approve: "approved_awaiting_payment", info: "info_needed", reject: "rejected", resume: "pending_review", cancel: "cancelled", packed: "packed", dispatched: "out_for_delivery", delivered: "delivered" };
@@ -253,6 +254,7 @@ const api = {
   staffList: t => DEMO ? demo.staffList(t) : call("staff/orders", { token: t }),
   staffOrder: (t, id) => DEMO ? demo.staffOrder(t, id) : call("staff/order?id=" + encodeURIComponent(id), { token: t }),
   staffAct: (t, b) => DEMO ? demo.staffAct(t, b) : call("staff/order", { method: "POST", body: b, token: t }),
+  emailReceipt: (id, phone) => DEMO ? new Promise(ok => setTimeout(() => ok({ ok: true, to: "you@…" }), 250)) : call("order", { method: "POST", body: { id, phone, action: "email-receipt" } }),
   journal: () => DEMO ? Promise.resolve({ posts: J.merge(jDemo).filter(p => J.isLive(p, jToday())) }) : call("requests"),
   journalAct: (t, b) => DEMO ? demoJournal(b) : call("staff/orders", { method: "POST", body: b, token: t }),
   posView: t => DEMO ? demoPos().then(x => x.view()) : call("staff/orders?view=pos", { token: t }),
@@ -876,6 +878,7 @@ function vTrack() {
       : needPhone ? `<div class="empty-state"><p><b>Order ${esc(S.trackId)}</b></p><p class="muted small">Enter the last 4 digits of the phone number you used to see this order.</p></div>`
       : !o ? `<p class="muted">Loading your order…</p>`
       : `<div style="display:flex;justify-content:space-between;gap:1rem;flex-wrap:wrap;align-items:center"><div><div class="muted small">Order</div><h2 class="mono" style="font-size:1.4rem">${esc(o.id)}</h2><div class="muted small">Placed ${stamp(o.createdAt)}</div></div>${statusTag(o)}</div>
+        ${o.payment || PAID(o.status) ? receiptBox(o) : ""}
         ${o.status === "rejected" ? `<div class="notice rx"><b>We couldn't approve this prescription</b><span>${esc(o.note || "Our pharmacist will contact you to explain.")} You have not been charged.</span></div>` : ""}
         ${o.status === "info_needed" ? `<div class="notice rx"><b>Our pharmacist needs more information</b><span>${esc(o.note || "We'll call you shortly.")}</span></div>` : ""}
         ${o.status === "pending_review" ? `<div class="notice info"><b>Your prescription is with our pharmacist</b><span>Usually within an hour during opening hours (${esc(H.label)}). This page updates when it's approved.</span></div>` : ""}
@@ -887,7 +890,7 @@ function vTrack() {
           <div class="small" style="display:grid;gap:.35rem;margin-top:.6rem">${o.items.map(i => `<div class="r"><span>${i.qty} × ${esc(i.name)}</span><span class="num">${NGN(i.total)}</span></div>`).join("")}
           ${o.discount ? `<div class="r disc"><span>Discount${o.promo ? ` (${esc(o.promo.code)})` : ""}</span><span class="num">−${NGN(o.discount)}</span></div>` : ""}
           <div class="r"><span>Delivery · ${esc(o.delivery.label)}</span><span class="num">${o.deliveryFee ? NGN(o.deliveryFee) : "Free"}</span></div><div class="r"><b>Total</b><b class="num">${NGN(o.total)}${o.priced ? "" : "+"}</b></div></div></details>
-        <div class="order-actions"><button class="btn ${o.canPay ? "btn-secondary" : "btn-primary"}" type="button" data-receipt>${icon("download", "ic sm")} ${PAID(o.status) ? "Download receipt (PDF)" : "Download order summary (PDF)"}</button>${o.items.some(i => prod(i.id)) ? `<button class="btn btn-secondary" type="button" data-reorder>${icon("box", "ic sm")} Order these items again</button>` : ""}</div>
+        <div class="order-actions">${o.payment || PAID(o.status) ? "" : `<button class="btn ${o.canPay ? "btn-secondary" : "btn-primary"}" type="button" data-receipt>${icon("download", "ic sm")} Download order summary (PDF)</button>`}${o.items.some(i => prod(i.id)) ? `<button class="btn btn-secondary" type="button" data-reorder>${icon("box", "ic sm")} Order these items again</button>` : ""}</div>
         <div><h3 style="margin-bottom:.5rem">Order record</h3><div class="audit">${o.history.slice().reverse().map(l => `<div><span>${stamp(l.t)}</span><b style="font-weight:500">${esc(l.m)}</b></div>`).join("")}</div></div>
         ${o.status === "delivered" ? `<div class="notice info jask-track"><b>How did we do?</b><span>Tell us about your order in a minute. With your permission we may share it on the Synako Journal.</span><button class="btn btn-secondary btn-sm" type="button" data-shareexp="${esc(o.id)}">${icon("chat", "ic sm")} Share your experience</button></div>` : ""}
         ${final ? "" : `<p class="small muted">Questions? ${contactLine()}.</p>`}`}
@@ -983,6 +986,21 @@ async function shareJournal() {
   const url = `${SITE_URL}/journal/${p.id}`;
   try { if (navigator.share) { await navigator.share({ title: p.title, text: `${p.title} · ${B.name}`, url }); return; } } catch (e) { if (e && e.name === "AbortError") return; }
   try { await navigator.clipboard.writeText(url); toast("Link copied. Paste it anywhere to share."); } catch (e) { toast(url); }
+}
+
+/* Paid orders: the payment on record, with the receipt to download or have emailed */
+function receiptBox(o) {
+  const p = o.payment || {}, how = { card: "Card", bank: "Bank", bank_transfer: "Bank transfer", ussd: "USSD", test: "Test payment", mobile_money: "Mobile money" }[p.channel] || (p.channel ? p.channel.replace(/_/g, " ") : "Paystack");
+  return `<div class="receipt-box">${icon("check", "ic")}<div class="receipt-copy"><b>Payment received · ${NGN(o.total)}</b>
+      <span class="small muted">${p.paidAt ? stamp(p.paidAt) + " · " : ""}${esc(how)}${p.reference ? ` · Ref <span class="mono">${esc(p.reference)}</span>` : ""}</span></div>
+    <div class="receipt-btns"><button class="btn btn-primary" type="button" data-receipt>${icon("download", "ic sm")} Download receipt (PDF)</button><button class="btn btn-secondary" type="button" data-emailreceipt ${S.busy ? "disabled" : ""}>${icon("chat", "ic sm")} Email it to me</button></div></div>`;
+}
+async function emailReceipt(btn) {
+  const o = S.track; if (!o) return;
+  btn.disabled = true;
+  try { const r = await api.emailReceipt(o.id, phoneFor(o.id) || ""); toast(`Receipt sent to ${r.to}. Check your inbox (and spam) in a minute.`); }
+  catch (e) { toast(e.message); }
+  btn.disabled = false;
 }
 
 /* ---------- Content pages ---------- */
@@ -2313,6 +2331,7 @@ function deskDetail() {
     <div style="display:flex;justify-content:space-between;gap:1rem;flex-wrap:wrap"><div><div class="muted small">Order</div><h2 class="mono" style="font-size:1.35rem">${esc(o.id)}</h2><div class="muted small">${stamp(o.createdAt)} · ${esc(o.delivery.label)}</div></div>${statusTag(o)}</div>
     ${progressSteps(o)}
     <div class="desk-print"><button class="btn btn-ghost btn-sm" type="button" data-dreceipt>${icon("download", "ic sm")} ${PAID(o.status) ? "Receipt (PDF)" : "Order summary (PDF)"}</button><button class="btn btn-ghost btn-sm" type="button" data-print>${icon("print", "ic sm")} Print delivery note</button>${waTo(o.customer.phone, waUpdate(o)) ? `<a class="btn btn-ghost btn-sm" href="${esc(waTo(o.customer.phone, waUpdate(o)))}" target="_blank" rel="noopener">${icon("chat", "ic sm")} WhatsApp the customer</a>` : ""}</div>
+    ${updatesPanel(o)}
     <div class="review">
       <div style="display:grid;gap:.8rem;align-content:start">
         <dl class="kv"><dt>Customer</dt><dd>${esc(o.customer.name)}</dd><dt>Phone</dt><dd><a href="tel:${esc(o.customer.phone)}">${esc(o.customer.phone)}</a></dd><dt>Email</dt><dd>${esc(o.customer.email)}</dd>${o.customer.dob ? `<dt>Date of birth</dt><dd>${esc(o.customer.dob)}</dd>` : ""}
@@ -2343,6 +2362,38 @@ function deskDetail() {
         return `<button class="btn ${L2[1]}" type="button" data-act="${a}" ${S.busy || (a === "packed" && !allTicked) ? "disabled" : ""}>${L2[0]}</button>`; }).join("")}${packing && !allTicked ? `<span class="small muted">Tick every item to mark it packed.</span>` : ""}</div>
     </form>` : ""}
     <div><h3 class="h4" style="margin-bottom:.5rem">Order record</h3><div class="audit">${o.history.slice().reverse().map(l => `<div><span>${stamp(l.t)}</span><b style="font-weight:500">${esc(l.m)}</b></div>`).join("")}</div></div>`;
+}
+
+/* Desk: what the customer has been told about this order, and "send the update again" by email and/or SMS */
+const UPDATE_LABEL = { pending_review: "Order received", info_needed: "More information needed", rejected: "Prescription not approved", awaiting_payment: "Waiting for payment",
+  approved_awaiting_payment: "Approved, ready to pay", paid: "Payment received (with receipt)", packed: "Packed and sealed", out_for_delivery: "On its way", delivered: "Delivered" };
+const SMS_LABEL = { paid: "Payment received, with delivery code", approve: "Prescription approved, ready to pay", info: "More information needed", reject: "Prescription not approved",
+  packed: "Your order is packed", dispatched: "Your order is on its way", delivered: "Your order has been delivered", reminder: "Waiting for payment" };
+function updatesPanel(o) {
+  const sent = o.history.filter(h => h.internal && /^(Email|SMS) to customer /.test(h.m)).slice(-6).reverse();
+  const smsOn = DEMO || !!(S.staff.list && S.staff.list.sms), label = UPDATE_LABEL[o.status];
+  const row = h => { const m = h.m.match(/^(Email|SMS) to customer "(.*)": (sent|NOT sent · (.*))$/) || []; const ok = m[3] === "sent";
+    const what = m[2] ? (m[1] === "SMS" ? SMS_LABEL[m[2]] || m[2] : m[2].replace(/ · SYN-\w+$/, "")) : h.m;
+    return `<li><span class="tag ${ok ? "ok" : "bad"}">${m[1] || "Message"} ${ok ? "sent" : "not sent"}</span><span>${esc(what)}${ok ? "" : ` <span class="muted">· ${esc(m[4] || "")}</span>`}</span><span class="small muted">${stamp(h.t)}</span></li>`; };
+  return `<section class="updates" aria-labelledby="upd-h"><div class="updates-head"><div><h3 class="h4" id="upd-h">Customer updates</h3>
+      <p class="small muted">${esc(o.customer.email || "No email")} · ${esc(o.customer.phone || "No phone")}. They're emailed${smsOn ? " and texted" : ""} at every step automatically.</p></div>
+    ${label ? `<div class="updates-btns" role="group" aria-label="Send the update again"><span class="small"><b>Send again:</b> ${esc(label)}</span>
+      <button class="btn btn-ghost btn-sm" type="button" data-notify="email">${icon("chat", "ic sm")} Email</button>
+      <button class="btn btn-ghost btn-sm" type="button" data-notify="sms" ${smsOn ? "" : "disabled title=\"Add TERMII_API_KEY in the hosting settings to send texts\""}>${icon("phone", "ic sm")} SMS</button>
+      ${smsOn ? `<button class="btn btn-secondary btn-sm" type="button" data-notify="both">Both</button>` : ""}</div>` : ""}</div>
+    ${sent.length ? `<ul class="updates-log">${sent.map(row).join("")}</ul>` : `<p class="small muted">${DEMO ? "In the design preview nothing is sent." : "Nothing sent yet."}</p>`}
+    ${smsOn ? "" : `<p class="small muted">Texts switch on when TERMII_API_KEY is added in the hosting settings.</p>`}</section>`;
+}
+async function notifyAgain(via, btn) {
+  const st = S.staff, o = st.detail; if (!o) return;
+  btn.disabled = true;
+  try {
+    const r = await api.staffAct(st.token, { id: o.id, action: "notify", via, by: st.name });
+    st.detail = r.order;
+    const say = (k, res) => res ? (res.ok ? `${k} sent` : `${k} NOT sent (${res.why})`) : "";
+    toast([say("Email", r.sent.email), say("SMS", r.sent.sms)].filter(Boolean).join(" · ") || "Nothing to send.");
+  } catch (e) { if (e.status === 401) return signOut(); toast(e.message); }
+  render.fresh = true; render();
 }
 
 /* ---------- Shell: top bar, footer details, directory, drawer ---------- */
@@ -2816,6 +2867,8 @@ document.addEventListener("click", e => {
   if ("csv" in d) { downloadCsv(); return; }
   if ("print" in d) { window.print(); return; }
   if ("receipt" in d) { if (S.track) downloadReceipt(S.track, t); return; }
+  if ("emailreceipt" in d) { emailReceipt(t); return; }
+  if (d.notify) { notifyAgain(d.notify, t); return; }
   if ("dreceipt" in d) { if (S.staff.detail) downloadReceipt(S.staff.detail, t); return; }
   if (d.req) { markRequest(d.req, d.st); return; }
   if ("testmail" in d) { testEmail(t); return; }
@@ -2921,7 +2974,7 @@ async function deskAction(action) {
   const b = { id: o.id, action, note: note.trim(), by: st.name, code, rider: (($("#arider") || {}).value || "").trim() };
   if (action === "approve" && $("#aprice")) { b.price = $("#aprice").value; b.itemsText = $("#aitems").value; }
   S.busy = true; render();
-  try { const r = await api.staffAct(st.token, b); st.detail = r.order; render.fresh = true; toast({ approve: "Approved. The customer can now pay.", info: "Request sent to the customer.", reject: "Marked as not approved.", packed: "Marked as packed.", dispatched: "Marked out for delivery.", delivered: "Marked as delivered.", cancel: "Order cancelled.", resume: "Back in review." }[action]); await loadDesk(true); }
+  try { const r = await api.staffAct(st.token, b); st.detail = r.order; render.fresh = true; const told = r.sent && [r.sent.email && r.sent.email.ok && "email", r.sent.sms && r.sent.sms.ok && "SMS"].filter(Boolean).join(" and "); toast({ approve: "Approved. The customer can now pay.", info: "Request sent to the customer.", reject: "Marked as not approved.", packed: "Marked as packed.", dispatched: "Marked out for delivery.", delivered: "Marked as delivered.", cancel: "Order cancelled.", resume: "Back in review." }[action] + (told ? ` Customer told by ${told}.` : "")); await loadDesk(true); }
   catch (e) { if (e.status === 401) signOut(); else toast(e.message); }
   S.busy = false; render();
 }

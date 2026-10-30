@@ -123,7 +123,8 @@ test("malformed requests get a 400, not a server error", async () => {
   assert.equal((await api("orders", { raw: "{not json", headers: ip(4) })).status, 400);
   assert.equal((await api("orders", { raw: "null", headers: ip(4) })).status, 400);
   assert.equal((await api("health", { body: {} })).status, 200);
-  assert.equal((await api("order", { body: {} })).status, 405);
+  assert.equal((await api("order", { body: {}, headers: ip(4) })).status, 404, "an empty receipt request is refused, not a crash");
+  assert.equal((await api("order", { raw: "{oops", headers: ip(4) })).status, 400);
 });
 
 test("prescription orders wait for a pharmacist, who can approve them for payment", async () => {
@@ -466,4 +467,36 @@ test("the journal: starter posts, posts from the desk, scheduling and customer s
   assert.ok(week.stats.stories >= 1);
   assert.ok(!week.body.includes("Zainab") && !week.body.includes(placed.id) && !/paracetamol/i.test(week.body), "no names, order numbers or medicines");
   assert.match(week.body, /medicines/, "departments are named instead");
+});
+
+test("packing tells the customer, staff can send an update again, and customers can email themselves the receipt", async () => {
+  const token = (await api("staff/login", { body: { password: "desk" }, headers: ip(31) })).json.token;
+  const o = (await api("orders", { body: { items: [{ id: "para", q: 1 }], customer: { ...customer, phone: "0803 555 7788" }, delivery, consent: true }, headers: ip(32) })).json.order;
+
+  assert.equal((await api("order", { body: { id: o.id, phone: "7788", action: "email-receipt" }, headers: ip(33) })).status, 409, "no receipt before payment");
+  const ref = (await api("pay-start", { body: { id: o.id, phone: "7788" } })).json.reference;
+  await api("pay-verify", { body: { reference: ref } });
+
+  const packed = await api("staff/order", { token, body: { id: o.id, action: "packed", by: "Packer Tolu" } });
+  assert.equal(packed.status, 200);
+  assert.equal(packed.json.sent.email.ok, true, "the customer is emailed when the order is packed");
+  assert.equal(packed.json.sent.sms.ok, true, "and texted");
+  assert.ok(packed.json.order.history.some(h => h.internal && /^Email to customer "Your order is packed/.test(h.m)), "the desk record shows it went");
+
+  const again = await api("staff/order", { token, body: { id: o.id, action: "notify", via: "both", by: "Packer Tolu" } });
+  assert.equal(again.status, 200);
+  assert.equal(again.json.sent.email.ok, true);
+  assert.equal(again.json.sent.sms.ok, true);
+  assert.ok(again.json.order.history.some(h => /Update sent again by Packer Tolu \(email and SMS\)/.test(h.m)));
+  const smsOnly = await api("staff/order", { token, body: { id: o.id, action: "notify", via: "sms" } });
+  assert.equal(smsOnly.json.sent.email, null, "SMS only sends no email");
+  assert.equal((await api("staff/order", { body: { id: o.id, action: "notify" } })).status, 401, "only staff can send updates");
+
+  assert.equal((await api("order", { body: { id: o.id, phone: "0000", action: "email-receipt" }, headers: ip(33) })).status, 404, "the phone digits must match");
+  const mailed = await api("order", { body: { id: o.id, phone: "7788", action: "email-receipt" }, headers: ip(33) });
+  assert.equal(mailed.status, 200);
+  assert.match(mailed.json.to, /^a…@example\.com$/, "the address is shown masked");
+  const tracked = (await api(`order?id=${o.id}&phone=7788`)).json.order;
+  assert.equal(tracked.payment.status, "paid", "the order page has the payment details for the receipt");
+  assert.ok(!tracked.history.some(h => /Email to customer/.test(h.m)), "message records stay staff-only");
 });

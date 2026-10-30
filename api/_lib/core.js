@@ -320,6 +320,7 @@ const CUSTOMER_SMS = { // short and plain, to fit one message
   approve: o => `${shop()}: your prescription for ${o.id} is approved. Pay ${ngn(o.total)} here: ${baseUrl()}/track/${o.id}`,
   info: o => `${shop()}: our pharmacist needs more information about ${o.id}. Please call us or check ${baseUrl()}/track/${o.id}`,
   reject: o => `${shop()}: we couldn't approve the prescription for ${o.id}. You have not been charged. Details: ${baseUrl()}/track/${o.id}`,
+  packed: o => `${shop()}: ${o.id} is packed and sealed. We'll text you when the rider sets off.`,
   dispatched: o => `${shop()}: ${o.id} is on its way${o.rider ? ` with ${String(o.rider).split(" ")[0]}` : ""}.${o.deliveryCode ? ` Give the rider your code ${o.deliveryCode}.` : ""}`,
   delivered: o => `${shop()}: ${o.id} has been delivered. Thank you!`,
   reminder: o => `${shop()}: your order ${o.id} (${ngn(o.total)}) is waiting for payment. Pay here: ${baseUrl()}/track/${o.id}`
@@ -331,24 +332,37 @@ const CUSTOMER_MAIL = {
   approve: o => [`Good news: our pharmacist has approved your prescription for order ${o.id}. The total is ${naira(o.total)}.`, "Open the tracking page below and press Pay now to complete your order."],
   info: o => [`Our pharmacist needs a little more information about order ${o.id}:`, `“${o.note}”`, "Please call or message us, quoting your order number."],
   reject: o => [`Our pharmacist couldn't approve the prescription for order ${o.id}:`, `“${o.note}”`, "You haven't been charged. Please contact us if you have any questions."],
+  packed: o => [`Your order ${o.id} has been packed, checked by our pharmacist and sealed.`, "We'll let you know as soon as the rider sets off.", ...(o.deliveryCode ? [`Keep your delivery code ready: ${o.deliveryCode}`] : [])],
+  receipt: o => [`Here is your receipt for order ${o.id} (${naira(o.total)}), attached as a PDF.`, "You can also download it at any time from your order page."],
   dispatched: o => [`Your order ${o.id} is on its way${o.rider ? ` with our rider ${String(o.rider).split(" ")[0]}` : ""}.`, ...(o.deliveryCode ? [`Please give the rider your delivery code: ${o.deliveryCode}`] : [])],
   reminder: o => [`Your order ${o.id} (${naira(o.total)}) is still waiting for payment.`, "Open your order page below and press Pay now. If you've changed your mind, you can ignore this email."],
   expired: o => [`Your order ${o.id} was cancelled because it wasn't paid in time. You haven't been charged.`, "You're welcome to order again at any time."],
   delivered: o => [`Your order ${o.id} has been delivered. Thank you for choosing ${site().config.business.name}.`]
 };
-const SUBJECT = { reminder: "Your order is waiting for payment", expired: "Order cancelled: not paid", placed: "Order received", paid: "Payment received", approve: "Prescription approved, ready to pay", info: "We need more information", reject: "Prescription not approved", dispatched: "Your order is on its way", delivered: "Your order has been delivered" };
-export async function notifyCustomer(o, event) {
-  const make = CUSTOMER_MAIL[event];
-  if (!make) return;
-  const name = String(o.customer.name || "").split(" ")[0];
-  let attachments;
-  if (event === "paid") { try { attachments = [await receiptPdf(o)]; } catch (e) { console.error("Receipt failed", e); } } // the email still goes without it
-  const subject = `${SUBJECT[event]} · ${o.id}`;
-  const res = await sendEmail(o.customer.email, subject, [`Hello ${name},`, ...make(o), link(`${baseUrl()}/track/${o.id}`, event === "paid" ? "View your order and download your receipt" : "Track your order"),
-    `${site().config.business.name}. Your pathway to health and wellness.`], attachments);
-  if (emailReady()) await recordEmail(o, "customer", subject, res);
+const SUBJECT = { reminder: "Your order is waiting for payment", expired: "Order cancelled: not paid", placed: "Order received", paid: "Payment received", approve: "Prescription approved, ready to pay", packed: "Your order is packed", receipt: "Your receipt", info: "We need more information", reject: "Prescription not approved", dispatched: "Your order is on its way", delivered: "Your order has been delivered" };
+/* The update that fits an order's current step, for "send the update again" on the desk */
+export const UPDATE_FOR = { pending_review: "placed", info_needed: "info", rejected: "reject", awaiting_payment: "reminder", approved_awaiting_payment: "approve",
+  paid: "paid", packed: "packed", out_for_delivery: "dispatched", delivered: "delivered" };
+/* Email and text the customer about an order. Texts follow sms.events in js/config.js, unless staff send one by hand (manual).
+   Returns what happened to each, e.g. { email: { ok: true }, sms: { ok: false, why: "…" } } */
+export async function notifyCustomer(o, event, opts = {}) {
+  const make = CUSTOMER_MAIL[event], out = { email: null, sms: null };
+  if (!make) return out;
+  if (opts.email !== false) {
+    const name = String(o.customer.name || "").split(" ")[0];
+    let attachments;
+    if (["paid", "receipt"].includes(event) || (opts.manual && o.payment && o.payment.status === "paid")) { try { attachments = [await receiptPdf(o)]; } catch (e) { console.error("Receipt failed", e); } } // the email still goes without it
+    const subject = `${SUBJECT[event]} · ${o.id}`;
+    out.email = await sendEmail(o.customer.email, subject, [`Hello ${name},`, ...make(o), ...(attachments && !["paid", "receipt"].includes(event) ? ["Your receipt is attached as a PDF."] : []),
+      link(`${baseUrl()}/track/${o.id}`, attachments ? "View your order and download your receipt" : "Track your order"), `${site().config.business.name}. Your pathway to health and wellness.`], attachments);
+    if (emailReady()) await recordEmail(o, "customer", subject, out.email);
+  }
   const sms = CUSTOMER_SMS[event];
-  if (sms && smsReady() && (site().config.sms || {}).events?.includes(event)) await recordEmail(o, "customer", event, await sendSms(o.customer.phone, sms(o)), "SMS");
+  if (opts.sms !== false && sms) {
+    if (smsReady() && (opts.manual || (site().config.sms || {}).events?.includes(event))) await recordEmail(o, "customer", event, out.sms = await sendSms(o.customer.phone, sms(o)), "SMS");
+    else if (opts.manual) out.sms = { ok: false, why: "SMS isn't set up (TERMII_API_KEY)" };
+  } else if (opts.manual && opts.sms !== false) out.sms = { ok: false, why: "There's no text message for this step" };
+  return out;
 }
 /* Staff alerts carry no health details: just the order number and a link to the desk */
 export async function notifyStaff(o, event) {

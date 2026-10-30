@@ -127,6 +127,16 @@ The shop has a blog at **`/journal`** (*Journal* in the menu and footer, with th
 - **Receipts:** when a payment goes through, the customer's "Payment received" email has the **PDF receipt attached**, plus a link to their order page, where **Download receipt** makes a fresh copy at any time (before payment it's an order summary). Staff can download the same PDF from the Pharmacist Desk. The PDF comes from `js/receipt.js` and shows your business and licence details from `js/config.js`, so fill those in before launch.
 - **How the pharmacy hears about orders:** every new order, payment and message emails `STAFF_EMAIL`, and the Pharmacist Desk refreshes every 10 seconds. When something new arrives it **chimes**, shows what came in ("1 new paid order to pack") and counts waiting orders in the browser tab. Keep `/pharmacist` open on the counter computer during opening hours.
 
+## Receipts and customer updates
+
+- **Customers:** once an order is paid, the order page shows a green **Payment received** box with the amount, date, payment method and Paystack reference, and two buttons:
+  - **Download receipt (PDF)**
+  - **Email it to me**, which sends the PDF to the address on the order (limited to 5 an hour per visitor)
+
+  Before payment, the page offers an order summary PDF instead.
+- **Packed:** when staff press **Mark as packed** (after ticking the packing checklist), the customer is emailed and texted that the order is packed and sealed. The toast on the desk confirms who was told.
+- **Customer updates on the desk:** every order shows the customer's email and phone and the last messages sent (email or SMS, sent or not, and why not). If a customer says they didn't get a message, **Send again** re-sends the update for the order's current step by **Email**, **SMS** or **Both**. Paid orders re-send with the receipt attached. Each re-send is noted on the order record with the staff member's name.
+
 ## Riders and deliveries
 
 - **Delivery codes:** when an order is paid, the customer gets a 4-digit **delivery code** (on their order page, in the payment email and, if SMS is on, by text). They give it to the rider at the door, and the order can only be marked delivered with that code. If there's no code, for example the customer collected in store, staff mark it delivered on the desk with a short note saying why.
@@ -159,7 +169,7 @@ Open **`/pos`** (also `/till`) on the counter computer or a tablet. Staff sign i
   1. Open a Termii account and register a sender ID, for example `Synako`.
   2. Add **TERMII_API_KEY** and **TERMII_SENDER_ID** in the hosting settings. If Termii's dashboard shows you a different API address, also add **TERMII_BASE_URL**.
   3. Optionally add **TERMII_CHANNEL**. `generic` is the default. Use `dnd` so texts also reach numbers on Do-Not-Disturb, once Termii approves your sender ID for it. Termii can also send over WhatsApp if you set that up with them.
-- **Which texts go out:** customers get texts for payment received (with the delivery code), prescription approved (with the pay link), more information needed, not approved, out for delivery, delivered, and the unpaid reminder. Remove any you don't want from `sms.events` in `js/config.js`.
+- **Which texts go out:** customers get texts for payment received (with the delivery code), prescription approved (with the pay link), more information needed, not approved, packed, out for delivery, delivered, and the unpaid reminder. Remove any you don't want from `sms.events` in `js/config.js`.
 - **Texts to the shop:** add **STAFF_SMS** (a phone number) to get a text for every paid order and every prescription to review. This is handy while the order emails aren't set up.
 - **Records:** every text is noted on the order's staff-only record as sent, or with Termii's reason if not.
 - **Without Termii:** the **WhatsApp** buttons on the desk and the rider page work straight away, using the WhatsApp on the phone in hand.

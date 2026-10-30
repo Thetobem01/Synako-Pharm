@@ -1,4 +1,4 @@
-import { handle, only, send, body, query, fail, requireStaff, db, log, STATUS, notifyCustomer, checkDeliveryCode, limit } from "../_lib/core.js";
+import { handle, only, send, body, query, fail, requireStaff, db, log, STATUS, notifyCustomer, checkDeliveryCode, limit, UPDATE_FOR } from "../_lib/core.js";
 import { till, syncShop } from "../_lib/pos.js";
 
 const NEXT = { // allowed staff actions by current status
@@ -36,6 +36,7 @@ export default handle(async (req, res) => {
   const o = await db.get("order:" + b.id);
   if (!o) throw fail(404, "Order not found.");
   const action = String(b.action || "");
+  if (action === "notify") return send(res, 200, await resend(req, o, b));
   if (!(NEXT[o.status] || []).includes(action)) throw fail(409, `You can't do that while the order is "${STATUS[o.status]}".`);
   const note = String(b.note || "").trim().slice(0, 500);
   const by = String(b.by || "Pharmacist").trim().slice(0, 60);
@@ -72,6 +73,20 @@ export default handle(async (req, res) => {
   if (action === "packed") { // the parcel leaves the same shelf the till counts; never blocks packing
     try { await syncShop(await till().takeOnline(o.items, by, o.id), by); } catch (e) { console.error("Shelf count not updated", e); }
   }
-  await notifyCustomer(o, action);
-  send(res, 200, { order: Object.assign({}, o, { statusLabel: STATUS[o.status], actions: NEXT[o.status] || [] }) });
+  const sent = await notifyCustomer(o, action);
+  const fresh = (await db.get("order:" + o.id)) || o;
+  send(res, 200, { order: Object.assign({}, fresh, { statusLabel: STATUS[fresh.status], actions: NEXT[fresh.status] || [] }), sent });
 });
+
+/* "Send the update again": the latest update for the order's step, by email, SMS or both, when a customer didn't get it */
+async function resend(req, o, b) {
+  const event = UPDATE_FOR[o.status];
+  if (!event) throw fail(409, `There's no customer update to send while the order is "${STATUS[o.status]}".`);
+  await limit(req, "resend:" + o.id, 6, 600, "That's several updates for this order in a few minutes. Please wait before sending another.");
+  const by = String(b.by || "Staff").trim().slice(0, 60), via = ["email", "sms"].includes(b.via) ? b.via : "both";
+  const sent = await notifyCustomer(o, event, { manual: true, email: via !== "sms", sms: via !== "email" });
+  const fresh = (await db.get("order:" + o.id)) || o;
+  log(fresh, `Update sent again by ${by} (${via === "both" ? "email and SMS" : via === "sms" ? "SMS" : "email"})`, { internal: true });
+  await db.set("order:" + fresh.id, fresh);
+  return { order: Object.assign({}, fresh, { statusLabel: STATUS[fresh.status], actions: NEXT[fresh.status] || [] }), sent };
+}

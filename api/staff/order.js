@@ -1,4 +1,4 @@
-import { handle, only, send, body, query, fail, requireStaff, db, log, STATUS, notifyCustomer, checkDeliveryCode, limit, UPDATE_FOR } from "../_lib/core.js";
+import { handle, only, send, body, query, fail, requireStaff, canDispense, db, log, STATUS, notifyCustomer, checkDeliveryCode, limit, UPDATE_FOR } from "../_lib/core.js";
 import { till, syncShop } from "../_lib/pos.js";
 
 const NEXT = { // allowed staff actions by current status
@@ -21,22 +21,27 @@ const MSG = {
   delivered: "Delivered"
 };
 
+/* Shop staff see the packing and delivery steps; prescription decisions are for pharmacists */
+const actionsFor = (o, me) => (NEXT[o.status] || []).filter(a => canDispense(me) || !["approve", "info", "reject", "resume"].includes(a));
+
 /* GET: full order (with prescription file). POST: pharmacist action. */
 export default handle(async (req, res) => {
   if (!only(req, res, "GET", "POST")) return;
-  requireStaff(req);
+  const me = await requireStaff(req);
   if (req.method === "GET") {
     const { id } = query(req);
     const o = await db.get("order:" + id);
     if (!o) throw fail(404, "Order not found.");
     const file = o.hasFile ? await db.get("rx:" + o.id) : null;
-    return send(res, 200, { order: Object.assign({}, o, { statusLabel: STATUS[o.status], actions: NEXT[o.status] || [] }), file });
+    return send(res, 200, { order: Object.assign({}, o, { statusLabel: STATUS[o.status], actions: actionsFor(o, me) }), file });
   }
   const b = await body(req);
   const o = await db.get("order:" + b.id);
   if (!o) throw fail(404, "Order not found.");
   const action = String(b.action || "");
-  if (action === "notify") return send(res, 200, await resend(req, o, b));
+  if (me.name) b.by = me.name; // an account's own name goes on the record
+  if (action === "notify") return send(res, 200, await resend(req, o, b, me));
+  if (["approve", "info", "reject", "resume"].includes(action) && !canDispense(me)) throw fail(403, "Only a pharmacist can make prescription decisions. Ask a pharmacist to review this order.");
   if (!(NEXT[o.status] || []).includes(action)) throw fail(409, `You can't do that while the order is "${STATUS[o.status]}".`);
   const note = String(b.note || "").trim().slice(0, 500);
   const by = String(b.by || "Pharmacist").trim().slice(0, 60);
@@ -75,11 +80,11 @@ export default handle(async (req, res) => {
   }
   const sent = await notifyCustomer(o, action);
   const fresh = (await db.get("order:" + o.id)) || o;
-  send(res, 200, { order: Object.assign({}, fresh, { statusLabel: STATUS[fresh.status], actions: NEXT[fresh.status] || [] }), sent });
+  send(res, 200, { order: Object.assign({}, fresh, { statusLabel: STATUS[fresh.status], actions: actionsFor(fresh, me) }), sent });
 });
 
 /* "Send the update again": the latest update for the order's step, by email, SMS or both, when a customer didn't get it */
-async function resend(req, o, b) {
+async function resend(req, o, b, me) {
   const event = UPDATE_FOR[o.status];
   if (!event) throw fail(409, `There's no customer update to send while the order is "${STATUS[o.status]}".`);
   await limit(req, "resend:" + o.id, 6, 600, "That's several updates for this order in a few minutes. Please wait before sending another.");
@@ -88,5 +93,5 @@ async function resend(req, o, b) {
   const fresh = (await db.get("order:" + o.id)) || o;
   log(fresh, `Update sent again by ${by} (${via === "both" ? "email and SMS" : via === "sms" ? "SMS" : "email"})`, { internal: true });
   await db.set("order:" + fresh.id, fresh);
-  return { order: Object.assign({}, fresh, { statusLabel: STATUS[fresh.status], actions: NEXT[fresh.status] || [] }), sent };
+  return { order: Object.assign({}, fresh, { statusLabel: STATUS[fresh.status], actions: actionsFor(fresh, me) }), sent };
 }

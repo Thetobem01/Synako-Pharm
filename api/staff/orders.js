@@ -1,7 +1,8 @@
 import crypto from "node:crypto";
-import { handle, only, send, body, query, fail, requireStaff, requireRider, requirePos, posReady, db, site, STATUS, emailReady, paystackReady, smsReady, riderReady, sendEmail, mailFrom, limit, outOfStock, baseUrl,
+import { handle, only, send, body, query, fail, requireStaff, requireRider, requireAdmin, requirePos, tillManager, posReady, db, site, STATUS, emailReady, paystackReady, smsReady, riderReady, sendEmail, mailFrom, limit, outOfStock, baseUrl,
   log, notifyCustomer, checkDeliveryCode, remindUnpaid } from "../_lib/core.js";
 import { allPosts, savePost, hidePost, weekDraft } from "../_lib/journal.js";
+import { team, teamAction, publicAccount, accountById } from "../_lib/staff.js";
 import { posAction, posView } from "../_lib/pos.js";
 import { lowStock, setLow, notifySupply, suppliers, saveSupplier, deleteSupplier, purchaseOrders, createPO, updatePO, shortages, overdue, supplyDigest } from "../_lib/supply.js";
 /* Pharmacist Desk. GET: recent orders and requests, plus site details still missing.
@@ -21,15 +22,16 @@ export default handle(async (req, res) => {
     const reminders = await remindUnpaid();
     return send(res, 200, Object.assign(reminders, { supply: await supplyDigest() }));
   }
-  if (req.method === "GET" && q.view === "rider") { requireRider(req); return send(res, 200, { deliveries: await deliveries() }); }
+  if (req.method === "GET" && q.view === "rider") { await requireRider(req); return send(res, 200, { deliveries: await deliveries() }); }
   const b = req.method === "POST" ? await body(req) : {};
-  if (b.action === "rider-take" || b.action === "rider-delivered") { requireRider(req); return send(res, 200, await riderAction(req, b)); }
-  if (req.method === "GET" && q.view === "pos") { requirePos(req); return send(res, 200, await posView()); }
-  if (/^pos-/.test(String(b.action || ""))) { const role = requirePos(req); return send(res, 200, await posAction(b, role, tellWaitingCustomers)); }
-  requireStaff(req);
+  if (b.action === "rider-take" || b.action === "rider-delivered") { const me = await requireRider(req); return send(res, 200, await riderAction(req, Object.assign({}, b, me.name ? { by: me.name } : {}))); }
+  if (req.method === "GET" && q.view === "pos") { await requirePos(req); return send(res, 200, await posView()); }
+  if (/^pos-/.test(String(b.action || ""))) { const me = await requirePos(req); return send(res, 200, await posAction(Object.assign({}, b, me.name ? { by: me.name } : {}), tillManager(me) ? "staff" : "pos", tellWaitingCustomers)); }
+  const me = await requireStaff(req);
   if (req.method === "GET" && q.view === "supply") return send(res, 200, await supplyView());
   if (req.method === "POST") {
-    const by = String(b.by || "Staff").trim().slice(0, 60);
+    const by = me.name || String(b.by || "Staff").trim().slice(0, 60); // an account's own name; the master password says who in the form
+    if (String(b.action || "").startsWith("team-")) { await requireAdmin(req); return send(res, 200, await teamAction(b, Object.assign({}, me, { name: by }))); }
     if (b.action === "supplier-save") { await saveSupplier(b.supplier || {}); return send(res, 200, await supplyView()); }
     if (b.action === "supplier-delete") { await deleteSupplier(String(b.id || "")); return send(res, 200, await supplyView()); }
     if (b.action === "po-create") { const po = await createPO(b, by); return send(res, 201, Object.assign(await supplyView(), { po })); }
@@ -55,9 +57,9 @@ export default handle(async (req, res) => {
       const out = await outOfStock();
       if (b.out) out.add(p.id); else out.delete(p.id);
       await db.set("stock:out", [...out]);
-      if (b.out) { await setLow(p.id, false); await notifySupply(`Out of stock: ${p.name}`, [`${String(b.by || "Staff").slice(0, 60)} marked ${p.name} (${p.pack}) as out of stock. Customers can't order it until it's back.`, "Add it to a purchase order from the Supply tab."], `OUT OF STOCK: ${p.name}.`); }
+      if (b.out) { await setLow(p.id, false); await notifySupply(`Out of stock: ${p.name}`, [`${by} marked ${p.name} (${p.pack}) as out of stock. Customers can't order it until it's back.`, "Add it to a purchase order from the Supply tab."], `OUT OF STOCK: ${p.name}.`); }
       let told = 0;
-      if (!b.out) told = await tellWaitingCustomers(p, String(b.by || "Staff").slice(0, 60));
+      if (!b.out) told = await tellWaitingCustomers(p, by);
       return send(res, 200, { out: [...out], told });
     }
     if (b.action === "test-email") { // only ever to the shop's own alert inbox
@@ -70,7 +72,7 @@ export default handle(async (req, res) => {
     const r = b.id ? await db.get("req:" + String(b.id)) : null;
     if (!r) throw fail(404, "Request not found.");
     r.status = b.status === "new" ? "new" : "done";
-    r.handledBy = r.status === "done" ? String(b.by || "Staff").trim().slice(0, 60) : "";
+    r.handledBy = r.status === "done" ? by : "";
     r.handledAt = r.status === "done" ? new Date().toISOString() : "";
     await db.set("req:" + r.id, r);
     return send(res, 200, { request: r });
@@ -102,7 +104,8 @@ export default handle(async (req, res) => {
   if (!process.env.CRON_SECRET) setup.push("CRON_SECRET so payment reminders also go out when the desk is closed");
   else if (!process.env.STAFF_EMAIL) setup.push("STAFF_EMAIL for new-order alerts");
   const low = await lowStock();
-  send(res, 200, { orders, requests, missing, setup, sms: smsReady(), low: [...low], out: [...await outOfStock()], posts: await allPosts(), serverTime: new Date().toISOString() });
+  send(res, 200, { orders, requests, missing, setup, sms: smsReady(), low: [...low], out: [...await outOfStock()], posts: await allPosts(), me: me.id ? publicAccount(await accountById(me.id)) : { name: "", role: "admin", roleLabel: "Admin (master password)", master: true },
+    team: me.role === "admin" ? await team() : undefined, serverTime: new Date().toISOString() });
 });
 
 /* When a product is back, email everyone who asked to be told by email; phone-only requests stay on the desk to call */

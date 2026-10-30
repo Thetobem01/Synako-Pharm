@@ -2082,3 +2082,30 @@ select::-ms-expand { display: none; }
 .pd-full .pd-feed { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 28px; }
 .pd-full .pd-feed li:nth-last-child(2):nth-child(odd) button { border-bottom: 0; }
 @media (max-width: 860px) { .pd-full .pd-feed { grid-template-columns: 1fr; } .pd-full .pd-feed li:nth-last-child(2) button { border-bottom: 1px solid var(--dp-color-rule); } }
+
+/* Desk: who is signed in, the Team page and password forms */
+.dk-me { display: flex; gap: .55rem; align-items: flex-start; margin: var(--sp-3) 0 0; padding: .7rem .75rem; border-radius: 10px; background: var(--surface-2); font-size: var(--fs-sm); line-height: 1.35; }
+.dk-me .ic { margin-top: .1rem; flex: none; color: var(--brand); }
+.dk-me .small { color: var(--muted); }
+.team { display: grid; gap: var(--sp-5); padding-bottom: var(--sp-8); }
+.team-head { padding: var(--sp-4) var(--sp-5) var(--sp-3); }
+.team-head p { margin: .25rem 0 0; }
+.team-list { padding: 0; overflow: hidden; }
+.team-list .jtable-wrap { border: 0; border-top: 1px solid var(--line); border-radius: 0; }
+.team-list select { min-height: 38px; font-size: var(--fs-sm); border: 1px solid var(--line-2); border-radius: var(--r-sm); background-color: var(--surface); }
+.team-grid { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: var(--sp-5); align-items: start; }
+.team-grid .f { display: grid; gap: var(--sp-4); padding: var(--sp-5) var(--sp-6); }
+.team-grid .f h2 { display: flex; align-items: center; gap: .5rem; }
+.team-grid .row2 { align-items: end; }
+.team-roles { display: grid; gap: var(--sp-3); padding: var(--sp-5) var(--sp-6); }
+.team-roles .kv dd { margin-bottom: .4rem; }
+.team-pw { gap: .45rem; }
+.team-code { font-size: 1.15rem; letter-spacing: .06em; padding: .1rem .45rem; border-radius: 6px; background: #fff; }
+.team-pw-btns { display: flex; gap: var(--sp-3); align-items: center; margin-top: .25rem; }
+.linkbtn.danger { color: var(--bad); }
+.pwform { display: grid; gap: var(--sp-4); max-width: 640px; padding: var(--sp-5) var(--sp-6); }
+.pwform .row2 { align-items: end; }
+.desk-login .pwform { margin: var(--sp-6) auto; }
+@media (max-width: 1024px) { .team-grid { grid-template-columns: 1fr; } }
+@media (max-width: 560px) { .team-grid .f, .team-roles, .pwform { padding: var(--sp-4); } .team-head { padding: var(--sp-4); } }
+.jtable th { white-space: nowrap; }

@@ -136,6 +136,7 @@ const ICONS = {
   cal: '<path d="M8 2v3"/><path d="M16 2v3"/><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/>',
   card: '<rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/><path d="M6 14h2"/>',
   check: '<path d="M20 6 9 17l-5-5"/>',
+  users: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
   pen: '<path d="M13.4 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7.4"/><path d="M2 6h4"/><path d="M2 10h4"/><path d="M2 14h4"/><path d="M2 18h4"/><path d="M21.378 5.626a1 1 0 1 0-3.004-3.004l-5.01 5.012a2 2 0 0 0-.506.854l-.837 2.87a.5.5 0 0 0 .62.62l2.87-.837a2 2 0 0 0 .854-.506z"/>',
   wine: '<path d="M8 22h8"/><path d="M7 10h10"/><path d="M12 15v7"/><path d="M12 15a5 5 0 0 0 5-5c0-2-.5-4-2-8H9c-1.5 4-2 6-2 8a5 5 0 0 0 5 5Z"/>',
   scale: '<circle cx="12" cy="5" r="3"/><path d="M6.5 8a2 2 0 0 0-1.905 1.46L2.1 18.5A2 2 0 0 0 4 21h16a2 2 0 0 0 1.925-2.54L19.4 9.5A2 2 0 0 0 17.48 8Z"/>',
@@ -224,7 +225,7 @@ const demo = (() => {
     staffLogin: (pw, role) => wait({ token: "demo", role: role === "rider" ? "rider" : "staff" }), // a manager on the till, so voids can be tried
     riderList: () => wait({ deliveries: [...orders.values()].filter(o => ["packed", "out_for_delivery"].includes(o.status)).map(o => ({ id: o.id, status: o.status, statusLabel: LBL[o.status], createdAt: o.createdAt, speedId: o.delivery.speed, speed: o.delivery.label, name: o.customer.name, phone: o.customer.phone, addr: o.delivery.addr, landmark: o.delivery.landmark || "", city: o.delivery.city, state: o.delivery.state, note: o.delivery.note || "", items: o.items.length, total: o.total, idCheck: false, rider: o.rider || "", hasCode: false })) }),
     riderAct: () => Promise.reject(new Error("Riders can't update orders in the design preview.")),
-    staffList: () => wait({ orders: [...orders.values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).map(o => ({ id: o.id, createdAt: o.createdAt, status: o.status, statusLabel: LBL[o.status], rx: o.rx, rxRequest: o.rxRequest, customer: o.customer.name, total: o.total, priced: o.priced, items: o.items.map(i => `${i.qty} × ${i.name}`), speed: o.delivery.label })), requests: reqs, missing: missingDetails(), posts: J.merge(jDemo) }),
+    staffList: () => wait({ orders: [...orders.values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).map(o => ({ id: o.id, createdAt: o.createdAt, status: o.status, statusLabel: LBL[o.status], rx: o.rx, rxRequest: o.rxRequest, customer: o.customer.name, total: o.total, priced: o.priced, items: o.items.map(i => `${i.qty} × ${i.name}`), speed: o.delivery.label })), requests: reqs, missing: missingDetails(), posts: J.merge(jDemo), me: { name: S.staff.name, role: "admin", roleLabel: "Admin (design preview)", master: true }, team: demoTeamList.map(x => Object.assign({}, x)) }),
     weekDraft: () => wait({ draft: J.weekReview([...orders.values()].map(o => ({ createdAt: o.createdAt, status: o.status, rx: o.rx, speed: o.delivery.speed, city: o.delivery.city, state: o.delivery.state, items: o.items.map(i => ({ id: i.id, qty: i.qty })) })), [], P, DEPTS, Date.now(), CFG.site.timezone) }),
     staffOrder: (t, oid) => { const o = orders.get(oid); return wait({ order: full(o), file: o.file || null }); },
     staffAct: (t, b) => {
@@ -247,7 +248,9 @@ const api = {
   payStart: (id, phone) => DEMO ? demo.payStart(id, phone) : call("pay-start", { method: "POST", body: { id, phone } }),
   payVerify: reference => DEMO ? demo.payVerify(reference) : call("pay-verify", { method: "POST", body: { reference } }),
   request: b => DEMO ? demo.request(b) : call("requests", { method: "POST", body: b }),
-  staffLogin: (password, role) => DEMO ? demo.staffLogin(password, role) : call("staff/login", { method: "POST", body: { password, role } }),
+  staffLogin: (password, role, username) => DEMO ? demo.staffLogin(password, role) : call("staff/login", { method: "POST", body: { password, role, username } }),
+  changePassword: (t, current, password) => DEMO ? Promise.resolve({ ok: true }) : call("staff/login", { method: "POST", body: { action: "change-password", current, password }, token: t }),
+  teamAct: (t, b) => DEMO ? demoTeam(b) : call("staff/orders", { method: "POST", body: b, token: t }),
   riderList: t => DEMO ? demo.riderList() : call("staff/orders?view=rider", { token: t }),
   riderAct: (t, b) => DEMO ? demo.riderAct() : call("staff/orders", { method: "POST", body: b, token: t }),
   staffPost: (t, b) => DEMO ? Promise.resolve({ reminded: 0, cancelled: 0 }) : call("staff/orders", { method: "POST", body: b, token: t }),
@@ -1184,12 +1187,13 @@ function vStaff() {
   if (!st.token) return `<div class="wrap desk-login"><form class="f panel" id="staffform" novalidate>
       <h1 class="h2">Pharmacist Desk</h1><p class="muted small">For Synako pharmacy staff only. Sign in to review prescriptions and manage orders.</p>
       ${alertBox(st.err)}
-      <label for="sname">Your name<span class="hint">Recorded against every decision you make.</span><input id="sname" name="sname" required autocomplete="name" value="${esc(st.name)}"></label>
-      <label for="spw">Desk password<input id="spw" name="spw" type="password" required autocomplete="current-password"></label>
+      <label for="sname">Username<span class="hint">Your admin gives you a username and a one-time password. The owner can sign in with their name and the master password.</span><input id="sname" name="sname" required autocomplete="username" autocapitalize="none" spellcheck="false" value="${esc(st.user || "")}"></label>
+      <label for="spw">Password<input id="spw" name="spw" type="password" required autocomplete="current-password"></label>
       <button class="btn btn-primary" type="submit">Sign in</button>
       ${DEMO ? `<p class="small muted">Design preview: any password works.</p>` : ""}</form></div>`;
   const d = st.list;
   if (!d) return `<div class="wrap"><p class="muted" style="padding:2rem 0">Loading the desk…</p></div>`;
+  if (d.me && d.me.mustChange) { $("#staff-stats").innerHTML = ""; return `<div class="wrap desk-login">${alertBox(st.err)}${pwForm(true)}</div>`; }
   const groups = deskGroups(d);
   if (d.out) applyStock(d.out);
   const tab = st.tab || "overview";
@@ -1203,13 +1207,13 @@ function vStaff() {
   const count = { review: groups.review.length, pack: groups.pack.length, pay: groups.pay.length, requests: newMsgs, stock: P.filter(p => p.out).length, supply: shortCount(d), journal: js.fresh.length || (js.todayDone ? 0 : "Post due") };
   const warn = { review: groups.review.some(o => waitMins(o) > 60), pack: d.orders.some(o => o.status === "paid" && waitMins(o) > 60), supply: count.supply > 0, requests: newMsgs > 0, journal: !js.todayDone };
   let n = 0;
-  const navHtml = DESK_NAV.map(([label, items]) => `<p class="dk-nav-label">${label}</p>${items.map(([k, l, ic]) => { n++; return `<button type="button" class="dk-link" data-dtab="${k}"${tab === k ? ' aria-current="page"' : ""}>${icon(ic, "ic sm")}<span>${l}</span>${count[k] ? `<span class="count${warn[k] ? " warn" : ""}">${count[k]}${k === "stock" ? " out" : ""}</span>` : ""}<kbd aria-hidden="true">${n}</kbd></button>`; }).join("")}`).join("");
+  const navHtml = deskNav().map(([label, items]) => `<p class="dk-nav-label">${label}</p>${items.map(([k, l, ic]) => { n++; return `<button type="button" class="dk-link" data-dtab="${k}"${tab === k ? ' aria-current="page"' : ""}>${icon(ic, "ic sm")}<span>${l}</span>${count[k] ? `<span class="count${warn[k] ? " warn" : ""}">${count[k]}${k === "stock" ? " out" : ""}</span>` : ""}${n < 10 ? `<kbd aria-hidden="true">${n}</kbd>` : ""}</button>`; }).join("")}`).join("");
   let [group, title, sub] = DESK_TITLES[tab] || DESK_TITLES.overview;
   if (tab === "overview") { group = "Main dashboard"; title = `${greeting()}, ${esc(String(st.name || "").split(/\s+/).filter(w => w && !/^(pharm|dr|mr|mrs|ms|miss|prof|pst|chief)\.?$/i.test(w))[0] || "team")}.`; sub = overviewSummary(d, groups); }
   const ov = tab === "overview" ? overviewPanel(d, groups, takings, paidToday, day) : null;
   const head = `<header class="dk-head${tab === "overview" ? " is-dash" : ""}"><div><p class="dk-eyebrow">${group}</p><h1 tabindex="-1" id="dk-title">${title}</h1>${sub ? `<p>${sub}</p>` : ""}</div>${tab === "overview" ? overviewActions(d, groups) : ""}</header>`;
   const body = ov ? ov.rest
-    : tab === "supply" ? supplyPanel() : tab === "stock" ? stockPanel() : tab === "requests" ? requestsPanel(d) : tab === "journal" ? journalPanel(d)
+    : tab === "supply" ? supplyPanel() : tab === "stock" ? stockPanel() : tab === "requests" ? requestsPanel(d) : tab === "journal" ? journalPanel(d) : tab === "team" ? (isAdmin() ? teamPanel(d) : `<p class="muted">Only an admin can see the team.</p>`)
     : `<div class="desk${st.sel ? " has-sel" : ""}">
       <div class="queue-wrap">${queueTools(list)}<nav class="queue" id="queue" aria-label="Orders">${queueRows(list)}</nav></div>
       <section class="panel" aria-live="polite">${deskDetail()}</section>
@@ -1225,11 +1229,13 @@ function vStaff() {
         <button class="dk-tool" type="button" data-sound aria-pressed="${soundOn()}">${soundOn() ? `${icon("bell", "ic sm")} Sound on` : `${icon("belloff", "ic sm")} Sound off`}</button>
         <button class="dk-tool" type="button" data-keys>${icon("keys", "ic sm")} Keyboard shortcuts</button>
       </div>
+      ${d.me ? `<p class="dk-me">${icon("users", "ic sm")}<span>Signed in as <b>${esc(d.me.name || st.name || "")}</b><br><span class="small">${esc(d.me.roleLabel || "")}</span></span></p>${d.me.master || DEMO ? "" : `<button class="dk-tool" type="button" data-pwopen>${icon("lock", "ic sm")} Change my password</button>`}` : ""}
       <p class="dk-sync" role="status"><span class="dot" aria-hidden="true"></span>Live · ${st.updated ? `updated ${st.updated.toLocaleTimeString("en-GB")}` : "connecting"}</p>
     </nav>
     <div class="dk-main">
       ${ov ? `<div class="ov-hero2">${head}${ov.flow}</div>` : head}
       ${st.err ? alertBox(st.err) : ""}
+      ${st.pw ? pwForm(false) : ""}
       ${st.mail ? `<div class="notice ${/NOT sent/.test(st.mail) ? "bad" : "info"} small" role="status"><span>${esc(st.mail)}</span></div>` : ""}
       ${body}
       ${ov ? ov.progress : ""}
@@ -1281,7 +1287,8 @@ const DESK_NAV = [
   ["Operations", [["overview", "Overview", "pulse"], ["review", "To review", "rx"], ["pack", "Pack & deliver", "box"], ["pay", "Awaiting payment", "card"], ["done", "Completed", "check"]]],
   ["Customers", [["requests", "Messages & bookings", "chat"]]],
   ["Inventory", [["stock", "Stock", "layers"], ["supply", "Supply", "truck"]]],
-  ["Website", [["journal", "Journal", "pen"]]]
+  ["Website", [["journal", "Journal", "pen"]]],
+  ["Admin", [["team", "Team", "users"]]]
 ];
 const DESK_TABS = DESK_NAV.flatMap(([, items]) => items.map(i => i[0]));
 const DESK_TITLES = {
@@ -1293,6 +1300,7 @@ const DESK_TITLES = {
   requests: ["Customers", "Messages & bookings", "Messages, consultations, wholesale quotes and back-in-stock requests."],
   stock: ["Inventory", "Stock", "Mark products running low or out of stock. Out-of-stock items can't be ordered online."],
   supply: ["Inventory", "Supply", "Shortages, purchase orders to wholesalers, and your wholesaler list."],
+  team: ["Admin", "Team", "Staff accounts. Each person signs in with their own username and password, so the record shows who did what."],
   journal: ["Website", "Journal", "Your daily routine for the shop's journal: a post every day, customer stories, and the week in review."]
 };
 function goDesk(tab, extra) {
@@ -1358,7 +1366,7 @@ function overviewPanel(d, groups, takings, paidToday, day) {
 let cmdkList = [];
 function cmdkItems(q) {
   const st = S.staff, d = st.list, nq = norm(q || "");
-  const sections = DESK_NAV.flatMap(([g, items]) => items.map(([k, l]) => ({ kind: "Section", label: l, sub: g, run: () => goDesk(k) })));
+  const sections = deskNav().flatMap(([g, items]) => items.map(([k, l]) => ({ kind: "Section", label: l, sub: g, run: () => goDesk(k) })));
   const actions = [
     { kind: "Action", label: "Send payment reminders now", run: () => { const b = document.querySelector("[data-remind]"); if (b) sendReminders(b); } },
     { kind: "Action", label: "Create a purchase order", sub: "Supply · Shortages", run: () => goDesk("supply", { sview: "short" }) },
@@ -1502,6 +1510,74 @@ function demoJournal(b) {
   const post = Object.assign({}, p, { id, title: p.title.trim(), body: p.body.trim(), author: p.author || B.name, createdAt: new Date().toISOString() });
   put(post);
   return done({ post, posts: J.merge(jDemo) });
+}
+
+/* ---------- Team: staff accounts (admins only). Each person signs in with their own username; there's no public sign-up ---------- */
+const ROLE_INFO = [["staff", "Shop staff", "Packing, deliveries, messages, stock, supply and the journal. Can't make prescription decisions."],
+  ["pharmacist", "Pharmacist", "The whole desk, including approving prescriptions."],
+  ["admin", "Admin", "Everything, plus this Team page: adding staff and setting passwords."],
+  ["till", "Till", "The till (/pos) only: counter sales, receiving stock and customer records."],
+  ["rider", "Rider", "The rider page only (/rider): deliveries, directions and delivery codes."]];
+const isAdmin = () => !!(S.staff.list && S.staff.list.me && S.staff.list.me.role === "admin") || (DEMO && !!S.staff.token);
+const deskNav = () => DESK_NAV.filter(([g]) => g !== "Admin" || isAdmin());
+function teamStatus(a) {
+  return !a.active ? ["bad", "Switched off"] : !a.ready ? ["warn", "Needs a password"] : a.mustChange ? ["gen", "Waiting for first sign-in"] : ["ok", "Active"];
+}
+function teamPanel(d) {
+  const st = S.staff, list = d.team || [], me = d.me || {}, shown = st.teamPw;
+  const roleSel = a => `<label class="sr" for="tr-${esc(a.id)}">Role for ${esc(a.name)}</label><select id="tr-${esc(a.id)}" data-teamrole="${esc(a.id)}">${ROLE_INFO.map(([k, l]) => `<option value="${k}"${a.role === k ? " selected" : ""}>${l}</option>`).join("")}</select>`;
+  const rows = list.map(a => { const [c, l] = teamStatus(a), self = me.id && me.id === a.id; return `<tr><td><b>${esc(a.name)}</b>${self ? ` <span class="small muted">(you)</span>` : ""}</td><td class="mono small">${esc(a.username)}</td><td>${self ? esc(a.roleLabel) : roleSel(a)}</td><td><span class="tag ${c}">${l}</span></td><td class="small muted">${a.lastLogin ? stamp(a.lastLogin) : "Never"}</td>
+    <td class="jrow-btns"><button class="btn btn-ghost btn-sm" type="button" data-teampw="${esc(a.id)}">${a.ready ? "Reset password" : "Set password"}</button>${self ? "" : `<button class="linkbtn small" type="button" data-teamactive="${esc(a.id)}" data-on="${a.active ? "" : "1"}">${a.active ? "Switch off" : "Switch on"}</button><button class="linkbtn small danger" type="button" data-teamremove="${esc(a.id)}">Remove</button>`}</td></tr>`; }).join("");
+  return `<div class="team">
+    ${shown ? `<div class="notice ok team-pw" role="status"><b>${shown.for ? `${esc(shown.for.name)} can now sign in` : "One-time password ready"}</b>
+      <span>Username <b class="mono">${esc(shown.for ? shown.for.username : "")}</b> · one-time password <b class="mono team-code">${esc(shown.password)}</b></span>
+      <span>Give it to them in person or by phone, not in a group chat. They choose their own password the first time they sign in. It won't be shown again.</span>
+      <div class="team-pw-btns"><button class="btn btn-secondary btn-sm" type="button" data-teamcopy>Copy</button><button class="linkbtn" type="button" data-teamdone>Done</button></div></div>` : ""}
+    <section class="panel team-list" aria-labelledby="tl-h"><div class="team-head"><h2 class="h3" id="tl-h">Staff accounts</h2><p class="small muted">Only an admin can add people. Switching someone off signs them out straight away.</p></div>
+      <div class="jtable-wrap"><table class="jtable"><thead><tr><th scope="col">Name</th><th scope="col">Username</th><th scope="col">Role</th><th scope="col">Status</th><th scope="col">Last sign-in</th><th scope="col"><span class="sr">Actions</span></th></tr></thead><tbody>${rows || `<tr><td colspan="6" class="muted">No accounts yet.</td></tr>`}</tbody></table></div></section>
+    <div class="team-grid">
+      <form class="f panel" id="teamform" novalidate aria-labelledby="ta-h"><h2 class="h3" id="ta-h">${icon("users", "ic")} Add a member of staff</h2>
+        <div class="row2"><label for="tm-name">Full name<input id="tm-name" required maxlength="60" autocomplete="off"></label>
+          <label for="tm-user">Username<span class="hint">Letters and numbers. Leave empty to use their first name.</span><input id="tm-user" maxlength="30" autocomplete="off" autocapitalize="none" spellcheck="false" class="mono"></label></div>
+        <label for="tm-role">Role<select id="tm-role">${ROLE_INFO.map(([k, l]) => `<option value="${k}">${l}</option>`).join("")}</select></label>
+        <button class="btn btn-primary" type="submit">Create account</button></form>
+      <section class="panel team-roles" aria-labelledby="tr-h"><h2 class="h3" id="tr-h">What each role can do</h2><dl class="kv">${ROLE_INFO.map(([, l, t]) => `<dt>${l}</dt><dd>${t}</dd>`).join("")}</dl>
+        <p class="small muted">${me.master ? "You're signed in with the master password. Give yourself an admin account too, so the record shows your name." : "The owner can always sign in with the master password (STAFF_PASSWORD) to recover access."}</p></section>
+    </div>
+  </div>`;
+}
+async function teamCall(b, btn, done) {
+  if (btn) btn.disabled = true;
+  try {
+    const r = await api.teamAct(S.staff.token, b);
+    S.staff.list.team = r.team; if (r.password) S.staff.teamPw = { password: r.password, for: r.for };
+    if (done) toast(done);
+    render.fresh = true; render();
+    return r;
+  } catch (e) { if (e.status === 401) signOut(); else toast(e.message); }
+  finally { if (btn && document.contains(btn)) btn.disabled = false; }
+}
+/* Design preview: a pretend team, nothing is saved */
+const demoTeamList = [{ id: "starter-ogwe", name: "Ogwe", username: "ogwe", role: "staff", roleLabel: "Shop staff", active: true, ready: false }, { id: "starter-kanny", name: "Kanny", username: "kanny", role: "staff", roleLabel: "Shop staff", active: true, ready: false }];
+function demoTeam(b) {
+  const L = demoTeamList, a = L.find(x => x.id === b.id), label = k => (ROLE_INFO.find(r => r[0] === k) || [])[1];
+  let password = "";
+  if (b.action === "team-save" && a) Object.assign(a, { name: b.name, role: b.role, roleLabel: label(b.role) });
+  else if (b.action === "team-save") { const u = String(b.username || b.name.split(/\s+/)[0]).toLowerCase().replace(/[^a-z0-9._-]/g, ""); if (L.some(x => x.username === u)) return Promise.reject(new Error(`The username "${u}" is already taken.`)); L.push({ id: "U" + Date.now(), name: b.name, username: u, role: b.role, roleLabel: label(b.role), active: true, ready: true, mustChange: true }); password = "demo2-pass7"; }
+  else if (b.action === "team-password") { Object.assign(a, { ready: true, mustChange: true }); password = "demo2-pass7"; }
+  else if (b.action === "team-active") a.active = !!b.active;
+  else if (b.action === "team-remove") L.splice(L.indexOf(a), 1);
+  const who = b.action === "team-save" && !a ? L[L.length - 1] : a;
+  return new Promise(ok => setTimeout(() => ok({ team: L.map(x => Object.assign({}, x)), password, for: password ? who : null }), 200));
+}
+function pwForm(forced) {
+  const me = (S.staff.list && S.staff.list.me) || {};
+  return `<form class="f panel pwform" id="pwform" novalidate aria-labelledby="pw-h"><h2 class="h3" id="pw-h">${forced ? `Welcome, ${esc(me.name || "")}. Choose your own password` : "Change my password"}</h2>
+    ${forced ? `<p class="small muted">You signed in with a one-time password. Choose a password only you know before using the desk.</p>` : ""}
+    <label for="pw-cur">${forced ? "One-time password" : "Current password"}<input id="pw-cur" type="password" required autocomplete="current-password"></label>
+    <div class="row2"><label for="pw-new">New password<span class="hint">At least 8 characters.</span><input id="pw-new" type="password" required minlength="8" autocomplete="new-password"></label>
+      <label for="pw-new2">New password again<input id="pw-new2" type="password" required minlength="8" autocomplete="new-password"></label></div>
+    <div class="actions"><button class="btn btn-primary" type="submit">Save password</button>${forced ? `<button class="linkbtn" type="button" id="pw-out">Sign out</button>` : `<button class="linkbtn" type="button" data-pwclose>Cancel</button>`}</div></form>`;
 }
 
 /* ---------- Supply: shortages, purchase orders to wholesalers, suppliers ---------- */
@@ -1828,8 +1904,8 @@ function vRider() {
   if (!r.token) return `<div class="wrap desk-login"><form class="f panel" id="riderform" novalidate>
       <h1 class="h2">Rider sign-in</h1><p class="muted small">For Synako delivery riders. See the deliveries that are ready, call or WhatsApp customers, get directions and confirm each delivery with the customer's code.</p>
       ${alertBox(r.err)}
-      <label for="rname">Your name<span class="hint">Customers are told who is bringing their order.</span><input id="rname" name="rname" required autocomplete="name" value="${esc(r.name)}"></label>
-      <label for="rpw">Rider password<span class="hint">Ask the pharmacy for it.</span><input id="rpw" name="rpw" type="password" required autocomplete="current-password"></label>
+      <label for="rname">Your username or name<span class="hint">Customers are told who is bringing their order.</span><input id="rname" name="rname" required autocomplete="username" autocapitalize="none" value="${esc(r.name)}"></label>
+      <label for="rpw">Password<span class="hint">Your own password, or the shared rider password from the pharmacy.</span><input id="rpw" name="rpw" type="password" required autocomplete="current-password"></label>
       <button class="btn btn-primary" type="submit">Sign in</button></form></div>`;
   if (!r.list) return `<div class="wrap"><p class="muted" style="padding:2rem 0">Loading deliveries…</p></div>`;
   const by = (a, b) => ((URGENCY[a.speedId] ?? 9) - (URGENCY[b.speedId] ?? 9)) || (Date.parse(a.createdAt) - Date.parse(b.createdAt));
@@ -2227,8 +2303,8 @@ function vPos() {
   if (!p.token) return `<div class="wrap desk-login"><form class="f panel" id="posform" novalidate>
       <h1 class="h2">Till sign-in</h1><p class="muted small">For Synako counter staff. Sell at the counter, receive stock, update shelf prices and look after customer records.</p>
       ${alertBox(p.err)}
-      <label for="pname">Your name<span class="hint">Printed on receipts and recorded against every sale.</span><input id="pname" name="pname" required autocomplete="name" value="${esc(p.name)}"></label>
-      <label for="ppw">Till password<span class="hint">Ask the pharmacy manager. The desk password works too, and lets you void sales.</span><input id="ppw" name="ppw" type="password" required autocomplete="current-password"></label>
+      <label for="pname">Your username or name<span class="hint">Printed on receipts and recorded against every sale.</span><input id="pname" name="pname" required autocomplete="username" autocapitalize="none" value="${esc(p.name)}"></label>
+      <label for="ppw">Password<span class="hint">Your own password, or the shared till password. Admins and pharmacists can void sales.</span><input id="ppw" name="ppw" type="password" required autocomplete="current-password"></label>
       <button class="btn btn-primary" type="submit">Open the till</button>
       ${DEMO ? `<p class="small muted">Design preview: any password works, with sample sales.</p>` : ""}</form></div>`;
   if (!p.data) return `<div class="wrap"><p class="muted" style="padding:2rem 0">${p.err ? esc(p.err) : "Opening the till…"}</p></div>`;
@@ -2346,6 +2422,7 @@ function deskDetail() {
         <div class="checks">${auto.map(c => `<div class="small" style="display:flex;gap:.5rem;align-items:center">${c.ok ? `<span class="tag ok">Pass</span>` : `<span class="tag bad">Check</span>`}<span>${c.l}</span></div>`).join("")}</div>
       </div>` : ""}
     </div>
+    ${o.status === "pending_review" && !A.includes("approve") ? `<div class="notice info small"><span>A pharmacist needs to review this prescription. It will move to packing once it's approved and paid.</span></div>` : ""}
     ${A.length ? `<form class="f" id="actform" novalidate>
       ${reviewing ? `<fieldset><legend>Pharmacist confirms</legend>
         <label class="check"><input type="checkbox" id="c1" required><span>Prescriber verified against the MDCN or relevant council register</span></label>
@@ -2869,6 +2946,14 @@ document.addEventListener("click", e => {
   if ("receipt" in d) { if (S.track) downloadReceipt(S.track, t); return; }
   if ("emailreceipt" in d) { emailReceipt(t); return; }
   if (d.notify) { notifyAgain(d.notify, t); return; }
+  if (d.teampw) { const a = (S.staff.list.team || []).find(x => x.id === d.teampw); if (a && (!a.ready || confirm(`Make a new one-time password for ${a.name}? Their current password stops working.`))) teamCall({ action: "team-password", id: a.id }, t); return; }
+  if (d.teamactive) { teamCall({ action: "team-active", id: d.teamactive, active: !!d.on }, t, d.on ? "Account switched on." : "Account switched off. They're signed out."); return; }
+  if (d.teamremove) { const a = (S.staff.list.team || []).find(x => x.id === d.teamremove); if (a && confirm(`Remove ${a.name}'s account? They won't be able to sign in.`)) teamCall({ action: "team-remove", id: a.id }, t, "Account removed."); return; }
+  if ("teamdone" in d) { S.staff.teamPw = null; render(); return; }
+  if ("teamcopy" in d) { const p = S.staff.teamPw; if (p) navigator.clipboard.writeText(p.password).then(() => toast("Copied."), () => toast(p.password)); return; }
+  if ("pwopen" in d) { S.staff.pw = true; render.fresh = true; render(); const c = $("#pw-cur"); if (c) c.focus(); return; }
+  if ("pwclose" in d) { S.staff.pw = false; render(); return; }
+  if (t.id === "pw-out") { signOut(); return; }
   if ("dreceipt" in d) { if (S.staff.detail) downloadReceipt(S.staff.detail, t); return; }
   if (d.req) { markRequest(d.req, d.st); return; }
   if ("testmail" in d) { testEmail(t); return; }
@@ -2936,6 +3021,7 @@ document.addEventListener("change", async e => {
   if (t.id === "sort") { S.sort = t.value; render(); return; }
   if (t.id === "sh-all") { const st = S.staff, sel = st.shsel || (st.shsel = {}), q = norm(st.shq || ""), f = st.shf || ""; (st.supply.shortages || []).filter(x => (!f || (f === "open" ? !x.onOrder.length : x.state === f)) && (!q || norm(x.name + " " + x.pack).includes(q))).forEach(x => { sel[x.id] = t.checked; }); render(); return; }
   if (t.id === "po-sup") { S.staff.poSup = t.value; render(); return; }
+  if (t.dataset && t.dataset.teamrole) { const a = (S.staff.list.team || []).find(x => x.id === t.dataset.teamrole); if (a) teamCall({ action: "team-save", id: a.id, name: a.name, role: t.value }, null, `${a.name} is now ${(ROLE_INFO.find(r => r[0] === t.value) || [])[1]}.`); return; }
   if (t.dataset && t.dataset.shsel) { const sel = S.staff.shsel || (S.staff.shsel = {}); sel[t.dataset.shsel] = t.checked; render(); return; }
   if (t.dataset && t.dataset.pack) {
     const id = t.dataset.pack, n = Number(t.dataset.n), p = S.staff.packed || (S.staff.packed = {}), l = p[id] || (p[id] = []);
@@ -2996,9 +3082,28 @@ document.addEventListener("submit", async e => {
   }
   if (f.id === "staffform") {
     if (!f.reportValidity()) return;
-    S.staff.name = f.sname.value.trim(); store.sset("synako.staffName", S.staff.name);
-    try { const { token } = await api.staffLogin(f.spw.value); S.staff.token = token; S.staff.err = ""; store.sset("synako.staff", token); render.fresh = true; render(); loadDesk(); }
+    const typed = f.sname.value.trim();
+    try {
+      const r = await api.staffLogin(f.spw.value, undefined, typed);
+      S.staff.user = typed; S.staff.name = r.name || typed; store.sset("synako.staffName", S.staff.name);
+      S.staff.token = r.token; S.staff.err = ""; S.staff.tab = "overview"; store.sset("synako.staff", r.token); render.fresh = true; render(); loadDesk();
+    }
     catch (er) { S.staff.err = er.message; render(); }
+    return;
+  }
+  if (f.id === "teamform") {
+    if (!f.reportValidity()) return;
+    const r = await teamCall({ action: "team-save", name: $("#tm-name").value.trim(), username: $("#tm-user").value.trim(), role: $("#tm-role").value }, f.querySelector("[type=submit]"));
+    if (r) { const el = $(".team-pw"); if (el) el.scrollIntoView({ block: "center" }); }
+    return;
+  }
+  if (f.id === "pwform") {
+    if (!f.reportValidity()) return;
+    const cur = $("#pw-cur").value, next = $("#pw-new").value;
+    if (next !== $("#pw-new2").value) { const n2 = $("#pw-new2"); n2.setCustomValidity("The two new passwords don't match."); n2.reportValidity(); n2.setCustomValidity(""); return; }
+    const btn = f.querySelector("[type=submit]"); btn.disabled = true;
+    try { await api.changePassword(S.staff.token, cur, next); S.staff.pw = false; S.staff.err = ""; toast("Password saved. Use it next time you sign in."); render.fresh = true; await loadDesk(); }
+    catch (er) { if (er.status === 401) return signOut(); toast(er.message); btn.disabled = false; }
     return;
   }
   if (f.id === "supform") {
@@ -3010,7 +3115,7 @@ document.addEventListener("submit", async e => {
   if (f.id === "posform") {
     if (!f.reportValidity()) return;
     S.pos.name = f.pname.value.trim(); store.set("synako.posName", S.pos.name);
-    try { const { token, role } = await api.staffLogin(f.ppw.value, "pos"); Object.assign(S.pos, { token, role, err: "", tab: "sell" }); store.sset("synako.pos", token); store.sset("synako.posRole", role); render.fresh = true; render(); loadPos(); }
+    try { const { token, role, name } = await api.staffLogin(f.ppw.value, "pos", S.pos.name); if (name) { S.pos.name = name; store.set("synako.posName", name); } Object.assign(S.pos, { token, role, err: "", tab: "sell" }); store.sset("synako.pos", token); store.sset("synako.posRole", role); render.fresh = true; render(); loadPos(); }
     catch (er) { S.pos.err = er.message; render(); }
     return;
   }
@@ -3031,8 +3136,8 @@ document.addEventListener("submit", async e => {
   }
   if (f.id === "riderform") {
     if (!f.reportValidity()) return;
-    S.rider.name = f.rname.value.trim(); store.set("synako.riderName", S.rider.name);
-    try { const { token } = await api.staffLogin(f.rpw.value, "rider"); S.rider.token = token; S.rider.err = ""; store.sset("synako.rider", token); render.fresh = true; render(); loadRider(); }
+    S.rider.name = f.rname.value.trim();
+    try { const { token, name } = await api.staffLogin(f.rpw.value, "rider", S.rider.name); if (name) S.rider.name = name; store.set("synako.riderName", S.rider.name); S.rider.token = token; S.rider.err = ""; store.sset("synako.rider", token); render.fresh = true; render(); loadRider(); }
     catch (er) { S.rider.err = er.message; render(); }
     return;
   }

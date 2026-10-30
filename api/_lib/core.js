@@ -161,21 +161,38 @@ export function checkPosPassword(pw) {
   const a = Buffer.from(String(pw || "")), b = Buffer.from(process.env.POS_PASSWORD || "");
   return a.length === b.length && b.length > 0 && crypto.timingSafeEqual(a, b);
 }
-/* Staff token: "expiry.signature". Rider token: "expiry.rider.signature". Till token: "expiry.pos.signature" */
-export function issueToken(hours = 12, role) { const exp = String(Date.now() + hours * 3600e3), body = role ? `${exp}.${role}` : exp; return body + "." + hmac(body); }
-function tokenRole(req) {
+/* Tokens: "expiry.role.account.signature". The master password (STAFF_PASSWORD) gives "expiry.signature" (an admin with no account),
+   the shared RIDER_PASSWORD "expiry.rider.signature" and the till's POS_PASSWORD "expiry.pos.signature". */
+const TOKEN_ROLES = ["admin", "pharmacist", "staff", "rider", "pos"];
+export function issueToken(hours = 12, role, uid) { const body = [String(Date.now() + hours * 3600e3), role, uid].filter(Boolean).join("."); return body + "." + hmac(body); }
+function tokenInfo(req) {
   const t = (req.headers.authorization || "").replace(/^Bearer\s+/i, "");
   const parts = t.split("."), sig = parts.pop(), body = parts.join(".");
-  if (!SECRET || !parts.length || parts.length > 2 || !sig || Number(parts[0]) < Date.now() || (parts[1] && !["rider", "pos"].includes(parts[1]))) throw fail(401, "Please sign in again.");
+  if (!SECRET || !parts.length || parts.length > 3 || !sig || Number(parts[0]) < Date.now() || (parts[1] && !TOKEN_ROLES.includes(parts[1])) || (parts[2] && !/^[A-Za-z0-9-]+$/.test(parts[2]))) throw fail(401, "Please sign in again.");
   const good = hmac(body);
   if (sig.length !== good.length || !crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(good))) throw fail(401, "Please sign in again.");
-  return parts[1] || "staff";
+  return { role: parts[1] || "admin", uid: parts[2] || "" };
 }
-export function requireStaff(req) { if (tokenRole(req) !== "staff") throw fail(401, "Please sign in again."); }
+/* Who is signed in: { id, name, username, role }. An account that has been switched off or removed stops working at once. */
+async function signedIn(req) {
+  const t = tokenInfo(req);
+  if (!t.uid) return { id: "", name: "", username: "", role: t.role };
+  const acc = await (await import("./staff.js")).accountById(t.uid);
+  if (!acc || acc.active === false || acc.removed) throw fail(401, "Your account has been switched off. Please speak to the pharmacy's admin.");
+  return { id: acc.id, name: acc.name, username: acc.username, role: ["rider", "pos"].includes(t.role) ? t.role : acc.role, mustChange: !!acc.mustChange };
+}
+/* The desk: admins, pharmacists and shop staff (not riders) */
+export async function requireStaff(req) { const me = await signedIn(req); if (["rider", "pos", "till"].includes(me.role)) throw fail(401, "Please sign in again."); return me; }
+export async function requireAdmin(req) { const me = await requireStaff(req); if (me.role !== "admin") throw fail(403, "Only an admin can do that."); return me; }
+/* Prescription decisions need a pharmacist (or an admin) */
+export const canDispense = me => me.role === "admin" || me.role === "pharmacist";
 /* Riders and staff may both use the delivery list */
-export function requireRider(req) { const r = tokenRole(req); if (r === "pos") throw fail(401, "Please sign in again."); return r; }
-/* Staff and the till may both use the counter; returns "staff" or "pos" */
-export function requirePos(req) { const r = tokenRole(req); if (r === "rider") throw fail(401, "Please sign in again."); return r; }
+export async function requireRider(req) { const me = await signedIn(req); if (me.role === "pos") throw fail(401, "Please sign in again."); return me; }
+/* The till: desk staff and till staff (not riders). Managers (admins and pharmacists) may void sales. */
+export async function requirePos(req) { const me = await signedIn(req); if (me.role === "rider") throw fail(401, "Please sign in again."); return me; }
+/* Anyone signed in (desk, rider page or till) */
+export async function requireSignedIn(req) { return signedIn(req); }
+export const tillManager = me => ["admin", "pharmacist"].includes(me.role);
 
 /* ---------- Orders ---------- */
 export function newId(prefix = "SYN") {

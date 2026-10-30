@@ -127,6 +127,25 @@ The shop has a blog at **`/journal`** (*Journal* in the menu and footer, with th
 - **Receipts:** when a payment goes through, the customer's "Payment received" email has the **PDF receipt attached**, plus a link to their order page, where **Download receipt** makes a fresh copy at any time (before payment it's an order summary). Staff can download the same PDF from the Pharmacist Desk. The PDF comes from `js/receipt.js` and shows your business and licence details from `js/config.js`, so fill those in before launch.
 - **How the pharmacy hears about orders:** every new order, payment and message emails `STAFF_EMAIL`, and the Pharmacist Desk refreshes every 10 seconds. When something new arrives it **chimes**, shows what came in ("1 new paid order to pack") and counts waiting orders in the browser tab. Keep `/pharmacist` open on the counter computer during opening hours.
 
+## Staff accounts (Team)
+
+Each member of staff signs in with **their own username and password**, so the order record shows who approved, packed and delivered each order. There is no public sign-up: only an admin can add people.
+
+- **First time:** open `/pharmacist`, type your name as the username and the **master password** (`STAFF_PASSWORD`). This signs you in as an admin. Open **Admin → Team**.
+- **Ogwe and Kanny** are already listed as *Needs a password*. Press **Set password** for each, check their role, and give them the one-time password in person or by phone. They choose their own password the first time they sign in.
+- **Add a member of staff:** full name, username (their first name if left empty) and role, then **Create account**. The one-time password is shown once.
+- **Roles:**
+  - **Shop staff:** packing, deliveries, messages, stock, supply and the journal. They can't approve, reject or query prescriptions.
+  - **Pharmacist:** the whole desk, including prescription decisions.
+  - **Admin:** everything, plus the Team page.
+  - **Till:** the till (`/pos`) only.
+  - **Rider:** the rider page (`/rider`) only.
+
+  Admins and pharmacists are managers on the till, so they can void sales.
+- **Switch off** stops an account at once (even if that person is signed in). **Reset password** gives a new one-time password. **Remove** deletes the account.
+- **Change my password:** in the desk sidebar, for anyone with an account.
+- The master password always works as an admin, to recover access. The shared `RIDER_PASSWORD` and `POS_PASSWORD` still work too, until everyone has an account.
+
 ## Receipts and customer updates
 
 - **Customers:** once an order is paid, the order page shows a green **Payment received** box with the amount, date, payment method and Paystack reference, and two buttons:

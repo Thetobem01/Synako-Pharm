@@ -500,3 +500,68 @@ test("packing tells the customer, staff can send an update again, and customers 
   assert.equal(tracked.payment.status, "paid", "the order page has the payment details for the receipt");
   assert.ok(!tracked.history.some(h => /Email to customer/.test(h.m)), "message records stay staff-only");
 });
+
+test("staff accounts: only an admin adds people, each signs in with their own password, roles limit what they can do", async () => {
+  const master = (await api("staff/login", { body: { password: "desk", username: "Owner" }, headers: ip(41) })).json;
+  assert.equal(master.role, "admin", "the master password opens the desk as an admin");
+  const desk = (await api("staff/orders", { token: master.token })).json;
+  assert.ok(desk.me.master);
+  assert.ok(["ogwe", "kanny"].every(u => desk.team.some(a => a.username === u && !a.ready)), "Ogwe and Kanny are listed, waiting for a password");
+
+  // Kanny gets a one-time password, then must choose her own
+  const kanny = desk.team.find(a => a.username === "kanny");
+  const set = await api("staff/orders", { token: master.token, body: { action: "team-password", id: kanny.id } });
+  assert.equal(set.status, 200);
+  assert.match(set.json.password, /^[a-z0-9]{5}-[a-z0-9]{5}$/);
+  const k = (await api("staff/login", { body: { username: "Kanny", password: set.json.password }, headers: ip(42) })).json;
+  assert.equal(k.role, "staff"); assert.equal(k.name, "Kanny"); assert.equal(k.mustChange, true);
+  const kDesk = (await api("staff/orders", { token: k.token })).json;
+  assert.equal(kDesk.me.username, "kanny"); assert.equal(kDesk.team, undefined, "only admins see the team");
+  assert.equal((await api("staff/orders", { token: k.token, body: { action: "team-save", name: "Sneaky", role: "admin" } })).status, 403, "shop staff can't add accounts");
+  assert.equal((await api("staff/login", { token: k.token, body: { action: "change-password", current: "wrong-one", password: "kanny-secret-1" }, headers: ip(42) })).status, 400);
+  assert.equal((await api("staff/login", { token: k.token, body: { action: "change-password", current: set.json.password, password: "kanny-secret-1" }, headers: ip(42) })).status, 200);
+  assert.equal((await api("staff/login", { body: { username: "kanny", password: set.json.password }, headers: ip(43) })).status, 401, "the one-time password stops working");
+  const k2 = (await api("staff/login", { body: { username: "kanny", password: "kanny-secret-1" }, headers: ip(43) })).json;
+  assert.equal(k2.mustChange, false);
+
+  // Shop staff can't make prescription decisions; their name goes on the record
+  const prescription = { pname: "Dr K. Eze", preg: "MDCN 123", pphone: "0800 000 0001", pclinic: "Test Clinic", pdate: today, file: { name: "rx.png", data: tinyPng } };
+  const rx = (await api("orders", { body: { items: [{ id: "amox", q: 1 }], customer, delivery, consent: true, prescription }, headers: ip(44) })).json.order;
+  assert.deepEqual((await api("staff/order?id=" + rx.id, { token: k2.token })).json.order.actions, [], "no approve button for shop staff");
+  assert.equal((await api("staff/order", { token: k2.token, body: { id: rx.id, action: "approve" } })).status, 403);
+
+  // A new pharmacist account, made by the admin
+  const made = await api("staff/orders", { token: master.token, body: { action: "team-save", name: "Ogwe Pharm", username: "ogwe.p", role: "pharmacist" } });
+  assert.equal(made.json.for.username, "ogwe.p");
+  assert.equal((await api("staff/orders", { token: master.token, body: { action: "team-save", name: "Copy", username: "ogwe.p" } })).status, 409, "usernames are unique");
+  const p = (await api("staff/login", { body: { username: "ogwe.p", password: made.json.password }, headers: ip(45) })).json;
+  const ok = await api("staff/order", { token: p.token, body: { id: rx.id, action: "approve", by: "Someone else" } });
+  assert.equal(ok.status, 200, "a pharmacist can approve");
+  assert.ok(ok.json.order.history.some(h => h.internal && /approved by pharmacist · payment link ready by Ogwe Pharm/.test(h.m)), "the record uses the account's name, not what the browser sent");
+
+  // Switching an account off signs it out at once
+  await api("staff/orders", { token: master.token, body: { action: "team-active", id: kanny.id, active: false } });
+  assert.equal((await api("staff/orders", { token: k2.token })).status, 401);
+  assert.equal((await api("staff/login", { body: { username: "kanny", password: "kanny-secret-1" }, headers: ip(46) })).status, 403);
+  // Rider accounts open the rider page only
+  const rid = await api("staff/orders", { token: master.token, body: { action: "team-save", name: "Musa Rider", username: "musa", role: "rider" } });
+  assert.equal((await api("staff/login", { body: { username: "musa", password: rid.json.password }, headers: ip(47) })).status, 403, "riders can't open the desk");
+  const r = (await api("staff/login", { body: { username: "musa", password: rid.json.password, role: "rider" }, headers: ip(47) })).json;
+  assert.equal(r.role, "rider"); assert.equal(r.name, "Musa Rider");
+  assert.equal((await api("staff/orders?view=rider", { token: r.token })).status, 200);
+  assert.equal((await api("staff/orders", { token: r.token })).status, 401);
+});
+
+test("staff accounts on the till: till staff sell, managers void, nobody else opens the desk", async () => {
+  const master = (await api("staff/login", { body: { password: "desk", username: "Owner" }, headers: ip(51) })).json;
+  const made = await api("staff/orders", { token: master.token, body: { action: "team-save", name: "Ada Counter", username: "ada.c", role: "till" } });
+  assert.equal(made.status, 200);
+  assert.equal((await api("staff/login", { body: { username: "ada.c", password: made.json.password }, headers: ip(52) })).status, 403, "till accounts can't open the desk");
+  const t = (await api("staff/login", { body: { username: "ada.c", password: made.json.password, role: "pos" }, headers: ip(52) })).json;
+  assert.equal(t.role, "pos"); assert.equal(t.name, "Ada Counter");
+  assert.equal((await api("staff/orders?view=pos", { token: t.token })).status, 200, "the till opens");
+  assert.equal((await api("staff/orders", { token: t.token })).status, 401, "the desk doesn't");
+  const ph = await api("staff/orders", { token: master.token, body: { action: "team-save", name: "Pharm Bayo", username: "bayo", role: "pharmacist" } });
+  const m = (await api("staff/login", { body: { username: "bayo", password: ph.json.password, role: "pos" }, headers: ip(53) })).json;
+  assert.equal(m.role, "staff", "pharmacists are managers on the till (they can void sales)");
+});

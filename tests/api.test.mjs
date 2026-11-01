@@ -523,6 +523,7 @@ test("staff accounts: only an admin adds people, each signs in with their own pa
   assert.equal((await api("staff/login", { body: { username: "kanny", password: set.json.password }, headers: ip(43) })).status, 401, "the one-time password stops working");
   const k2 = (await api("staff/login", { body: { username: "kanny", password: "kanny-secret-1" }, headers: ip(43) })).json;
   assert.equal(k2.mustChange, false);
+  assert.ok((await api("staff/orders", { token: master.token })).json.team.find(a => a.username === "kanny").lastLogin, "the team page shows when someone last signed in");
 
   // Shop staff can't make prescription decisions; their name goes on the record
   const prescription = { pname: "Dr K. Eze", preg: "MDCN 123", pphone: "0800 000 0001", pclinic: "Test Clinic", pdate: today, file: { name: "rx.png", data: tinyPng } };

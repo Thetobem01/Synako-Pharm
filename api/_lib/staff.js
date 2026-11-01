@@ -58,8 +58,7 @@ export async function signIn(username, pw) {
   const acc = await findAccount(username);
   if (!acc || !matches(acc, pw)) return null;
   if (acc.active === false) throw fail(403, "Your account has been switched off. Please speak to the pharmacy's admin.");
-  const list = (await accounts()).map(a => a.id === acc.id ? Object.assign({}, a, { lastLogin: new Date().toISOString() }) : a);
-  await save(list);
+  await db.set("staff:seen:" + acc.id, new Date().toISOString()); // kept apart, so a sign-in never rewrites the account list
   return acc;
 }
 
@@ -109,6 +108,10 @@ export async function teamAction(b, me) {
   } else throw fail(400, "Unknown team action.");
   await save(list);
   const acc = shown ? list.find(a => a.hash && matches(a, shown)) : null;
-  return { team: (await accounts()).filter(a => !a.removed).map(publicAccount), password: shown, for: acc ? publicAccount(acc) : null };
+  return { team: await team(), password: shown, for: acc ? publicAccount(acc) : null };
 }
-export async function team() { return (await accounts()).filter(a => !a.removed).map(publicAccount); }
+export async function team() {
+  const list = (await accounts()).filter(a => !a.removed);
+  const seen = await Promise.all(list.map(a => a.starter ? null : db.get("staff:seen:" + a.id)));
+  return list.map((a, i) => publicAccount(Object.assign({}, a, seen[i] ? { lastLogin: seen[i] } : {})));
+}

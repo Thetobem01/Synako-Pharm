@@ -403,10 +403,11 @@ export async function paystackVerify(reference) {
   return j.data;
 }
 /* Mark an order paid after checking amount and currency; safe to call twice */
+const PAID_STATES = ["paid", "packed", "out_for_delivery", "delivered"];
 export async function settle(orderId, tx) {
-  const o = await db.get("order:" + orderId);
+  let o = await db.get("order:" + orderId);
   if (!o) throw fail(404, "Order not found.");
-  if (["paid", "packed", "out_for_delivery", "delivered"].includes(o.status)) return o;
+  if (PAID_STATES.includes(o.status)) return o;
   const kobo = Math.round(o.total * 100);
   if (tx.status !== "success") throw fail(402, "The payment didn't go through. You haven't been charged.");
   if (!tx.mock && (Number(tx.amount) !== kobo || tx.currency !== "NGN")) {
@@ -414,6 +415,18 @@ export async function settle(orderId, tx) {
     await db.set("order:" + o.id, o);
     throw fail(409, "The payment amount didn't match your order. Our team will contact you.");
   }
+  // The payment page and Paystack's webhook often confirm the same payment at once. Only one may settle it, or each
+  // would make its own delivery code and the customer could be sent one the order doesn't hold (and get two emails)
+  if (!(await db.once("lock:settle:" + o.id, 60))) {
+    for (let i = 0; i < 24; i++) {
+      await new Promise(r => setTimeout(r, 250));
+      const now = await db.get("order:" + o.id);
+      if (now && PAID_STATES.includes(now.status)) return now;
+    }
+    throw fail(409, "We're still confirming this payment. Please refresh the page in a moment.");
+  }
+  o = (await db.get("order:" + o.id)) || o;
+  if (PAID_STATES.includes(o.status)) return o;
   o.status = "paid";
   o.deliveryCode = o.deliveryCode || newDeliveryCode();
   o.payment = Object.assign(o.payment || {}, { status: "paid", reference: tx.reference, channel: tx.channel, paidAt: tx.paid_at || new Date().toISOString() });

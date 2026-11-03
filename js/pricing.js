@@ -45,7 +45,7 @@
     /* 30-minute delivery: only in the listed towns (before a town is entered, it's shown as possible) */
     const town = s => String(s || "").toLowerCase().replace(/[^a-z]/g, "");
     const inTown = !d.expressCities || !d.expressCities.length || !input.city || d.expressCities.some(c => town(input.city).includes(town(c)));
-    const big = subtotal > d.nextDayThreshold;
+    const big = d.nextDayThreshold > 0 && subtotal > d.nextDayThreshold; // 0 = no large-order limit
     /* Next-day fee by town: the first zone listing the customer's City / LGA, else the standard fee.
        Before a town is entered, the cheapest fee is used and the whole range is shown. */
     const zones = d.nextDayZones || [], zoneFees = zones.map(z => z.fee).concat(d.fees.nextDay);

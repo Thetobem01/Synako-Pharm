@@ -17,7 +17,7 @@ export async function allPosts() { return site().journal.merge(await saved()); }
 /* What the public sees: published posts whose date has come (Nigeria time) */
 export async function livePosts() {
   const J = site().journal, now = today();
-  return J.merge(await saved()).filter(p => J.isLive(p, now)).map(({ id, kind, date, title, body, author }) => ({ id, kind, date, title, body, author }));
+  return J.merge(await saved()).filter(p => J.isLive(p, now)).map(({ id, kind, date, title, body, author, image }) => ({ id, kind, date, title, body, author, image }));
 }
 
 export async function savePost(b, by) {

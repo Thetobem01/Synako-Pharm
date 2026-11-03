@@ -48,7 +48,7 @@
         express: 3000,
         sameDay: 2500,
         nextDay: 4500,            // next day to the far north of the local states (Owo, Akoko, Ikare); nearer towns pay less, see nextDayZones
-        otherStates: 4000
+        otherStates: 6000         // other states, 2–4 working days (interstate courier plus last-mile delivery)
       },
       /* Next-day fee by distance from the pharmacy in Okitipupa to the delivery town (2026 costs: petrol about ₦1,550–1,600 a litre).
          A customer's City / LGA is matched to these towns in order; anywhere else in the local states pays fees.nextDay. */

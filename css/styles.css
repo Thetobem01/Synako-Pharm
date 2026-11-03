@@ -1676,6 +1676,12 @@ body:has(#shell-customer:not([hidden])) {
 .jcard a:focus-visible { outline: none; }
 .jcard:has(a:focus-visible) { outline: 3px solid var(--focus); outline-offset: 2px; }
 .jcard p { margin: 0; }
+.jcard .jimg { width: 100%; height: auto; aspect-ratio: 16 / 9; object-fit: cover; border-radius: calc(var(--r) - 4px); background: var(--surface-2); margin-bottom: .25rem; }
+.jlist:not(.three) .jcard { grid-template-columns: minmax(0, 15rem) minmax(0, 1fr); column-gap: var(--sp-5); }
+.jlist:not(.three) .jcard .jimg { grid-row: 1 / span 3; margin: 0; align-self: start; }
+.jhero { margin: 0; max-width: 72ch; }
+.jhero img { display: block; width: 100%; height: auto; aspect-ratio: 16 / 9; object-fit: cover; border-radius: var(--r); background: var(--surface-2); }
+@media (max-width: 560px) { .jlist:not(.three) .jcard { grid-template-columns: 1fr; } .jlist:not(.three) .jcard .jimg { grid-row: auto; margin-bottom: .25rem; } }
 .jmeta { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem; margin: 0; font-size: var(--fs-sm); color: var(--muted); }
 .tag.jk { background: var(--brand-50); color: var(--brand-700); }
 .tag.jk-week { background: var(--ok-bg); color: var(--ok); }

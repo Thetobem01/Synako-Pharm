@@ -6,17 +6,19 @@
 (function (root) {
   "use strict";
   const KINDS = {
-    diary: { name: "Pharmacy diary", short: "Diary" },
-    week: { name: "Week in review", short: "Week in review" },
-    orders: { name: "Orders & delivery", short: "Orders" },
-    story: { name: "Customer stories", short: "Story" },
-    tip: { name: "Health tips", short: "Health tip" }
+    diary: { name: "Pharmacy diary", short: "Diary", image: "assets/journal/kind-diary.webp" },
+    week: { name: "Week in review", short: "Week in review", image: "assets/journal/kind-week.webp" },
+    orders: { name: "Orders & delivery", short: "Orders", image: "assets/journal/kind-orders.webp" },
+    story: { name: "Customer stories", short: "Story", image: "assets/journal/kind-story.webp" },
+    tip: { name: "Health tips", short: "Health tip", image: "assets/journal/kind-tip.webp" }
   };
+  /* Each post's picture (AI-generated scenes of everyday life in Nigeria): its own, or one for its kind */
+  const imageFor = p => (p && p.image) || (KINDS[p && p.kind] || KINDS.diary).image;
 
   /* Posts publish on their date (Nigeria time). Write with blank lines between paragraphs,
      "## " for a subheading, "- " for a list item and [words](/path) for a link inside the shop. */
   const STARTER = [
-    { id: "welcome-to-the-synako-journal", kind: "diary", date: "2026-10-29", author: "The Synako team", title: "Welcome to the Synako Journal",
+    { id: "welcome-to-the-synako-journal", image: "assets/journal/welcome-to-the-synako-journal.webp", kind: "diary", date: "2026-10-29", author: "The Synako team", title: "Welcome to the Synako Journal",
       body: `From today, this page is where we tell you what's happening at Synako Pharmacy, every day.
 
 Each day you'll find a short note from the pharmacy: what came in, what our pharmacists are being asked about, and anything you should know before you order. At the end of each week we'll post a week in review: how many orders we packed and delivered, how quickly they reached you, and what people bought most. We never share names, addresses or anyone's medicines.
@@ -30,7 +32,7 @@ Each day you'll find a short note from the pharmacy: what came in, what our phar
 
 If there's something you'd like us to write about, [send us a message](/contact). And if we've delivered to you recently, we'd love to hear how it went.` },
 
-    { id: "how-your-order-reaches-you", kind: "orders", date: "2026-10-30", author: "Synako Pharmacy", title: "From basket to your door: how your order reaches you",
+    { id: "how-your-order-reaches-you", image: "assets/journal/how-your-order-reaches-you.webp", kind: "orders", date: "2026-10-30", author: "Synako Pharmacy", title: "From basket to your door: how your order reaches you",
       body: `Every order placed on this website goes through the same few steps, and you can follow each one on your order page.
 
 ## 1. You place the order
@@ -47,7 +49,7 @@ When the rider sets off you get a message. You'll also have a 4-digit **delivery
 
 You can [track any order](/track) with its number and the last 4 digits of your phone number.` },
 
-    { id: "malaria-as-the-rains-end", kind: "tip", date: "2026-10-31", author: "Synako pharmacists", title: "Health tip: keeping malaria away as the rains end",
+    { id: "malaria-as-the-rains-end", image: "assets/journal/malaria-as-the-rains-end.webp", kind: "tip", date: "2026-10-31", author: "Synako pharmacists", title: "Health tip: keeping malaria away as the rains end",
       body: `Mosquitoes keep breeding in the puddles and containers the rains leave behind, so the end of the rainy season is no time to relax.
 
 ## Protect your home
@@ -62,7 +64,7 @@ You can [track any order](/track) with its number and the last 4 digits of your 
 
 Our pharmacists can advise you on testing and treatment. [Talk to a pharmacist](/contact) for free, or browse [medicines](/products/otc).` },
 
-    { id: "sending-a-prescription-online", kind: "orders", date: "2026-11-01", author: "Synako pharmacists", title: "Sending a prescription online: what our pharmacist checks",
+    { id: "sending-a-prescription-online", image: "assets/journal/sending-a-prescription-online.webp", kind: "orders", date: "2026-11-01", author: "Synako pharmacists", title: "Sending a prescription online: what our pharmacist checks",
       body: `You can send us a prescription from your phone. Here's what happens to it, so you know why we sometimes call you.
 
 ## What we check
@@ -78,7 +80,7 @@ Controlled medicines are never sold online. You can [collect them in store](/con
 
 Ready? [Send a prescription](/prescriptions).` },
 
-    { id: "getting-ready-for-harmattan", kind: "tip", date: "2026-11-02", author: "Synako pharmacists", title: "Health tip: getting ready for harmattan",
+    { id: "getting-ready-for-harmattan", image: "assets/journal/getting-ready-for-harmattan.webp", kind: "tip", date: "2026-11-02", author: "Synako pharmacists", title: "Health tip: getting ready for harmattan",
       body: `The dry, dusty harmattan wind usually arrives between late November and February. A few small habits help your skin, eyes and chest through it.
 
 ## Skin and lips
@@ -96,7 +98,7 @@ Ready? [Send a prescription](/prescriptions).` },
 
 See a doctor if a cough lasts more than three weeks or you're short of breath. You'll find moisturisers and lip care in [personal care](/products/personal-care).` },
 
-    { id: "share-your-experience", kind: "story", date: "2026-11-03", author: "The Synako team", title: "Tell us how we did",
+    { id: "share-your-experience", image: "assets/journal/share-your-experience.webp", kind: "story", date: "2026-11-03", author: "The Synako team", title: "Tell us how we did",
       body: `Every week we read what customers tell us about their orders: how quickly the rider arrived, whether the pharmacist's advice helped, and what we could do better.
 
 With your permission, we'll share some of these stories here, using your first name and town only. We never publish your phone number, your address or what you ordered.
@@ -158,5 +160,5 @@ Thank you to everyone who has ordered from us in our first weeks online.` }
   const isLive = (p, today) => p.status === "published" && p.date <= today;
   const slug = t => String(t || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60);
 
-  root.SYNAKO_JOURNAL = { KINDS, STARTER, weekReview, merge, isLive, slug, lagosDay };
+  root.SYNAKO_JOURNAL = { KINDS, STARTER, imageFor, weekReview, merge, isLive, slug, lagosDay };
 })(typeof window !== "undefined" ? window : globalThis);

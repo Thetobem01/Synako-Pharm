@@ -936,7 +936,8 @@ function jExcerpt(p, n) {
   return s.length > max ? s.slice(0, max).replace(/\s+\S*$/, "") + "…" : s;
 }
 const jMeta = p => `<p class="jmeta"><span class="tag jk jk-${esc(p.kind)}">${esc(jKind(p).short)}</span><time datetime="${esc(p.date)}">${jDate(p.date)}</time></p>`;
-const jCard = (p, h) => `<article class="jcard">${jMeta(p)}<${h || "h2"} class="h3">${link("/journal/" + p.id, esc(p.title))}</${h || "h2"}><p class="small muted">${esc(jExcerpt(p))}</p></article>`;
+const jPic = (p, cls) => `<img class="${cls}" src="${esc(J.imageFor(p))}" alt="" width="1024" height="576" loading="lazy" decoding="async">`;
+const jCard = (p, h) => `<article class="jcard">${jPic(p, "jimg")}${jMeta(p)}<${h || "h2"} class="h3">${link("/journal/" + p.id, esc(p.title))}</${h || "h2"}><p class="small muted">${esc(jExcerpt(p))}</p></article>`;
 function journalTeaser() {
   const list = jPosts().slice(0, 3);
   if (!list.length) return "";
@@ -980,7 +981,7 @@ function vPost(all) {
   const more = all.filter(x => x.id !== p.id).slice(0, 3);
   return `<div class="wrap page-head jhead"><nav class="crumbs" aria-label="Breadcrumb">${link("/", "Home")}<span aria-hidden="true">/</span>${link("/journal", "Journal")}</nav>
     ${jMeta(p)}<h1>${esc(p.title)}</h1><p class="muted small">By ${esc(p.author || B.name)}</p></div>
-  <div class="wrap jpost">
+  <div class="wrap jpost"><figure class="jhero">${jPic(p, "")}</figure>
     <article class="prose jbody">${jBody(p.body)}</article>
     <div class="jpost-foot"><button class="btn btn-ghost btn-sm" type="button" data-jshare>${icon("share", "ic sm")} Share this post</button>${link("/journal", "← All posts", "linkbtn")}</div>
     ${more.length ? `<section class="jmore" aria-labelledby="jmore-h"><h2 id="jmore-h" class="h3">More from the journal</h2><div class="jlist three">${more.map(x => jCard(x, "h3")).join("")}</div></section>` : ""}

@@ -46,6 +46,12 @@
     const town = s => String(s || "").toLowerCase().replace(/[^a-z]/g, "");
     const inTown = !d.expressCities || !d.expressCities.length || !input.city || d.expressCities.some(c => town(input.city).includes(town(c)));
     const big = subtotal > d.nextDayThreshold;
+    /* Next-day fee by town: the first zone listing the customer's City / LGA, else the standard fee.
+       Before a town is entered, the cheapest fee is used and the whole range is shown. */
+    const zones = d.nextDayZones || [], zoneFees = zones.map(z => z.fee).concat(d.fees.nextDay);
+    const zone = input.city && zones.find(z => (z.towns || []).some(t => town(input.city).includes(town(t))));
+    const nextDayFee = zone ? zone.fee : input.city ? d.fees.nextDay : Math.min(...zoneFees);
+    const nextDayRange = zones.length ? [Math.min(...zoneFees), Math.max(...zoneFees)] : "";
     const openNow = isOpen(cfg, date);
     const beforeCutoff = !!today && c.minutes < hm(d.sameDayCutoff);
 
@@ -56,7 +62,7 @@
       { speed: "sameday", label: `Same-day delivery (order before ${fmt12(d.sameDayCutoff)})`, fee: d.fees.sameDay,
         available: local && !big && beforeCutoff,
         reason: big ? "Large orders are delivered the next day." : !local ? "Not available in your state." : !beforeCutoff ? `Order before ${fmt12(d.sameDayCutoff)} for same-day delivery.` : "" },
-      { speed: "nextday", label: "Next-day delivery", fee: d.fees.nextDay, available: local, reason: local ? "" : "Not available in your state." },
+      { speed: "nextday", label: "Next-day delivery", fee: nextDayFee, range: input.city ? "" : nextDayRange, available: local, reason: local ? "" : "Not available in your state." },
       { speed: "states", label: "Delivery to other states (2–4 working days)", fee: d.fees.otherStates, available: !local, reason: local ? "" : "" }
     ].filter(o => local ? o.speed !== "states" : o.speed === "states");
 

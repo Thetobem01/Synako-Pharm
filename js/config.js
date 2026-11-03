@@ -47,9 +47,16 @@
       fees: {                     // ₦ — set your real fees
         express: 3000,
         sameDay: 2500,
-        nextDay: 1500,
+        nextDay: 4500,            // next day to the far north of the local states (Owo, Akoko, Ikare); nearer towns pay less, see nextDayZones
         otherStates: 4000
       },
+      /* Next-day fee by distance from the pharmacy in Okitipupa to the delivery town (2026 costs: petrol about ₦1,550–1,600 a litre).
+         A customer's City / LGA is matched to these towns in order; anywhere else in the local states pays fees.nextDay. */
+      nextDayZones: [
+        { name: "Okitipupa and its LGA", fee: 1500, towns: ["Okitipupa", "Igbotako", "Ode-Aye", "Erinje", "Ilutitun", "Iju-Odo", "Ayeka"] },
+        { name: "Nearby towns", fee: 2500, towns: ["Irele", "Ajagba", "Ode-Irele", "Omi", "Igbokoda", "Ilaje", "Mahin", "Ugbo", "Igbekebo", "Ese-Odo", "Kiribo", "Ore", "Odigbo", "Agbabu", "Sabomi"] },
+        { name: "Central Ondo", fee: 3500, towns: ["Ondo", "Akure", "Idanre", "Ile-Oluji", "Oke-Igbo", "Ifon", "Igbara-Oke", "Ilara-Mokin", "Iju", "Itaogbolu", "Ifedore", "Bolorunduro"] }
+      ],
       freeDeliveryOver: 0,        // ₦ — free same-day / next-day delivery in local states for baskets this size or more; 0 = off
       expressArea: "Okitipupa",   // where 30-minute delivery applies, in words shown to customers
       expressCities: ["Okitipupa"], // towns that get 30-minute delivery (matched to the customer's City / LGA); [] = every local town

@@ -784,7 +784,7 @@ function vCheckout() {
     <label for="dnote">Note for our team (optional)<span class="hint">Sizes (for example, gloves size L), delivery instructions, or a preferred brand.</span><textarea id="dnote" name="note" rows="2" maxlength="300">${v("note")}</textarea></label>
     <fieldset class="pay" id="speeds"><legend>Delivery option</legend>
       ${q.options.map(o => `<label for="sp-${o.speed}" class="${o.available ? "" : "off"}"><input type="radio" id="sp-${o.speed}" name="speed" value="${o.speed}" ${q.speed === o.speed ? "checked" : ""} ${o.available ? "" : "disabled"}>
-        <span><b>${esc(o.label)}</b> · ${NGN(o.fee)}${o.available ? "" : `<span class="why">${esc(o.reason)}</span>`}</span></label>`).join("")}
+        <span><b>${esc(o.label)}</b> · ${o.range ? `${NGN(o.range[0])}–${NGN(o.range[1])}, by town` : NGN(o.fee)}${o.available ? "" : `<span class="why">${esc(o.reason)}</span>`}</span></label>`).join("")}
       ${q.big ? `<p class="small muted">Orders above ${threshold} are delivered the next day.</p>` : ""}
       ${!q.openNow ? `<p class="small muted">We're closed right now (open ${esc(H.label)}). You can still order; we'll start on it when we open.</p>` : ""}
     </fieldset>
@@ -1057,7 +1057,7 @@ const CONTENT = {
     <div class="table-wrap" tabindex="0" role="region" aria-label="Delivery options and fees"><table class="tbl"><caption class="sr">Delivery options and fees</caption><thead><tr><th scope="col">Option</th><th scope="col">When</th><th scope="col">Fee</th></tr></thead><tbody>
       <tr><td>Home delivery in ${D.expressMinutes} minutes</td><td>During opening hours (${esc(H.label)})${has(D.expressArea) ? `, ${esc(D.expressArea)}` : ""}</td><td class="num">${NGN(D.fees.express)}</td></tr>
       <tr><td>Same day</td><td>Orders placed before ${cutoff}, Monday to Saturday</td><td class="num">${NGN(D.fees.sameDay)}</td></tr>
-      <tr><td>Next day</td><td>All other orders, and every order above ${threshold}</td><td class="num">${NGN(D.fees.nextDay)}</td></tr>
+      <tr><td>Next day</td><td>All other orders, and every order above ${threshold}${(D.nextDayZones || []).map(z => `<br><span class="small muted">${esc(z.name)} (${esc(z.towns.slice(0, 4).join(", "))}${z.towns.length > 4 ? "…" : ""}): ${NGN(z.fee)}</span>`).join("")}${(D.nextDayZones || []).length ? `<br><span class="small muted">Elsewhere in ${esc((D.localStates || []).join(", ") || "our area")}: ${NGN(D.fees.nextDay)}</span>` : ""}</td><td class="num">${(D.nextDayZones || []).length ? `${NGN(Math.min(...D.nextDayZones.map(z => z.fee)))}–${NGN(D.fees.nextDay)}` : NGN(D.fees.nextDay)}</td></tr>
       <tr><td>Other states</td><td>2–4 working days</td><td class="num">${NGN(D.fees.otherStates)}</td></tr>
     </tbody></table></div>
     <div class="panel prose"><h2>How we deliver medicines</h2><ul class="olist">

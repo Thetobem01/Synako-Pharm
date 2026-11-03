@@ -141,7 +141,7 @@ test("free delivery over a set amount: local same-day or next-day only", () => {
   cfg.delivery.freeDeliveryOver = para.price * 2;
   const q = (qty, state, speed) => pricing.quote({ items: [{ id: "para", q: qty }], state, city: "Okitipupa", speed }, cfg, P, at("10:00"));
   assert.equal(q(2, "Ondo", "nextday").deliveryFee, 0);
-  assert.equal(q(1, "Ondo", "nextday").deliveryFee, cfg.delivery.fees.nextDay, "below the threshold");
+  assert.equal(q(1, "Ondo", "nextday").deliveryFee, cfg.delivery.nextDayZones[0].fee, "below the threshold");
   assert.equal(q(2, "Ondo", "express").deliveryFee, cfg.delivery.fees.express, "never for 30-minute delivery");
   assert.equal(q(2, "Lagos", "states").deliveryFee, cfg.delivery.fees.otherStates, "never for other states");
 });
@@ -162,4 +162,18 @@ test("the store ships with online ordering switched on", () => {
 test("money is shown in Naira", () => {
   assert.equal(pricing.fmtMoney(1200, config), "₦1,200");
   assert.equal(pricing.fmtMoney(999999.99, config), "₦999,999.99");
+});
+
+test("next-day fee depends on the town, with the range shown before one is entered", () => {
+  const q = city => pricing.quote({ items: [{ id: "para", q: 1 }], state: "Ondo", city, speed: "nextday" }, config, P, at("16:00"));
+  const [near, mid, central] = config.delivery.nextDayZones;
+  assert.equal(q("Okitipupa").deliveryFee, near.fee);
+  assert.equal(q("ode aye").deliveryFee, near.fee, "spacing and case don't matter");
+  assert.equal(q("Igbokoda").deliveryFee, mid.fee);
+  assert.equal(q("Akure").deliveryFee, central.fee);
+  assert.equal(q("Owo").deliveryFee, config.delivery.fees.nextDay, "anywhere else in the state");
+  assert.ok(near.fee < mid.fee && mid.fee < central.fee && central.fee < config.delivery.fees.nextDay, "further costs more");
+  const before = q("").options.find(o => o.speed === "nextday");
+  assert.equal(before.range.join("–"), `${near.fee}–${config.delivery.fees.nextDay}`);
+  assert.equal(q("Akure").options.find(o => o.speed === "nextday").range, "", "no range once the town is known");
 });

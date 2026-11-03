@@ -43,7 +43,7 @@
     delivery: {
       sameDayCutoff: "14:00",     // same-day delivery for orders placed before this time
       expressMinutes: 30,         // home delivery time for express orders
-      nextDayThreshold: 999999.99,// orders ABOVE this (₦) are delivered the next day
+      nextDayThreshold: 0,        // ₦ — orders ABOVE this are delivered the next day only; 0 = no limit
       fees: {                     // ₦ — set your real fees
         express: 3000,
         sameDay: 2500,

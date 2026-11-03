@@ -177,3 +177,11 @@ test("next-day fee depends on the town, with the range shown before one is enter
   assert.equal(before.range.join("–"), `${near.fee}–${config.delivery.fees.nextDay}`);
   assert.equal(q("Akure").options.find(o => o.speed === "nextday").range, "", "no range once the town is known");
 });
+
+test("no large-order limit when the threshold is 0", () => {
+  const cfg = structuredClone(config);
+  cfg.delivery.nextDayThreshold = 0;
+  const q = pricing.quote({ items: [{ id: "para", q: 40 }], state: "Ondo", city: "Okitipupa", speed: "express" }, cfg, P, at("10:00"));
+  assert.equal(q.big, false);
+  assert.equal(q.speed, "express", "big baskets can still have 30-minute delivery");
+});

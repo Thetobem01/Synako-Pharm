@@ -67,6 +67,8 @@ const stamp = d => new Date(d).toLocaleString(CFG.site.locale, { day: "numeric",
 const addressLine = [B.address, B.city, B.state].filter(has).join(", ");
 const cutoff = PR.fmt12(D.sameDayCutoff);
 const threshold = NGN(D.nextDayThreshold);
+const bigLimit = D.nextDayThreshold > 0; // large orders go next day only when a limit is set
+const bigNote = bigLimit ? `${bigNote}` : "";
 /* Where fast delivery applies, for the wording around the site: " in Okitipupa", " within Ondo State" */
 const expressWhere = has(D.expressArea) ? ` in ${D.expressArea}` : "";
 const sameDayWhere = (D.localStates || []).length ? ` within ${D.localStates.join(", ")} State` : "";
@@ -499,7 +501,7 @@ function vHome() {
     </article>
     <article class="feature feature-warm">
       <div class="feature-copy"><p class="eyebrow">Fast delivery</p><h2>Home delivery in ${D.expressMinutes} minutes${esc(expressWhere)}</h2>
-        <p>Tired of waiting in a queue? Too weak to go to the store? We bring your medicines to you. Orders above ${threshold} are delivered the next day.</p>${link("/products", "Order now", "btn btn-primary")}</div>
+        <p>Tired of waiting in a queue? Too weak to go to the store? We bring your medicines to you.${bigNote}</p>${link("/products", "Order now", "btn btn-primary")}</div>
       <div class="feature-photo"><div class="fallback">${icon("truck", "ic huge")}</div>${photo(IMG.delivery, "", "A Synako delivery rider holding parcels")}</div>
     </article>
   </div></section>
@@ -663,7 +665,7 @@ function vProduct() {
         <details open><summary>${med ? "What it's for" : "About this product"}</summary><p>${esc(p.use)}</p></details>
         ${p.how ? `<details><summary>How to use</summary><p>${esc(p.how)}${med ? " Always read the label and patient leaflet." : ""}</p></details>` : ""}
         ${p.warn ? `<details><summary>Warnings</summary><p>${esc(p.warn)}</p></details>` : ""}
-        <details><summary>Delivery</summary><p>Home delivery in ${D.expressMinutes} minutes${esc(expressWhere)} during opening hours, or same-day delivery${esc(sameDayWhere)} for orders placed before ${cutoff}. Orders above ${threshold} are delivered the next day. Other states take 2–4 working days. We deliver within Nigeria only.</p></details>
+        <details><summary>Delivery</summary><p>Home delivery in ${D.expressMinutes} minutes${esc(expressWhere)} during opening hours, or same-day delivery${esc(sameDayWhere)} for orders placed before ${cutoff}.${bigNote} Other states take 2–4 working days. We deliver within Nigeria only.</p></details>
       </div>
       <p class="small muted">Questions about this product, or need a larger quantity? ${link("/contact", "Talk to us", "linkbtn")} or ${link("/wholesale", "request a trade quote", "linkbtn")}.</p>
     </div>
@@ -1049,7 +1051,7 @@ const CONTENT = {
       </aside>
     </div>` }),
   faq: () => ({ title: "Frequently asked questions", lead: "Quick answers about ordering, prescriptions and delivery.", body: `<div class="faq">${FAQ.map(([q, a], i) => `<details ${i === 0 ? "open" : ""}><summary>${esc(q)}</summary><p>${esc(a)}</p></details>`).join("")}
-    <details><summary>How fast is delivery?</summary><p>Home delivery in ${D.expressMinutes} minutes${esc(expressWhere)} during opening hours (${esc(H.label)}), or same-day delivery${esc(sameDayWhere)} for orders placed before ${cutoff}. Orders above ${threshold} are delivered the next day.</p></details>
+    <details><summary>How fast is delivery?</summary><p>Home delivery in ${D.expressMinutes} minutes${esc(expressWhere)} during opening hours (${esc(H.label)}), or same-day delivery${esc(sameDayWhere)} for orders placed before ${cutoff}.${bigNote}</p></details>
     <details><summary>Is pharmacist advice free?</summary><p>Yes, for quick questions: you'll reach a pharmacist in under ${C.freeMinutes} minutes. Longer consultations are by appointment and a fee applies.</p></details>
     <details><summary>How do I pay?</summary><p>Securely through Paystack, by card (Verve, Mastercard, Visa), bank transfer or USSD. For prescription orders you pay after our pharmacist approves the prescription.</p></details></div>
     <p style="margin-top:1.5rem">Can't find your answer? ${link("/contact", "Talk to a pharmacist", "linkbtn")}.</p>` }),
@@ -1057,12 +1059,12 @@ const CONTENT = {
     <div class="table-wrap" tabindex="0" role="region" aria-label="Delivery options and fees"><table class="tbl"><caption class="sr">Delivery options and fees</caption><thead><tr><th scope="col">Option</th><th scope="col">When</th><th scope="col">Fee</th></tr></thead><tbody>
       <tr><td>Home delivery in ${D.expressMinutes} minutes</td><td>During opening hours (${esc(H.label)})${has(D.expressArea) ? `, ${esc(D.expressArea)}` : ""}</td><td class="num">${NGN(D.fees.express)}</td></tr>
       <tr><td>Same day</td><td>Orders placed before ${cutoff}, Monday to Saturday</td><td class="num">${NGN(D.fees.sameDay)}</td></tr>
-      <tr><td>Next day</td><td>All other orders, and every order above ${threshold}${(D.nextDayZones || []).map(z => `<br><span class="small muted">${esc(z.name)} (${esc(z.towns.slice(0, 4).join(", "))}${z.towns.length > 4 ? "…" : ""}): ${NGN(z.fee)}</span>`).join("")}${(D.nextDayZones || []).length ? `<br><span class="small muted">Elsewhere in ${esc((D.localStates || []).join(", ") || "our area")}: ${NGN(D.fees.nextDay)}</span>` : ""}</td><td class="num">${(D.nextDayZones || []).length ? `${NGN(Math.min(...D.nextDayZones.map(z => z.fee)))}–${NGN(D.fees.nextDay)}` : NGN(D.fees.nextDay)}</td></tr>
+      <tr><td>Next day</td><td>All other orders${bigLimit ? `, and every order above ${threshold}` : ""}${(D.nextDayZones || []).map(z => `<br><span class="small muted">${esc(z.name)} (${esc(z.towns.slice(0, 4).join(", "))}${z.towns.length > 4 ? "…" : ""}): ${NGN(z.fee)}</span>`).join("")}${(D.nextDayZones || []).length ? `<br><span class="small muted">Elsewhere in ${esc((D.localStates || []).join(", ") || "our area")}: ${NGN(D.fees.nextDay)}</span>` : ""}</td><td class="num">${(D.nextDayZones || []).length ? `${NGN(Math.min(...D.nextDayZones.map(z => z.fee)))}–${NGN(D.fees.nextDay)}` : NGN(D.fees.nextDay)}</td></tr>
       <tr><td>Other states</td><td>2–4 working days</td><td class="num">${NGN(D.fees.otherStates)}</td></tr>
     </tbody></table></div>
     <div class="panel prose"><h2>How we deliver medicines</h2><ul class="olist">
       <li>Every order is packed and sealed by our pharmacy team and checked by a pharmacist.</li>
-      <li>Orders above ${threshold} are always delivered the next day, so we can prepare and insure them properly.</li>
+      ${bigLimit ? `<li>Orders above ${threshold} are always delivered the next day, so we can prepare and insure them properly.</li>` : ""}
       <li>Medicines that need cool storage travel in insulated packaging and are sent only to areas we can reach in time.</li>
       <li>Our rider may ask for your order number and, for prescription items, to see ID.</li>
       <li>We can't deliver outside Nigeria: the regulations don't allow cross-border online sales of medicines.</li></ul></div>` }),
@@ -1084,7 +1086,7 @@ const CONTENT = {
     <h2>Who can order</h2><p>You must be 18 or over and have a delivery address in Nigeria.</p>
     <h2>Prescriptions and professional checks</h2><p>Prescription-only medicines are supplied only against a valid prescription checked by our pharmacist. Our pharmacists may decline to supply any medicine, or limit quantities, if they believe it isn't safe or appropriate. Controlled medicines are not sold online.</p>
     <h2>Prices and payment</h2><p>Prices are in Naira. Payment is taken through Paystack. For orders with prescription items, payment is taken only after approval.</p>
-    <h2>Delivery</h2><p>Home delivery in ${D.expressMinutes} minutes${esc(expressWhere)} applies during opening hours. Orders above ${threshold} are delivered the next day. See the Delivery page for options and fees.</p>
+    <h2>Delivery</h2><p>Home delivery in ${D.expressMinutes} minutes${esc(expressWhere)} applies during opening hours.${bigNote} See the Delivery page for options and fees.</p>
     <h2>Consultations</h2><p>Quick pharmacist advice of up to ${C.freeMinutes} minutes is free. Longer consultations are by appointment and charged separately.</p>
     <h2>Cancellations and returns</h2><p>You can cancel before your order is packed. See Returns and refunds.</p></div>` }),
   licences: () => ({ title: "Our licences", lead: "Check that you're buying from a registered pharmacy.", body: `

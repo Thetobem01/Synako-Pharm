@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 import { handle, only, send, body, query, fail, requireStaff, requireRider, requireAdmin, requirePos, tillManager, posReady, db, site, STATUS, emailReady, paystackReady, smsReady, riderReady, sendEmail, mailFrom, limit, outOfStock, baseUrl,
-  log, notifyCustomer, checkDeliveryCode, remindUnpaid } from "../_lib/core.js";
+  log, notifyCustomer, checkDeliveryCode, remindUnpaid, updateOrder } from "../_lib/core.js";
 import { allPosts, savePost, hidePost, weekDraft } from "../_lib/journal.js";
 import { team, teamAction, publicAccount, accountById } from "../_lib/staff.js";
 import { posAction, posView } from "../_lib/pos.js";
@@ -146,18 +146,23 @@ async function riderAction(req, b) {
   const by = String(b.by || "Rider").trim().slice(0, 60);
   if (b.action === "rider-take") {
     if (o.status !== "packed") throw fail(409, o.status === "out_for_delivery" ? `${o.rider || "Another rider"} has already taken this delivery.` : "This order isn't ready to collect.");
-    o.status = "out_for_delivery"; o.rider = by;
-    log(o, "Out for delivery"); log(o, `Collected by rider ${by}`, { internal: true });
-    await db.set("order:" + o.id, o);
-    await notifyCustomer(o, "dispatched");
+    // Two riders can tap "Take" at the same moment: only the first write wins, the other is told who has it
+    const { order: taken } = await updateOrder(o.id, x => {
+      if (x.status !== "packed") throw fail(409, x.status === "out_for_delivery" ? `${x.rider || "Another rider"} has already taken this delivery.` : "This order isn't ready to collect.");
+      x.status = "out_for_delivery"; x.rider = by;
+      log(x, "Out for delivery"); log(x, `Collected by rider ${by}`, { internal: true });
+    });
+    await notifyCustomer(taken, "dispatched");
   } else {
     if (o.status !== "out_for_delivery") throw fail(409, "This order isn't out for delivery.");
     await limit(req, "delivery-code", 10, 600, "Too many wrong codes. Please wait a few minutes.");
     if (!checkDeliveryCode(o, b.code)) throw fail(400, "That code isn't right. Ask the customer for the 4-digit code in their SMS, email or order page.");
-    o.status = "delivered"; o.deliveredAt = new Date().toISOString();
-    log(o, "Delivered"); log(o, `Delivered by rider ${by}${o.deliveryCode ? " · delivery code checked" : ""}`, { internal: true });
-    await db.set("order:" + o.id, o);
-    await notifyCustomer(o, "delivered");
+    const { order: done } = await updateOrder(o.id, x => {
+      if (x.status !== "out_for_delivery") throw fail(409, "This order isn't out for delivery.");
+      x.status = "delivered"; x.deliveredAt = new Date().toISOString();
+      log(x, "Delivered"); log(x, `Delivered by rider ${by}${x.deliveryCode ? " · delivery code checked" : ""}`, { internal: true });
+    });
+    await notifyCustomer(done, "delivered");
   }
   return { deliveries: await deliveries() };
 }

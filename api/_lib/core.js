@@ -35,8 +35,10 @@ const mem = globalThis.__synakoMem || (globalThis.__synakoMem = { kv: new Map(),
 
 export const storageReady = () => !!(REDIS_URL && REDIS_TOKEN) || DEV;
 
+/* Dev only: SYNAKO_DEV_LATENCY_MS makes each in-memory call take as long as a trip to Upstash, so tests see real races */
+const DEV_LATENCY = DEV ? Number(process.env.SYNAKO_DEV_LATENCY_MS) || 0 : 0;
 async function redis(cmd) {
-  if (!REDIS_URL) return devRedis(cmd);
+  if (!REDIS_URL) { if (DEV_LATENCY) await new Promise(r => setTimeout(r, DEV_LATENCY)); return devRedis(cmd); }
   const r = await fetch(REDIS_URL, { method: "POST", headers: { Authorization: `Bearer ${REDIS_TOKEN}`, "Content-Type": "application/json" }, body: JSON.stringify(cmd), signal: AbortSignal.timeout(8000) });
   const j = await r.json();
   if (j.error) throw new Error("Storage error: " + j.error);
@@ -59,12 +61,24 @@ function devRedis([op, key, ...a]) { // in-memory stand-in, only when SYNAKO_DEV
     case "EXPIRE": { const t = setTimeout(() => mem.kv.delete(key), Number(a[0]) * 1000); if (t.unref) t.unref(); return 1; }
     case "ZADD": { const z = mem.z.get(key) || new Map(); z.set(a[1], Number(a[0])); mem.z.set(key, z); return 1; }
     case "ZREVRANGE": { const z = [...(mem.z.get(key) || new Map()).entries()].sort((x, y) => y[1] - x[1]).map(e => e[0]); return z.slice(Number(a[0]), Number(a[1]) + 1); }
+    case "EVAL": { // only the compare-and-set script below: EVAL script 1 key old new
+      if (key !== CAS_SCRIPT) throw new Error("Unsupported script");
+      const [, k, old, val] = a, cur = mem.kv.has(k) ? mem.kv.get(k) : null;
+      if (cur !== old) return 0;
+      mem.kv.set(k, val); return 1;
+    }
     default: throw new Error("Unsupported " + op);
   }
 }
+/* Write ARGV[2] only if the key still holds ARGV[1]: one atomic step in Redis, so a read-change-write can't overwrite
+   someone else's change made in between (a payment landing while staff press "Cancel", for example) */
+const CAS_SCRIPT = "if redis.call('GET', KEYS[1]) == ARGV[1] then redis.call('SET', KEYS[1], ARGV[2]) return 1 end return 0";
 export const db = {
   async get(key) { const v = await redis(["GET", key]); return v ? JSON.parse(v) : null; },
   async set(key, val) { return redis(["SET", key, JSON.stringify(val)]); },
+  async raw(key) { return redis(["GET", key]); },
+  /* true if the value was still `old` (the exact stored text) and has now been replaced */
+  async cas(key, old, val) { return Number(await redis(["EVAL", CAS_SCRIPT, "1", key, old, JSON.stringify(val)])) === 1; },
   /* Atomic add to a whole number (counts on the shelf); a missing key starts at 0 */
   async incrBy(key, n) { return Number(await redis(["INCRBY", key, String(Math.round(n))])); },
   /* Several numbers at once; null where a key isn't set */
@@ -241,6 +255,25 @@ export function publicOrder(o) {
 }
 export function log(o, m, extra) { o.history.push(Object.assign({ t: new Date().toISOString(), m }, extra || {})); }
 
+/* Change one order safely. Every change to a stored order goes through here: the payment page, Paystack's webhook,
+   the desk, riders and the reminder job can all touch the same order at once, and a plain read-then-write lets the
+   slower one put back what it read (a paid order back to "awaiting payment", or cancelled after it was paid).
+   mutate(o) gets the latest copy and changes it in place; it may throw to refuse, or return false to leave it alone.
+   If someone else wrote in between, it runs again on their version, so mutate must check the status itself.
+   Returns { order, changed }. */
+export async function updateOrder(id, mutate, tries = 8) {
+  const key = "order:" + id;
+  for (let i = 0; i < tries; i++) {
+    const raw = await db.raw(key);
+    if (!raw) throw fail(404, "Order not found.");
+    const o = JSON.parse(raw);
+    if ((await mutate(o)) === false) return { order: o, changed: false };
+    if (await db.cas(key, raw, o)) return { order: o, changed: true };
+    await new Promise(r => setTimeout(r, 15 + Math.random() * 40 * (i + 1)));
+  }
+  throw fail(409, "This order was being updated by someone else at the same moment. Please refresh and try again.");
+}
+
 /* ---------- Email (optional, via Resend: RESEND_API_KEY, MAIL_FROM, STAFF_EMAIL) ---------- */
 const RESEND_KEY = () => setting("RESEND_API_KEY");
 /* Sender: MAIL_FROM, or orders@ the domain the Resend connection verified */
@@ -286,9 +319,7 @@ export async function sendEmail(to, subject, lines, attachments) {
 /* Writes an email or SMS result onto the order's staff-only record, so the desk shows whether customers were reached */
 async function recordEmail(o, who, subject, res, kind = "Email") {
   try {
-    const fresh = (await db.get("order:" + o.id)) || o;
-    log(fresh, `${kind} to ${who} "${subject}": ${res.ok ? "sent" : "NOT sent · " + res.why}`, { internal: true });
-    await db.set("order:" + o.id, fresh);
+    const { order: fresh } = await updateOrder(o.id, x => { log(x, `${kind} to ${who} "${subject}": ${res.ok ? "sent" : "NOT sent · " + res.why}`, { internal: true }); });
     o.history = fresh.history;
   } catch (e) { console.error("Couldn't record email result", e); }
 }
@@ -411,8 +442,7 @@ export async function settle(orderId, tx) {
   const kobo = Math.round(o.total * 100);
   if (tx.status !== "success") throw fail(402, "The payment didn't go through. You haven't been charged.");
   if (!tx.mock && (Number(tx.amount) !== kobo || tx.currency !== "NGN")) {
-    log(o, `Payment amount mismatch: received ${tx.amount} ${tx.currency}, expected ${kobo} NGN`, { internal: true });
-    await db.set("order:" + o.id, o);
+    await updateOrder(o.id, x => { log(x, `Payment amount mismatch: received ${tx.amount} ${tx.currency}, expected ${kobo} NGN`, { internal: true }); });
     throw fail(409, "The payment amount didn't match your order. Our team will contact you.");
   }
   // The payment page and Paystack's webhook often confirm the same payment at once. Only one may settle it, or each
@@ -425,15 +455,21 @@ export async function settle(orderId, tx) {
     }
     throw fail(409, "We're still confirming this payment. Please refresh the page in a moment.");
   }
-  o = (await db.get("order:" + o.id)) || o;
-  if (PAID_STATES.includes(o.status)) return o;
-  o.status = "paid";
-  o.deliveryCode = o.deliveryCode || newDeliveryCode();
-  o.payment = Object.assign(o.payment || {}, { status: "paid", reference: tx.reference, channel: tx.channel, paidAt: tx.paid_at || new Date().toISOString() });
-  log(o, `Payment received · ${tx.channel || "Paystack"}`);
-  if (o.cancelledUnpaid) log(o, "Paid after it was cancelled for non-payment · order reinstated, please check stock", { internal: true });
-  log(o, "Order recorded for the National Electronic Pharmacy Platform (integration pending)", { internal: true });
-  await db.set("order:" + o.id, o);
+  const code = newDeliveryCode();
+  const r = await updateOrder(o.id, x => {
+    if (PAID_STATES.includes(x.status)) return false;
+    const was = x.status;
+    x.status = "paid";
+    x.deliveryCode = x.deliveryCode || code;
+    x.payment = Object.assign(x.payment || {}, { status: "paid", reference: tx.reference, channel: tx.channel, paidAt: tx.paid_at || new Date().toISOString() });
+    log(x, `Payment received · ${tx.channel || "Paystack"}`);
+    // The money has been taken, so the payment is always recorded; a cancelled order needs a person to decide what happens next
+    if (was === "cancelled") log(x, x.cancelledUnpaid ? "Paid after it was cancelled for non-payment · order reinstated, please check stock"
+      : "Paid after staff cancelled it · check with a pharmacist whether to supply it or refund the customer", { internal: true });
+    log(x, "Order recorded for the National Electronic Pharmacy Platform (integration pending)", { internal: true });
+  });
+  o = r.order;
+  if (!r.changed) return o;
   await notifyCustomer(o, "paid"); await notifyStaff(o, "paid");
   return o;
 }
@@ -445,20 +481,25 @@ export async function remindUnpaid(now = Date.now()) {
   if (!remindH && !cancelH) return done;
   const ids = await db.latest("orders", 300);
   for (const id of ids) {
-    const o = await db.get("order:" + id);
-    if (!o || !["awaiting_payment", "approved_awaiting_payment"].includes(o.status) || o.priced === false) continue;
-    const hours = (now - Date.parse(o.approvedAt || o.createdAt)) / 3600e3;
-    if (cancelH && hours >= cancelH) {
-      o.status = "cancelled"; o.cancelledUnpaid = true;
-      log(o, `Cancelled automatically: not paid within ${cancelH} hours`);
-      await db.set("order:" + o.id, o); done.cancelled++;
-      await notifyCustomer(o, "expired");
-    } else if (remindH && hours >= remindH && !o.reminded) {
-      o.reminded = new Date(now).toISOString();
-      log(o, "Payment reminder sent", { internal: true });
-      await db.set("order:" + o.id, o); done.reminded++;
-      await notifyCustomer(o, "reminder");
-    }
+    let act = "";
+    try {
+      // The checks run on the latest copy at the moment of writing, so an order paid meanwhile is never cancelled
+      const { order: o, changed } = await updateOrder(id, o => {
+        act = "";
+        if (!["awaiting_payment", "approved_awaiting_payment"].includes(o.status) || o.priced === false) return false;
+        const hours = (now - Date.parse(o.approvedAt || o.createdAt)) / 3600e3;
+        if (cancelH && hours >= cancelH) {
+          o.status = "cancelled"; o.cancelledUnpaid = true; act = "expired";
+          log(o, `Cancelled automatically: not paid within ${cancelH} hours`);
+        } else if (remindH && hours >= remindH && !o.reminded) {
+          o.reminded = new Date(now).toISOString(); act = "reminder";
+          log(o, "Payment reminder sent", { internal: true });
+        } else return false;
+      });
+      if (!changed) continue;
+      if (act === "expired") done.cancelled++; else done.reminded++;
+      await notifyCustomer(o, act);
+    } catch (e) { if (e.status !== 404) console.error("Reminder failed for", id, e); } // one bad order mustn't stop the rest
   }
   return done;
 }

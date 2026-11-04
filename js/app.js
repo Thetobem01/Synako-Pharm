@@ -68,7 +68,7 @@ const addressLine = [B.address, B.city, B.state].filter(has).join(", ");
 const cutoff = PR.fmt12(D.sameDayCutoff);
 const threshold = NGN(D.nextDayThreshold);
 const bigLimit = D.nextDayThreshold > 0; // large orders go next day only when a limit is set
-const bigNote = bigLimit ? `${bigNote}` : "";
+const bigNote = bigLimit ? ` Orders above ${threshold} are delivered the next day.` : ""; // follows a full stop in the delivery wording
 /* Where fast delivery applies, for the wording around the site: " in Okitipupa", " within Ondo State" */
 const expressWhere = has(D.expressArea) ? ` in ${D.expressArea}` : "";
 const sameDayWhere = (D.localStates || []).length ? ` within ${D.localStates.join(", ")} State` : "";

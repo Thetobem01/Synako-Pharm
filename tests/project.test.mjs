@@ -67,3 +67,13 @@ test("scheduled jobs point at an existing function and run at most daily (Vercel
     assert.ok(/^\d+$/.test(min) && /^\d+$/.test(hour), `${c.schedule}: Hobby allows one run a day at a fixed time`);
   }
 });
+
+test("app.js has no top-level constant that reads itself while it's being set (a ReferenceError blanks the whole site)", () => {
+  const src = fs.readFileSync(new URL("../js/app.js", import.meta.url), "utf8");
+  const bad = src.split("\n").map((l, i) => [l, i + 1]).filter(([l]) => {
+    const m = /^const (\w+) = (.*)$/.exec(l); if (!m) return false;
+    const init = m[2].split(/;|,\s*\w+\s*=(?!=|>)/)[0]; // just this constant's own value
+    return !init.includes("=>") && new RegExp(`(^|[^\\w.$])${m[1]}([^\\w$]|$)`).test(init); // functions may name themselves
+  });
+  assert.deepEqual(bad.map(([, n]) => n), []);
+});

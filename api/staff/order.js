@@ -1,4 +1,4 @@
-import { handle, only, send, body, query, fail, requireStaff, canDispense, db, log, STATUS, notifyCustomer, checkDeliveryCode, limit, UPDATE_FOR } from "../_lib/core.js";
+import { handle, only, send, body, query, fail, requireStaff, canDispense, db, log, STATUS, notifyCustomer, checkDeliveryCode, limit, UPDATE_FOR, updateOrder } from "../_lib/core.js";
 import { till, syncShop } from "../_lib/pos.js";
 
 const NEXT = { // allowed staff actions by current status
@@ -53,28 +53,33 @@ export default handle(async (req, res) => {
     } else if (!note) throw fail(400, "Enter the customer's delivery code, or add a note saying why there isn't one (for example, collected in store).");
   }
 
-  if (action === "approve") {
-    if (o.rxRequest) {
-      const extra = Number(b.price);
-      if (!(extra > 0)) throw fail(400, "Enter the price for the prescription items.");
-      o.items.push({ id: "rx-request", name: String(b.itemsText || "Prescription items").slice(0, 200), qty: 1, price: extra, total: extra, cls: "pom" });
-      o.subtotal = Math.round((o.subtotal + extra) * 100) / 100;
-      o.total = Math.round((Math.max(0, o.subtotal - (o.discount || 0)) + o.deliveryFee) * 100) / 100;
-      o.priced = true;
-    }
-    o.status = "approved_awaiting_payment";
-    o.approvedAt = new Date().toISOString(); o.reminded = ""; // payment reminders count from approval
-  } else if (action === "info") o.status = "info_needed";
-  else if (action === "reject") o.status = "rejected";
-  else if (action === "resume") o.status = "pending_review";
-  else if (action === "cancel") o.status = "cancelled";
-  else if (action === "packed") o.status = "packed";
-  else if (action === "dispatched") { o.status = "out_for_delivery"; if (b.rider) o.rider = String(b.rider).trim().slice(0, 60); }
-  else if (action === "delivered") o.status = "delivered";
-  o.note = note || o.note || "";
-  log(o, MSG[action]);
-  log(o, `${MSG[action]} by ${by}${o.rider && action === "dispatched" ? ` · rider ${o.rider}` : ""}${action === "delivered" && b.code ? " · delivery code checked" : ""}${note ? ` · “${note}”` : ""}`, { internal: true });
-  await db.set("order:" + o.id, o);
+  // Applied to the latest copy at the moment of writing: if a payment, a rider or another member of staff changed the
+  // order since it was read above, the step is checked again instead of overwriting their change
+  const { order: done } = await updateOrder(o.id, x => {
+    if (!(NEXT[x.status] || []).includes(action)) throw fail(409, `This order changed while you were working on it: it's now "${STATUS[x.status]}". Please refresh.`);
+    if (action === "approve") {
+      if (x.rxRequest) {
+        const extra = Number(b.price);
+        if (!(extra > 0)) throw fail(400, "Enter the price for the prescription items.");
+        x.items.push({ id: "rx-request", name: String(b.itemsText || "Prescription items").slice(0, 200), qty: 1, price: extra, total: extra, cls: "pom" });
+        x.subtotal = Math.round((x.subtotal + extra) * 100) / 100;
+        x.total = Math.round((Math.max(0, x.subtotal - (x.discount || 0)) + x.deliveryFee) * 100) / 100;
+        x.priced = true;
+      }
+      x.status = "approved_awaiting_payment";
+      x.approvedAt = new Date().toISOString(); x.reminded = ""; // payment reminders count from approval
+    } else if (action === "info") x.status = "info_needed";
+    else if (action === "reject") x.status = "rejected";
+    else if (action === "resume") x.status = "pending_review";
+    else if (action === "cancel") x.status = "cancelled";
+    else if (action === "packed") x.status = "packed";
+    else if (action === "dispatched") { x.status = "out_for_delivery"; if (b.rider) x.rider = String(b.rider).trim().slice(0, 60); }
+    else if (action === "delivered") { x.status = "delivered"; x.deliveredAt = new Date().toISOString(); }
+    x.note = note || x.note || "";
+    log(x, MSG[action]);
+    log(x, `${MSG[action]} by ${by}${x.rider && action === "dispatched" ? ` · rider ${x.rider}` : ""}${action === "delivered" && b.code ? " · delivery code checked" : ""}${note ? ` · “${note}”` : ""}`, { internal: true });
+  });
+  Object.assign(o, done);
   if (action === "packed") { // the parcel leaves the same shelf the till counts; never blocks packing
     try { await syncShop(await till().takeOnline(o.items, by, o.id), by); } catch (e) { console.error("Shelf count not updated", e); }
   }
@@ -90,8 +95,6 @@ async function resend(req, o, b, me) {
   await limit(req, "resend:" + o.id, 6, 600, "That's several updates for this order in a few minutes. Please wait before sending another.");
   const by = String(b.by || "Staff").trim().slice(0, 60), via = ["email", "sms"].includes(b.via) ? b.via : "both";
   const sent = await notifyCustomer(o, event, { manual: true, email: via !== "sms", sms: via !== "email" });
-  const fresh = (await db.get("order:" + o.id)) || o;
-  log(fresh, `Update sent again by ${by} (${via === "both" ? "email and SMS" : via === "sms" ? "SMS" : "email"})`, { internal: true });
-  await db.set("order:" + fresh.id, fresh);
+  const { order: fresh } = await updateOrder(o.id, x => { log(x, `Update sent again by ${by} (${via === "both" ? "email and SMS" : via === "sms" ? "SMS" : "email"})`, { internal: true }); });
   return { order: Object.assign({}, fresh, { statusLabel: STATUS[fresh.status], actions: actionsFor(fresh, me) }), sent };
 }

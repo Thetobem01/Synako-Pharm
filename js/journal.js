@@ -6,11 +6,11 @@
 (function (root) {
   "use strict";
   const KINDS = {
-    diary: { name: "Pharmacy diary", short: "Diary", image: "assets/journal/kind-diary.webp" },
-    week: { name: "Week in review", short: "Week in review", image: "assets/journal/kind-week.webp" },
-    orders: { name: "Orders & delivery", short: "Orders", image: "assets/journal/kind-orders.webp" },
-    story: { name: "Customer stories", short: "Story", image: "assets/journal/kind-story.webp" },
-    tip: { name: "Health tips", short: "Health tip", image: "assets/journal/kind-tip.webp" }
+    diary: { name: "Pharmacy diary", short: "Diary", image: "assets/journal/kind-diary-city.webp" },
+    week: { name: "Week in review", short: "Week in review", image: "assets/journal/kind-week-city.webp" },
+    orders: { name: "Orders & delivery", short: "Orders", image: "assets/journal/kind-orders-city.webp" },
+    story: { name: "Customer stories", short: "Story", image: "assets/journal/kind-story-city.webp" },
+    tip: { name: "Health tips", short: "Health tip", image: "assets/journal/kind-tip-city.webp" }
   };
   /* Each post's picture (AI-generated scenes of everyday life in Nigeria): its own, or one for its kind */
   const imageFor = p => (p && p.image) || (KINDS[p && p.kind] || KINDS.diary).image;
@@ -64,7 +64,7 @@ You can [track any order](/track) with its number and the last 4 digits of your 
 
 Our pharmacists can advise you on testing and treatment. [Talk to a pharmacist](/contact) for free, or browse [medicines](/products/otc).` },
 
-    { id: "sending-a-prescription-online", image: "assets/journal/sending-a-prescription-online.webp", kind: "orders", date: "2026-11-01", author: "Synako pharmacists", title: "Sending a prescription online: what our pharmacist checks",
+    { id: "sending-a-prescription-online", image: "assets/journal/sending-a-prescription-online-city.webp", kind: "orders", date: "2026-11-01", author: "Synako pharmacists", title: "Sending a prescription online: what our pharmacist checks",
       body: `You can send us a prescription from your phone. Here's what happens to it, so you know why we sometimes call you.
 
 ## What we check
@@ -80,7 +80,7 @@ Controlled medicines are never sold online. You can [collect them in store](/con
 
 Ready? [Send a prescription](/prescriptions).` },
 
-    { id: "getting-ready-for-harmattan", image: "assets/journal/getting-ready-for-harmattan.webp", kind: "tip", date: "2026-11-02", author: "Synako pharmacists", title: "Health tip: getting ready for harmattan",
+    { id: "getting-ready-for-harmattan", image: "assets/journal/getting-ready-for-harmattan-city.webp", kind: "tip", date: "2026-11-02", author: "Synako pharmacists", title: "Health tip: getting ready for harmattan",
       body: `The dry, dusty harmattan wind usually arrives between late November and February. A few small habits help your skin, eyes and chest through it.
 
 ## Skin and lips
@@ -98,7 +98,7 @@ Ready? [Send a prescription](/prescriptions).` },
 
 See a doctor if a cough lasts more than three weeks or you're short of breath. You'll find moisturisers and lip care in [personal care](/products/personal-care).` },
 
-    { id: "share-your-experience", image: "assets/journal/share-your-experience.webp", kind: "story", date: "2026-11-03", author: "The Synako team", title: "Tell us how we did",
+    { id: "share-your-experience", image: "assets/journal/share-your-experience-city.webp", kind: "story", date: "2026-11-03", author: "The Synako team", title: "Tell us how we did",
       body: `Every week we read what customers tell us about their orders: how quickly the rider arrived, whether the pharmacist's advice helped, and what we could do better.
 
 With your permission, we'll share some of these stories here, using your first name and town only. We never publish your phone number, your address or what you ordered.

@@ -77,3 +77,27 @@ test("app.js has no top-level constant that reads itself while it's being set (a
   });
   assert.deepEqual(bad.map(([, n]) => n), []);
 });
+
+test("every journal post is dated, unique, and links only to pages that exist", async () => {
+  const sandbox = {}; sandbox.window = sandbox;
+  const vm = await import("node:vm"); vm.createContext(sandbox);
+  for (const f of ["js/config.js", "js/data.js", "js/journal.js"]) vm.runInContext(fs.readFileSync(new URL("../" + f, import.meta.url), "utf8"), sandbox);
+  const J = sandbox.SYNAKO_JOURNAL, { P, DEPTS, CATS } = sandbox.SYNAKO, posts = J.STARTER;
+  assert.equal(new Set(posts.map(p => p.id)).size, posts.length, "post ids are unique");
+  const app = fs.readFileSync(new URL("../js/app.js", import.meta.url), "utf8");
+  const pages = JSON.parse(/const PAGES = (\[[^\]]*\])/.exec(app)[1]);
+  const filters = JSON.parse((/const FILTERS = (\[[^\]]*\])/.exec(app) || [, "[]"])[1]);
+  const ok = path => {
+    const [a, b] = path.replace(/^\/|\/$/g, "").split("/");
+    if (a === "product") return P.some(p => p.id === b);
+    if (a === "products") return !b || b === "prescription" || filters.includes(b) || DEPTS.some(d => d.id === b) || CATS.some(c => c.id === b); // as the router in js/app.js
+    if (a === "journal") return !b || posts.some(p => p.id === b);
+    return ["contact", "track", "prescriptions", "controlled-medicines", ...pages].includes(a) && !b;
+  };
+  for (const p of posts) {
+    assert.match(p.date, /^\d{4}-\d{2}-\d{2}$/, p.id);
+    assert.ok(J.KINDS[p.kind], `${p.id}: kind`);
+    for (const [, href] of p.body.matchAll(/\]\(([^)]+)\)/g)) assert.ok(ok(href), `${p.id} links to ${href}, which doesn't exist`);
+    if (p.image) assert.ok(fs.existsSync(new URL("../" + p.image, import.meta.url)), `${p.id}: image ${p.image}`);
+  }
+});

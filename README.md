@@ -113,7 +113,7 @@ The Pharmacist Desk lists any hosting settings that are still missing.
 
 The shop has a blog at **`/journal`** (*Journal* in the menu and footer, with the latest three posts on the home page). It has five kinds of post: **Pharmacy diary** (a short daily note), **Week in review**, **Orders & delivery**, **Customer stories** and **Health tips**.
 
-- **Starter week:** six posts are ready in `js/journal.js`, one a day from 29 October to 3 November 2026. Each goes live on its date (Nigeria time). You can edit or remove any of them from the desk.
+- **Built-in posts:** `js/journal.js` holds a post for every day from 29 October to 18 November 2026: the starter week, then health tips and how-to posts. Each goes live on its own date (Nigeria time), so posts written ahead appear by themselves. You can edit or remove any of them from the desk. Add the next batch before the last date passes, or the journal goes quiet again.
 - **The daily routine** is on the Pharmacist Desk under **Website → Journal** (shortcut `9`). It has:
   - a checklist for today: post today's note, read new customer experiences, and the week in review
   - the next 7 days, with each day's post, so gaps are easy to spot and fill

@@ -1,0 +1,36 @@
+{
+  "task_id": "harness-setup",
+  "goal": "Install guard rails so agents working on Synako stay in scope and cannot commit without a verified receipt.",
+  "branch": "harness-setup",
+  "base": "main@f9c8b2e",
+  "can_read": ["**"],
+  "can_write": [
+    ".claude/**",
+    ".githooks/**",
+    "evals/**",
+    "CLAUDE.md",
+    ".gitignore",
+    ".vercelignore"
+  ],
+  "never_touch": [
+    ".env*",
+    "vercel.json",
+    ".github/workflows/**",
+    "api/**",
+    "js/**",
+    "css/**",
+    "index.html",
+    "tests/**",
+    "package.json"
+  ],
+  "done_when": [
+    "npm run check  -> exit 0",
+    "npm test       -> exit 0, 76/76 pass",
+    "bash evals/harness-dryrun.sh -> exit 0 (every barrier blocks, valid path passes)"
+  ],
+  "budget": { "max_turns": 20 },
+  "decisions": [
+    "Receipt gate enforced on agent/* and claude/* branches only (Tobe's own branches are not gated).",
+    "Hooks written in Node, not jq: Node is already required by the project."
+  ]
+}

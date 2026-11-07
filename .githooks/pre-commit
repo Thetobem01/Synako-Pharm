@@ -1,0 +1,4 @@
+#!/bin/sh
+# Synako harness receipt gate. Enable once per clone with:
+#   git config core.hooksPath .githooks
+exec node "$(git rev-parse --show-toplevel)/.githooks/check-receipt.mjs"

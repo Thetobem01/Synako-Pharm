@@ -621,6 +621,26 @@ form.f { display: grid; gap: var(--sp-4); }
 .review { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-5); }
 .checks { display: grid; gap: var(--sp-2); }
 .rx-img { max-height: 420px; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--surface); }
+/* Prescription on the desk: the preview opens a full-size viewer that zooms and rotates */
+.rx-thumb { position: relative; display: block; width: 100%; padding: 0; border: 0; background: none; cursor: zoom-in; border-radius: var(--r-sm); }
+.rx-thumb .rx-img { display: block; width: 100%; object-fit: contain; }
+.rx-thumb:focus-visible { outline: 3px solid var(--brand); outline-offset: 2px; }
+.rx-hint { position: absolute; right: .5rem; bottom: .5rem; display: inline-flex; gap: .35rem; align-items: center; padding: .3rem .6rem; border-radius: var(--r-pill); background: rgba(13, 20, 36, .78); color: #fff; font-size: .8rem; font-weight: 600; }
+.rx-actions { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: .6rem; }
+body.rxv-open { overflow: hidden; }
+.rxv { position: fixed; inset: 0; z-index: 80; display: flex; flex-direction: column; background: rgba(8, 13, 24, .94); color: #fff; }
+.rxv-bar { display: flex; flex-wrap: wrap; gap: .5rem 1rem; align-items: center; justify-content: space-between; padding: .6rem 1rem; background: #0d1424; border-bottom: 1px solid rgba(255, 255, 255, .12); }
+.rxv-title { font-size: .95rem; }
+.rxv-tools { display: flex; flex-wrap: wrap; gap: .4rem; align-items: center; }
+.rxv-tools .btn { background: #fff; color: var(--ink); min-width: 2.5rem; }
+.rxv-tools .btn:disabled { opacity: .45; cursor: default; }
+.rxv-level { min-width: 5.5rem; text-align: center; font-variant-numeric: tabular-nums; font-size: .9rem; }
+.rxv-close { background: #fff; color: var(--ink); }
+.rxv-stage { flex: 1; min-height: 0; overflow: auto; display: flex; padding: 8px; overscroll-behavior: contain; }
+.rxv-frame { position: relative; margin: auto; flex: none; }
+.rxv-frame img { position: absolute; left: 50%; top: 50%; max-width: none; background: #fff; box-shadow: 0 6px 30px rgba(0, 0, 0, .5); cursor: zoom-in; }
+@media (max-width: 640px) { .rxv-bar { padding: .5rem .6rem; } .rxv-title { width: 100%; } }
+@media print { .rxv { display: none; } }
 .requests { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: var(--sp-4); padding-block: var(--sp-5) var(--sp-8); }
 .req { display: grid; gap: .35rem; }
 .req .top { display: flex; justify-content: space-between; gap: var(--sp-2); }

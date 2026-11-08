@@ -1177,6 +1177,106 @@ function chime() {
     });
   } catch (e) { /* sound not available */ }
 }
+/* ---------- Prescription file viewer (desk) ----------
+   The upload arrives as a data: address. Browsers won't open those in a new tab, and a handwritten prescription
+   needs to be read full size, so the file is turned into a blob: address once and shown in a viewer that can zoom and
+   rotate. The viewer sits outside the desk's own markup, so the desk's refresh every 10 seconds doesn't close it. */
+let rxBlob = { data: "", url: "" };
+const rxIsPdf = f => /^data:application\/pdf/.test(f.data);
+function rxFileUrl(f) {
+  if (rxBlob.data !== f.data) {
+    if (rxBlob.url) { closeRxViewer(); URL.revokeObjectURL(rxBlob.url); }
+    const comma = f.data.indexOf(","), type = (/^data:([^;,]+)/.exec(f.data) || [])[1] || "application/octet-stream";
+    const bin = atob(f.data.slice(comma + 1)), bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    rxBlob = { data: f.data, url: URL.createObjectURL(new Blob([bytes], { type })) };
+  }
+  return rxBlob.url;
+}
+function rxFileName(f, o) {
+  const ext = rxIsPdf(f) ? "pdf" : ({ "image/png": "png", "image/webp": "webp" })[(/^data:([^;,]+)/.exec(f.data) || [])[1]] || "jpg";
+  return `prescription-${o.id}.${ext}`;
+}
+const RX_ZOOM = [1, 1.5, 2, 3, 4]; // times the size that fits the screen
+let rxv = null; // { el, img, zoom, rot, back }
+function openRxViewer() {
+  const f = S.staff.file, o = S.staff.detail;
+  if (!f || !o || rxIsPdf(f)) return;
+  closeRxViewer();
+  const url = rxFileUrl(f), el = document.createElement("div");
+  el.className = "rxv"; el.setAttribute("role", "dialog"); el.setAttribute("aria-modal", "true"); el.setAttribute("aria-label", `Prescription for order ${o.id}`);
+  el.innerHTML = `<div class="rxv-bar"><b class="rxv-title">Prescription · <span class="mono">${esc(o.id)}</span></b>
+    <div class="rxv-tools" role="toolbar" aria-label="Viewer tools">
+      <button type="button" class="btn btn-ghost btn-sm" data-rxzoom="-1" aria-label="Zoom out" aria-keyshortcuts="-">−</button>
+      <span class="rxv-level" aria-live="polite">Whole page</span>
+      <button type="button" class="btn btn-ghost btn-sm" data-rxzoom="1" aria-label="Zoom in" aria-keyshortcuts="+">+</button>
+      <button type="button" class="btn btn-ghost btn-sm" data-rxzoom="0" aria-keyshortcuts="0">Fit page</button>
+      <button type="button" class="btn btn-ghost btn-sm" data-rxrotate aria-keyshortcuts="R">Rotate</button>
+      <a class="btn btn-ghost btn-sm" href="${url}" target="_blank" rel="noopener">New tab</a>
+      <a class="btn btn-ghost btn-sm" href="${url}" download="${esc(rxFileName(f, o))}">${icon("download", "ic sm")} Download</a>
+      <button type="button" class="iconbtn rxv-close" data-rxclose aria-label="Close" aria-keyshortcuts="Escape">${icon("close", "ic sm")}</button>
+    </div></div>
+    <div class="rxv-stage"><div class="rxv-frame"><img src="${url}" alt="Uploaded prescription for order ${esc(o.id)}"></div></div>`;
+  document.body.appendChild(el);
+  rxv = { el, img: el.querySelector("img"), zoom: 0, rot: 0, back: document.activeElement };
+  document.body.classList.add("rxv-open");
+  if (rxv.img.complete) rxLayout(); else rxv.img.addEventListener("load", rxLayout);
+  el.querySelector("[data-rxclose]").focus();
+}
+function closeRxViewer() {
+  if (!rxv) return;
+  const back = rxv.back; rxv.el.remove(); rxv = null;
+  document.body.classList.remove("rxv-open");
+  if (back && back.isConnected) back.focus(); // the desk may have redrawn: then focus stays on the page
+}
+/* Sizes the picture: "fit" shows the whole page; zooming makes it bigger and the stage scrolls. Rotating swaps width and height. */
+function rxLayout() {
+  if (!rxv || !rxv.img.naturalWidth) return;
+  const { img } = rxv, stage = rxv.el.querySelector(".rxv-stage"), frame = rxv.el.querySelector(".rxv-frame");
+  const w = img.naturalWidth, h = img.naturalHeight, side = rxv.rot % 180 !== 0;
+  const rw = side ? h : w, rh = side ? w : h;
+  const fit = Math.min((stage.clientWidth - 16) / rw, (stage.clientHeight - 16) / rh);
+  const s = fit * RX_ZOOM[rxv.zoom];
+  img.style.width = Math.round(w * s) + "px"; img.style.height = Math.round(h * s) + "px";
+  img.style.transform = `translate(-50%, -50%) rotate(${rxv.rot}deg)`;
+  frame.style.width = Math.round(rw * s) + "px"; frame.style.height = Math.round(rh * s) + "px";
+  rxv.el.querySelector(".rxv-level").textContent = rxv.zoom ? Math.round(RX_ZOOM[rxv.zoom] * 100) + "%" : "Whole page";
+  rxv.el.querySelector('[data-rxzoom="-1"]').disabled = rxv.zoom === 0;
+  rxv.el.querySelector('[data-rxzoom="1"]').disabled = rxv.zoom === RX_ZOOM.length - 1;
+}
+function rxZoom(step) {
+  if (!rxv) return;
+  rxv.zoom = step === 0 ? 0 : Math.max(0, Math.min(RX_ZOOM.length - 1, rxv.zoom + step));
+  rxLayout();
+}
+function rxRotate() { if (rxv) { rxv.rot = (rxv.rot + 90) % 360; rxLayout(); } }
+document.addEventListener("click", e => {
+  const t = e.target.closest && e.target.closest("[data-rxview],[data-rxzoom],[data-rxrotate],[data-rxclose]");
+  if (!t) return;
+  if (t.hasAttribute("data-rxview")) openRxViewer();
+  else if (t.hasAttribute("data-rxzoom")) rxZoom(Number(t.dataset.rxzoom));
+  else if (t.hasAttribute("data-rxrotate")) rxRotate();
+  else closeRxViewer();
+});
+document.addEventListener("dblclick", e => { if (rxv && e.target === rxv.img) rxZoom(rxv.zoom ? 0 : 2); });
+window.addEventListener("resize", () => rxLayout());
+/* While the viewer is open its keys win over the desk's shortcuts (window, capture phase, runs first) */
+window.addEventListener("keydown", e => {
+  if (!rxv) return;
+  const k = e.key;
+  if (k === "Escape") closeRxViewer();
+  else if (k === "+" || k === "=") rxZoom(1);
+  else if (k === "-" || k === "_") rxZoom(-1);
+  else if (k === "0") rxZoom(0);
+  else if (k === "r" || k === "R") rxRotate();
+  else if (k === "Tab") { // keep focus inside the viewer
+    const f = [...rxv.el.querySelectorAll("button:not([disabled]), a[href]")], i = f.indexOf(document.activeElement);
+    if (!f.length) return;
+    e.preventDefault(); f[(i + (e.shiftKey ? -1 : 1) + f.length) % f.length].focus();
+  } else return;
+  e.preventDefault(); e.stopPropagation();
+}, true);
+
 async function loadDeskOrder(id, quiet) {
   const st = S.staff; st.sel = id;
   if (!quiet) { st.detail = null; render(); }
@@ -2400,8 +2500,12 @@ function deskDetail() {
     { l: "Clinic address looks Nigerian", ok: /nigeria|lagos|abuja|port harcourt|ikeja|wuse|kano|ibadan|enugu|benin|kaduna|jos|owerri|calabar|abeokuta|yaba|lekki|ilorin|akure/i.test(p.clinic || p.pclinic || "") },
     { l: "Issued within the last 6 months", ok: months <= 6 && months >= 0 }
   ] : [];
-  const f = st.file;
-  const fileView = f ? (f.data.startsWith("data:application/pdf") ? `<p><a class="btn btn-ghost" href="${f.data}" download="${esc(f.name || "prescription.pdf")}">Open prescription PDF</a></p>` : `<a href="${f.data}" target="_blank" rel="noopener"><img class="rx-img" src="${f.data}" alt="Uploaded prescription for order ${esc(o.id)}"></a>`) : (o.rx ? `<p class="muted small">No prescription file.</p>` : "");
+  const f = st.file, rxUrl = f && rxFileUrl(f), rxDl = f && `href="${rxUrl}" download="${esc(rxFileName(f, o))}"`;
+  // Opened from a blob: address: browsers refuse to open data: addresses in a new tab, so a click on them did nothing
+  const fileView = !f ? (o.rx ? `<p class="muted small">No prescription file.</p>` : "")
+    : rxIsPdf(f) ? `<p class="rx-actions"><a class="btn btn-primary btn-sm" href="${rxUrl}" target="_blank" rel="noopener">Open prescription PDF</a><a class="btn btn-ghost btn-sm" ${rxDl}>${icon("download", "ic sm")} Download</a></p>`
+    : `<button type="button" class="rx-thumb" data-rxview aria-label="Open the prescription full size to zoom and rotate"><img class="rx-img" src="${rxUrl}" alt="Uploaded prescription for order ${esc(o.id)}"><span class="rx-hint">${icon("search", "ic sm")} Open full size</span></button>
+      <p class="rx-actions"><button class="btn btn-primary btn-sm" type="button" data-rxview>Zoom and rotate</button><a class="btn btn-ghost btn-sm" href="${rxUrl}" target="_blank" rel="noopener">Open in new tab</a><a class="btn btn-ghost btn-sm" ${rxDl}>${icon("download", "ic sm")} Download</a></p>`;
   const A = o.actions || [];
   const reviewing = A.includes("approve");
   const packing = A.includes("packed"), ticks = (st.packed && st.packed[o.id]) || [];

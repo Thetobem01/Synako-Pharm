@@ -101,3 +101,12 @@ test("every journal post is dated, unique, and links only to pages that exist", 
     if (p.image) assert.ok(fs.existsSync(new URL("../" + p.image, import.meta.url)), `${p.id}: image ${p.image}`);
   }
 });
+
+test("the desk opens prescription files from a blob: address, never a data: link (browsers block opening those)", () => {
+  const src = fs.readFileSync(new URL("../js/app.js", import.meta.url), "utf8");
+  assert.deepEqual(src.match(/href="\$\{[^}]*\.data\}"/g) || [], [], "a link to the raw data: address of a file does nothing when clicked");
+  const view = src.slice(src.indexOf("const fileView"), src.indexOf("const fileView") + 1500);
+  assert.match(view, /rxFileUrl\(f\)|rxUrl/, "the desk's prescription view uses rxFileUrl");
+  assert.match(src, /URL\.createObjectURL\(new Blob/, "the file is turned into a blob: address");
+  assert.match(src, /function openRxViewer/, "and can be opened full size");
+});

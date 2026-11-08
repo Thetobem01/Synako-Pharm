@@ -1,0 +1,51 @@
+{
+  "task_id": "harness-setup",
+  "branch": "harness-setup",
+  "base": "main@f9c8b2e",
+  "verdict": "APPROVED",
+  "created": "2026-11-07T02:18Z",
+  "commands": [
+    {
+      "cmd": "npm run check",
+      "exit": 0
+    },
+    {
+      "cmd": "npm test",
+      "exit": 0,
+      "tests": 76,
+      "pass": 76,
+      "fail": 0
+    },
+    {
+      "cmd": "bash evals/harness-dryrun.sh",
+      "exit": 0,
+      "cases": 44,
+      "pass": 44,
+      "fail": 0
+    }
+  ],
+  "scope_check": "git diff --cached --name-only: all files inside can_write",
+  "reviewer": null,
+  "known_gaps": [
+    "Shell guard is pattern-based (best effort); obfuscated commands can slip past it.",
+    "Pre-commit only runs where core.hooksPath=.githooks is set; CI does not run the dry run yet (.github/workflows is protected).",
+    ".vercelignore exclusion not verified against a real Vercel deploy from this session.",
+    "Checksums, not signatures: they prove the receipt matches the commit, not who wrote it."
+  ],
+  "files": {
+    ".claude/contracts/harness-setup.json": "2cbe00656ea75ec9ab78388f6215b4d35ed273e9e4af532f7d9ec94bac5bb08b",
+    ".claude/hooks/guard.mjs": "0197909517a87c877ced24c8d36450738cbd7a00862a6558be3d2bd450cfa8f0",
+    ".claude/hooks/protected.mjs": "408777568cc98ef71cdb20d3923af9551e4ab0e8ed7b139cc10e1f40659663e1",
+    ".claude/rules/compliance.md": "8154ce27bc09ff82e170867478638c123c684eef8cbd1a2aa4a49f9110467cbb",
+    ".claude/rules/high-stakes.md": "ecb56f3e98e9c7542f7cdbcffc4f51ffb67701514e09fab32a096982286f2dca",
+    ".claude/rules/scope.md": "38bc65da7a7741779d9f20630c4deb9ba3132acaab070df61e387533aa99031a",
+    ".claude/settings.json": "55819104fb1446e85aacec766b0eea871752046b43ab66bfdc303142bca5af54",
+    ".claude/state/decision_ledger.jsonl": "a165fbe2032e6642a7a4abfffcbb91d9cdfe3bb00d187fc6b94e6da0f547c591",
+    ".githooks/check-receipt.mjs": "4b316e6427b3a36798c501097b730fde72d61892b684164acfd61663807fc026",
+    ".githooks/pre-commit": "fbf84a3a1e5d274a77434d8128f492b01315de08b6ecd0408b6e309a17fcd568",
+    ".gitignore": "0312143de50e91cc6c7530881e697dc9d77b74a3b6a82d8d5591df6fff509e62",
+    ".vercelignore": "97d05bd753eaa009046b12f0ae601282bf6e5c04a8df798ce6d7baae1c04910b",
+    "CLAUDE.md": "3faf2abc9f6d27883f53429742ff7b1b0412532f4c002693feb374e15a6ac1ea",
+    "evals/harness-dryrun.sh": "e8446aa2702bfaa129e3e4fc9fa66b561bf7af5e95eeb64bdcb5ba2657adafbf"
+  }
+}

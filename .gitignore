@@ -2,3 +2,5 @@
 node_modules/
 .vercel
 /*.png
+.agent_worktrees/
+.claude/settings.local.json

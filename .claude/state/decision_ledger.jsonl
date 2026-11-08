@@ -1,0 +1,6 @@
+{"t":"2026-11-07T02:08Z","task":"harness-setup","decision":"Receipt gate covers agent/* and claude/* branches only","why":"Tobe gave no scope; recommended default so his own quick commits aren't blocked"}
+{"t":"2026-11-07T02:10Z","task":"harness-setup","decision":"Hooks in Node instead of jq","why":"Node is already required (engines >=18); jq may be missing on Tobe's Mac"}
+{"t":"2026-11-07T02:12Z","task":"harness-setup","decision":"Added api/order.js and api/_lib/core.js to high-stakes","why":"order.js computes trusted totals; core.js issues sign-in tokens and checks passwords"}
+{"t":"2026-11-07T02:14Z","task":"harness-setup","decision":"Guard also protects .claude/hooks, settings and .githooks","why":"An agent must not be able to switch off its own guard rails"}
+{"t":"2026-11-07T02:15Z","task":"harness-setup","decision":"Harness folders and CLAUDE.md added to .vercelignore","why":"Otherwise Vercel would serve receipts and rules publicly"}
+{"t":"2026-11-07T02:16Z","task":"harness-setup","decision":"Compliance rule reworded for NEPP","why":"Project notes say an integration point is marked, but no NEPP marker exists on main"}

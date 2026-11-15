@@ -1,5 +1,6 @@
 /* Supply chain for the supply manager: wholesalers, the shortage list, purchase orders and alerts.
    Lives behind the Pharmacist Desk sign-in; routes are in api/staff/orders.js (Vercel Hobby's 12-function limit). */
+import { SUPPLIERS } from "./suppliers-seed.js";
 import { db, site, fail, newId, log, outOfStock, sendEmail, sendSms, smsReady, setting, baseUrl } from "./core.js";
 
 const clean = (v, n) => String(v == null ? "" : v).trim().slice(0, n);
@@ -27,11 +28,11 @@ export async function notifySupply(subject, lines, sms) {
 }
 
 /* ---------- Suppliers (wholesalers) ---------- */
-/* The desk's saved list; until the first save, the starter list in js/config.js (supply.suppliers) */
+/* The desk's saved list; until the first save, the starter list in api/_lib/suppliers-seed.js (server-only, never public) */
 export async function suppliers() {
   const saved = await db.get("suppliers");
   if (saved) return saved;
-  return ((site().config.supply || {}).suppliers || []).filter(x => x && x.name).map((x, i) => ({
+  return SUPPLIERS.filter(x => x && x.name).map((x, i) => ({
     id: "SUP-" + (String(x.name).toUpperCase().replace(/[^A-Z0-9]+/g, "").slice(0, 10) || i), name: clean(x.name, 80), contact: clean(x.contact, 80), phone: clean(x.phone, 20),
     whatsapp: clean(x.whatsapp, 20), email: clean(x.email, 120).toLowerCase(), leadDays: Math.max(0, Math.min(60, Math.round(Number(x.leadDays) || 0))), notes: clean(x.notes, 300)
   }));

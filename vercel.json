@@ -8,7 +8,15 @@
     },
     {
       "source": "/robots.txt",
-      "destination": "/api/robots"
+      "destination": "/api/sitemap?file=robots"
+    },
+    {
+      "source": "/:a(product|products|journal)/:b",
+      "destination": "/api/page?a=:a&b=:b"
+    },
+    {
+      "source": "/:a(products|journal|about|contact|faq|delivery|returns|privacy|terms|licences|cookies|careers|wholesale|prescriptions|controlled-medicines)",
+      "destination": "/api/page?a=:a"
     },
     {
       "source": "/((?!api/|assets/|css/|js/|manifest.webmanifest|sitemap.xml|robots.txt|favicon).*)",
@@ -79,7 +87,7 @@
   ],
   "functions": {
     "api/**/*.js": {
-      "includeFiles": "{js/**,assets/receipt-logo.jpg}",
+      "includeFiles": "{js/**,assets/receipt-logo.jpg,index.html}",
       "maxDuration": 15
     }
   },

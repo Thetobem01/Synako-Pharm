@@ -363,7 +363,7 @@ test("supply: wholesalers, the shortage list, purchase orders and restocking", a
   const rider = (await api("staff/login", { body: { password: "ride", role: "rider" }, headers: ip(60) })).json.token;
   assert.equal((await api("staff/orders?view=supply", { token: rider })).status, 401, "riders can't see supply");
   const starter = (await api("staff/orders?view=supply", { token })).json.suppliers;
-  assert.ok(starter.some(s => s.name === "Tuyil Pharmaceuticals LTD" && s.leadDays === 5), "the starter list from js/config.js is there before any changes");
+  assert.ok(starter.some(s => s.name === "Tuyil Pharmaceuticals LTD" && s.leadDays === 5), "the starter list (api/_lib/suppliers-seed.js) is there before any changes");
   assert.equal(new Set(starter.map(s => s.id)).size, starter.length, "starter wholesalers each get their own id");
   assert.equal((await api("staff/orders", { token, body: { action: "supplier-save", supplier: { name: "No Contact Ltd" } } })).status, 400, "a wholesaler needs a way to be reached");
   const saved = await api("staff/orders", { token, body: { action: "supplier-save", supplier: { name: "Ondo Pharma Wholesale", phone: "08030000000", email: "orders@ondo-wholesale.example", leadDays: 3 } } });

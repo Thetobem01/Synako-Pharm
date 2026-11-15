@@ -12,15 +12,27 @@ const types = { ".html": "text/html; charset=utf-8", ".js": "text/javascript", "
 /* Same security headers as production (vercel.json), so problems show up locally */
 const vercel = JSON.parse(fs.readFileSync(path.join(root, "vercel.json"), "utf8"));
 const globalHeaders = (vercel.headers.find(h => h.source === "/(.*)") || { headers: [] }).headers;
-const REWRITE = { "/sitemap.xml": "/api/sitemap", "/robots.txt": "/api/robots" };
+/* vercel.json's rewrites to the API, applied the way Vercel does (":name(a|b)" and ":name" path parts) */
+const REWRITES = vercel.rewrites.filter(r => r.destination.startsWith("/api/")).map(r => {
+  const names = [];
+  const re = new RegExp("^" + r.source.replace(/:(\w+)(\([^)]*\))?/g, (_, n, alt) => { names.push(n); return alt || "([^/]+)"; }) + "$");
+  return { re, names, destination: r.destination };
+});
 
 http.createServer(async (req, res) => {
   const url = new URL(req.url, "http://localhost");
   for (const h of globalHeaders) if (h.key !== "Strict-Transport-Security") res.setHeader(h.key, h.key === "Content-Security-Policy" ? h.value.replace("; upgrade-insecure-requests", "") : h.value);
-  if (REWRITE[url.pathname]) url.pathname = REWRITE[url.pathname];
+  for (const r of REWRITES) {
+    const m = r.re.exec(url.pathname);
+    if (!m) continue;
+    const to = new URL(r.destination.replace(/:(\w+)/g, (_, n) => encodeURIComponent(m[r.names.indexOf(n) + 1] || "")), "http://localhost");
+    url.searchParams.forEach((v, k) => { if (!to.searchParams.has(k)) to.searchParams.set(k, v); });
+    url.pathname = to.pathname; url.search = to.search; req.url = to.pathname + to.search;
+    break;
+  }
   if (url.pathname.startsWith("/api/")) {
     const file = path.join(root, url.pathname.replace(/\/$/, "") + ".js");
-    if (!file.startsWith(path.join(root, "api")) || !fs.existsSync(file) || path.basename(file).startsWith("_")) { res.statusCode = 404; return res.end('{"error":"Not found"}'); }
+    if (!file.startsWith(path.join(root, "api")) || !fs.existsSync(file) || url.pathname.split("/").some(seg => seg.startsWith("_"))) { res.statusCode = 404; return res.end('{"error":"Not found"}'); } // like Vercel: nothing under a "_" name is served
     try { const mod = await import(pathToFileURL(file).href); return await mod.default(req, res); }
     catch (e) { console.error(e); res.statusCode = 500; return res.end('{"error":"Server error"}'); }
   }

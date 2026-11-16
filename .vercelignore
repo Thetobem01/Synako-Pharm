@@ -2,3 +2,8 @@ dev/
 tests/
 .github/
 docs/
+.claude/
+.githooks/
+evals/
+.agent_worktrees/
+CLAUDE.md
